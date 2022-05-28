@@ -1,0 +1,3 @@
+[submodule "external/asdx12"]
+	path = external/asdx12
+	url = https://github.com/ProjectAsura/asdx12
