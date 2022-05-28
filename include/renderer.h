@@ -40,6 +40,18 @@ class Renderer : public asdx::Application
     /* NOTHING */
 
 public:
+    //////////////////////////////////////////////////////////////////////////
+    // ExportData structure
+    //////////////////////////////////////////////////////////////////////////
+    struct ExportData
+    {
+        std::vector<uint8_t>    Pixels;
+        std::vector<uint8_t>    Converted;
+        uint32_t                FrameIndex;
+        uint32_t                Width;
+        uint32_t                Height;
+    };
+
     //=========================================================================
     // public variables.
     //=========================================================================
@@ -64,6 +76,13 @@ private:
     asdx::Tlas                      m_TLAS;
     asdx::ComputeTarget             m_Canvas;
     double                          m_RenderTimeSec;
+
+    uint8_t                         m_ReadBackIndex = 0;
+    uint8_t                         m_MapIndex      = 0;
+    asdx::RefPtr<ID3D12Resource>    m_ReadBackTexture[3];
+    uint32_t                        m_ReadBackPitch = 0;
+    ExportData                      m_ExportData[3];
+    uint32_t                        m_CaptureIndex  = 0;
 
 #if ASDX_ENABLE_IMGUI
     bool    m_DebugSetting = true;

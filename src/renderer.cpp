@@ -9,11 +9,15 @@
 //-----------------------------------------------------------------------------
 #include <renderer.h>
 #include <fnd/asdxLogger.h>
+#include <process.h>
+
+#include <fpng.h>
 
 #if ASDX_ENABLE_IMGUI
 #include "../external/asdx12/external/imgui/imgui.h"
 #endif
 
+#include <fnd/asdxStopWatch.h>
 
 namespace {
 
@@ -22,6 +26,39 @@ namespace {
 //-----------------------------------------------------------------------------
 #include "../res/shader/Compile/TonemapVS.inc"
 #include "../res/shader/Compile/TonemapPS.inc"
+
+
+//-----------------------------------------------------------------------------
+//      画像に出力します.
+//-----------------------------------------------------------------------------
+unsigned Export(void* args)
+{
+    auto data = reinterpret_cast<r3d::Renderer::ExportData*>(args);
+    if (data == nullptr)
+    { return -1; }
+
+    char path[256] = {};
+    sprintf_s(path, "output_%03ld.png", data->FrameIndex);
+
+    // Releaseモードで 5-28[ms]程度の揺れ.
+    if (fpng::fpng_encode_image_to_memory(
+        data->Pixels.data(),
+        data->Width,
+        data->Height,
+        4,
+        data->Converted))
+    {
+        FILE* pFile = nullptr;
+        auto err = fopen_s(&pFile, path, "wb");
+        if (pFile != nullptr)
+        {
+            fwrite(data->Converted.data(), 1, data->Converted.size(), pFile);
+            fclose(pFile);
+        }
+    }
+
+    return 0;
+}
 
 } // namespace
 
@@ -63,6 +100,81 @@ bool Renderer::OnInit()
     {
         ELOGA("Error : DirectX Ray Tracing is not supported.");
         return false;
+    }
+
+    // PNGライブラリ初期化.
+    fpng::fpng_init();
+
+    // リードバックテクスチャ生成.
+    {
+        D3D12_RESOURCE_DESC desc = {};
+        desc.Dimension          = D3D12_RESOURCE_DIMENSION_BUFFER;
+        desc.Alignment          = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
+        desc.Width              = m_SceneDesc.Width * m_SceneDesc.Height * 4;
+        desc.Height             = 1;
+        desc.DepthOrArraySize   = 1;
+        desc.MipLevels          = 1;
+        desc.Format             = DXGI_FORMAT_UNKNOWN;
+        desc.SampleDesc.Count   = 1;
+        desc.SampleDesc.Quality = 0;
+        desc.Layout             = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        desc.Flags              = D3D12_RESOURCE_FLAG_NONE;
+
+        D3D12_HEAP_PROPERTIES props = {};
+        props.Type = D3D12_HEAP_TYPE_READBACK;
+
+        for(auto i=0; i<3; ++i)
+        {
+            auto hr = pDevice->CreateCommittedResource(
+                &props,
+                D3D12_HEAP_FLAG_NONE,
+                &desc,
+                D3D12_RESOURCE_STATE_COPY_DEST,
+                nullptr,
+                IID_PPV_ARGS(m_ReadBackTexture[i].GetAddress()));
+
+            if (FAILED(hr))
+            {
+                ELOGA("Error : ID3D12Device::CreateCommittedResource() Failed. errcode = 0x%x", hr);
+                return false;
+            }
+
+            m_ExportData[i].Pixels.resize(m_SceneDesc.Width * m_SceneDesc.Height * 4);
+            m_ExportData[i].FrameIndex  = 0;
+            m_ExportData[i].Width       = m_SceneDesc.Width;
+            m_ExportData[i].Height      = m_SceneDesc.Height;
+        }
+
+        UINT   rowCount     = 0;
+        UINT64 pitchSize    = 0;
+        UINT64 resSize      = 0;
+
+        D3D12_RESOURCE_DESC dstDesc = {};
+        dstDesc.Dimension           = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        dstDesc.Alignment           = 0;
+        dstDesc.Width               = m_SceneDesc.Width;
+        dstDesc.Height              = m_SceneDesc.Height;
+        dstDesc.DepthOrArraySize    = 1;
+        dstDesc.MipLevels           = 1;
+        dstDesc.Format              = DXGI_FORMAT_R8G8B8A8_UNORM;
+        dstDesc.SampleDesc.Count    = 1;
+        dstDesc.SampleDesc.Quality  = 0;
+        dstDesc.Layout              = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+        dstDesc.Flags               = D3D12_RESOURCE_FLAG_NONE;
+
+        pDevice->GetCopyableFootprints(&dstDesc,
+            0,
+            1,
+            0,
+            nullptr,
+            &rowCount,
+            &pitchSize,
+            &resSize);
+
+        m_ReadBackPitch = static_cast<uint32_t>((pitchSize + 255) & ~0xFFu);
+
+        m_ReadBackIndex = 0;
+
     }
 
     // フル矩形用頂点バッファの初期化.
@@ -201,6 +313,12 @@ void Renderer::OnTerm()
 
     m_TLAS  .Term();
     m_Canvas.Term();
+
+    for(auto i=0; i<3; ++i)
+    {
+        m_ReadBackTexture[i].Reset();
+        m_ExportData[i].Pixels.clear();
+    }
 }
 
 //-----------------------------------------------------------------------------
@@ -208,11 +326,29 @@ void Renderer::OnTerm()
 //-----------------------------------------------------------------------------
 void Renderer::OnFrameMove(asdx::FrameEventArgs& args)
 {
-    // 制限時間を超えた
-    if (args.Time >= m_RenderTimeSec)
+    //// 制限時間を超えた
+    //if (args.Time >= m_RenderTimeSec)
+    //{
+    //    // TODO : 終了処理.
+    //    return;
+    //}
+
+    // CPUで読み取り.
+    if (GetFrameCount() > 2)
     {
-        // TODO : 終了処理.
-        return;
+        uint8_t* ptr = nullptr;
+        auto idx = m_MapIndex;
+        auto hr  = m_ReadBackTexture[idx]->Map(0, nullptr, reinterpret_cast<void**>(&ptr));
+        if (SUCCEEDED(hr))
+        {
+            memcpy(m_ExportData[idx].Pixels.data(), ptr, m_ExportData[idx].Pixels.size());
+            m_ExportData[idx].FrameIndex = m_CaptureIndex;
+        }
+        m_ReadBackTexture[idx]->Unmap(0, nullptr);
+        m_CaptureIndex++;
+
+        // 画像に出力.
+        _beginthreadex(nullptr, 0, Export, &m_ExportData[idx], 0, nullptr);
     }
 }
 
@@ -237,9 +373,8 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
             D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
             D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
-        asdx::ScopedBarrier barrier1(
-            m_GfxCmdList,
-            m_ColorTarget[idx].GetResource(),
+        m_GfxCmdList.BarrierTransition(
+            m_ColorTarget[idx].GetResource(), 0,
             D3D12_RESOURCE_STATE_PRESENT,
             D3D12_RESOURCE_STATE_RENDER_TARGET);
 
@@ -253,6 +388,45 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
 
         // 2D描画.
         Draw2D();
+    }
+
+    // リードバック実行.
+    {
+        m_GfxCmdList.BarrierTransition(
+            m_ColorTarget[idx].GetResource(), 0,
+            D3D12_RESOURCE_STATE_RENDER_TARGET,
+            D3D12_RESOURCE_STATE_COPY_SOURCE);
+
+        D3D12_TEXTURE_COPY_LOCATION dst = {};
+        dst.Type                                = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+        dst.pResource                           = m_ReadBackTexture[m_ReadBackIndex].GetPtr();
+        dst.PlacedFootprint.Footprint.Width     = static_cast<UINT>(m_SceneDesc.Width);
+        dst.PlacedFootprint.Footprint.Height    = m_SceneDesc.Height;
+        dst.PlacedFootprint.Footprint.Depth     = 1;
+        dst.PlacedFootprint.Footprint.RowPitch  = m_ReadBackPitch;
+        dst.PlacedFootprint.Footprint.Format    = DXGI_FORMAT_R8G8B8A8_UNORM;
+
+        D3D12_TEXTURE_COPY_LOCATION src = {};
+        src.Type                = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+        src.pResource           = m_ColorTarget[idx].GetResource();
+        src.SubresourceIndex    = 0;
+
+        D3D12_BOX box = {};
+        box.left    = 0;
+        box.right   = m_SceneDesc.Width;
+        box.top     = 0;
+        box.bottom  = m_SceneDesc.Height;
+        box.front   = 0;
+        box.back    = 1;
+
+        m_GfxCmdList.CopyTextureRegion(&dst, 0, 0, 0, &src, &box);
+
+        m_ReadBackIndex = (m_ReadBackIndex + 1) % 3;
+
+        m_GfxCmdList.BarrierTransition(
+            m_ColorTarget[idx].GetResource(), 0,
+            D3D12_RESOURCE_STATE_COPY_SOURCE,
+            D3D12_RESOURCE_STATE_PRESENT);
     }
 
     // コマンド記録終了.
