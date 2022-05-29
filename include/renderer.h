@@ -5,7 +5,12 @@
 //-----------------------------------------------------------------------------
 #pragma once
 
+// レイトレ合宿提出モード 
+#define CAMP_RELEASE        (0)     // 1なら提出モード.
+
+#if (CAMP_RELEASE == 0)
 #define ASDX_ENABLE_IMGUI   (1)
+#endif
 
 //-----------------------------------------------------------------------------
 // Include
@@ -18,13 +23,16 @@
 #include <gfx/asdxCommandQueue.h>
 #include <gfx/asdxQuad.h>
 #include <edit/asdxGuiMgr.h>
-
+#include <model_mgr.h>
 
 namespace r3d {
 
+///////////////////////////////////////////////////////////////////////////////
+// SceneDesc structure
+///////////////////////////////////////////////////////////////////////////////
 struct SceneDesc
 {
-    uint32_t    TimeSec;
+    double      TimeSec;
     uint32_t    Width;
     uint32_t    Height;
 };
@@ -47,6 +55,7 @@ public:
     {
         std::vector<uint8_t>    Pixels;
         std::vector<uint8_t>    Converted;
+        std::vector<uint8_t>    Temporary;
         uint32_t                FrameIndex;
         uint32_t                Width;
         uint32_t                Height;
@@ -71,11 +80,12 @@ private:
     asdx::WaitPoint                 m_FrameWaitPoint;
     asdx::RootSignature             m_TonemapRootSig;
     asdx::PipelineState             m_TonemapPSO;
+    asdx::RootSignature             m_RayTracingRootSig;
     asdx::RayTracingPipelineState   m_RayTracingPSO;
     std::vector<asdx::Blas>         m_BLAS;
     asdx::Tlas                      m_TLAS;
     asdx::ComputeTarget             m_Canvas;
-    double                          m_RenderTimeSec;
+    ModelMgr                        m_ModelMgr;
 
     uint8_t                         m_ReadBackIndex = 0;
     uint8_t                         m_MapIndex      = 0;
@@ -84,7 +94,7 @@ private:
     ExportData                      m_ExportData[3];
     uint32_t                        m_CaptureIndex  = 0;
 
-#if ASDX_ENABLE_IMGUI
+#if (!CAMP_RELEASE)
     bool    m_DebugSetting = true;
 #endif
 

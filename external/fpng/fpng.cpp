@@ -1757,9 +1757,7 @@ do_literals:
 			zlib_size = raw_size;
 		}
 		
-#if 0 // [Customize] Start
 		assert((out_ofs + zlib_size) <= out_buf.size());
-#endif// [Customize] End
 
 		out_buf.resize(out_ofs + zlib_size);
 
@@ -1803,6 +1801,148 @@ do_literals:
 				
 		return true;
 	}
+
+#if 1 // [Customize] Start
+	bool fpng_encode_image_to_memory(const void* pImage, uint32_t w, uint32_t h, uint32_t num_chans, std::vector<uint8_t>& out_buf, std::vector<uint8_t>& temp_buf, uint32_t flags)
+	{
+		if (!endian_check())
+		{
+			assert(0);
+			return false;
+		}
+
+		if ((w < 1) || (h < 1) || (w * (uint64_t)h > UINT32_MAX) || (w > FPNG_MAX_SUPPORTED_DIM) || (h > FPNG_MAX_SUPPORTED_DIM))
+		{
+			assert(0);
+			return false;
+		}
+
+		if ((num_chans != 3) && (num_chans != 4))
+		{
+			assert(0);
+			return false;
+		}
+
+		int i, bpl = w * num_chans;
+		uint32_t y;
+
+		temp_buf.resize((bpl + 1) * h + 7);
+		uint32_t temp_buf_ofs = 0;
+
+		for (y = 0; y < h; ++y)
+		{
+			const uint8_t* pSrc = (uint8_t*)pImage + y * bpl;
+			const uint8_t* pPrev_src = y ? ((uint8_t*)pImage + (y - 1) * bpl) : nullptr;
+
+			uint8_t* pDst = &temp_buf[temp_buf_ofs];
+
+			apply_filter(y ? 2 : 0, w, h, num_chans, bpl, pSrc, pPrev_src, pDst);
+
+			temp_buf_ofs += 1 + bpl;
+		}
+
+		const uint32_t PNG_HEADER_SIZE = 58;
+				
+		uint32_t out_ofs = PNG_HEADER_SIZE;
+				
+		out_buf.resize((out_ofs + (bpl + 1) * h + 7) & ~7);
+
+		uint32_t defl_size = 0;
+		if ((flags & FPNG_FORCE_UNCOMPRESSED) == 0)
+		{
+			if (num_chans == 3)
+			{
+				if (flags & FPNG_ENCODE_SLOWER)
+					defl_size = pixel_deflate_dyn_3_rle(temp_buf.data(), w, h, &out_buf[out_ofs], (uint32_t)out_buf.size() - out_ofs);
+				else
+					defl_size = pixel_deflate_dyn_3_rle_one_pass(temp_buf.data(), w, h, &out_buf[out_ofs], (uint32_t)out_buf.size() - out_ofs);
+			}
+			else
+			{
+				if (flags & FPNG_ENCODE_SLOWER)
+					defl_size = pixel_deflate_dyn_4_rle(temp_buf.data(), w, h, &out_buf[out_ofs], (uint32_t)out_buf.size() - out_ofs);
+				else
+					defl_size = pixel_deflate_dyn_4_rle_one_pass(temp_buf.data(), w, h, &out_buf[out_ofs], (uint32_t)out_buf.size() - out_ofs);
+			}
+		}
+
+		uint32_t zlib_size = defl_size;
+		
+		if (!defl_size)
+		{
+			// Dynamic block failed to compress - fall back to uncompressed blocks, filter 0.
+
+			temp_buf_ofs = 0;
+
+			for (y = 0; y < h; ++y)
+			{
+				const uint8_t* pSrc = (uint8_t*)pImage + y * bpl;
+
+				uint8_t* pDst = &temp_buf[temp_buf_ofs];
+
+				apply_filter(0, w, h, num_chans, bpl, pSrc, nullptr, pDst);
+
+				temp_buf_ofs += 1 + bpl;
+			}
+
+			assert(temp_buf_ofs <= temp_buf.size());
+						
+			out_buf.resize(out_ofs + 6 + temp_buf_ofs + ((temp_buf_ofs + 65534) / 65535) * 5);
+
+			uint32_t raw_size = write_raw_block(temp_buf.data(), (uint32_t)temp_buf_ofs, out_buf.data() + out_ofs, (uint32_t)out_buf.size() - out_ofs);
+			if (!raw_size)
+			{
+				// Somehow we miscomputed the size of the output buffer.
+				assert(0);
+				return false;
+			}
+
+			zlib_size = raw_size;
+		}
+		
+		out_buf.resize(out_ofs + zlib_size);
+
+		const uint32_t idat_len = (uint32_t)out_buf.size() - PNG_HEADER_SIZE;
+
+		// Write real PNG header, fdEC chunk, and the beginning of the IDAT chunk
+		{
+			static const uint8_t s_color_type[] = { 0x00, 0x00, 0x04, 0x02, 0x06 };
+
+			uint8_t pnghdr[58] = { 
+				0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a,   // PNG sig
+				0x00,0x00,0x00,0x0d, 'I','H','D','R',  // IHDR chunk len, type
+			    0,0,(uint8_t)(w >> 8),(uint8_t)w, // width
+				0,0,(uint8_t)(h >> 8),(uint8_t)h, // height
+				8,   //bit_depth
+				s_color_type[num_chans], // color_type
+				0, // compression
+				0, // filter
+				0, // interlace
+				0, 0, 0, 0, // IHDR crc32
+				0, 0, 0, 5, 'f', 'd', 'E', 'C', 82, 36, 147, 227, FPNG_FDEC_VERSION,   0xE5, 0xAB, 0x62, 0x99, // our custom private, ancillary, do not copy, fdEC chunk
+			  (uint8_t)(idat_len >> 24),(uint8_t)(idat_len >> 16),(uint8_t)(idat_len >> 8),(uint8_t)idat_len, 'I','D','A','T' // IDATA chunk len, type
+			}; 
+
+			// Compute IHDR CRC32
+			uint32_t c = (uint32_t)fpng_crc32(pnghdr + 12, 17, FPNG_CRC32_INIT);
+			for (i = 0; i < 4; ++i, c <<= 8)
+				((uint8_t*)(pnghdr + 29))[i] = (uint8_t)(c >> 24);
+
+			memcpy(out_buf.data(), pnghdr, PNG_HEADER_SIZE);
+		}
+
+		// Write IDAT chunk's CRC32 and a 0 length IEND chunk
+		vector_append(out_buf, "\0\0\0\0\0\0\0\0\x49\x45\x4e\x44\xae\x42\x60\x82", 16); // IDAT CRC32, followed by the IEND chunk
+
+		// Compute IDAT crc32
+		uint32_t c = (uint32_t)fpng_crc32(out_buf.data() + PNG_HEADER_SIZE - 4, idat_len + 4, FPNG_CRC32_INIT);
+		
+		for (i = 0; i < 4; ++i, c <<= 8)
+			(out_buf.data() + out_buf.size() - 16)[i] = (uint8_t)(c >> 24);
+				
+		return true;
+	}
+#endif// [Customize] End
 
 #ifndef FPNG_NO_STDIO
 	bool fpng_encode_image_to_file(const char* pFilename, const void* pImage, uint32_t w, uint32_t h, uint32_t num_chans, uint32_t flags)

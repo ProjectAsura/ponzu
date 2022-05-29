@@ -26,6 +26,7 @@ namespace {
 //-----------------------------------------------------------------------------
 #include "../res/shader/Compile/TonemapVS.inc"
 #include "../res/shader/Compile/TonemapPS.inc"
+#include "../res/shader/Compile/RtCamp.inc"
 
 
 //-----------------------------------------------------------------------------
@@ -37,6 +38,9 @@ unsigned Export(void* args)
     if (data == nullptr)
     { return -1; }
 
+    //asdx::StopWatch timer;
+    //timer.Start();
+
     char path[256] = {};
     sprintf_s(path, "output_%03ld.png", data->FrameIndex);
 
@@ -46,7 +50,8 @@ unsigned Export(void* args)
         data->Width,
         data->Height,
         4,
-        data->Converted))
+        data->Converted,
+        data->Temporary))
     {
         FILE* pFile = nullptr;
         auto err = fopen_s(&pFile, path, "wb");
@@ -56,6 +61,9 @@ unsigned Export(void* args)
             fclose(pFile);
         }
     }
+
+    //timer.End();
+    //ILOGA("timer = %lf", timer.GetElapsedMsec());
 
     return 0;
 }
@@ -104,6 +112,9 @@ bool Renderer::OnInit()
 
     // PNGライブラリ初期化.
     fpng::fpng_init();
+
+    // モデルマネージャ初期化.
+    //m_ModelMgr.Init();
 
     // リードバックテクスチャ生成.
     {
@@ -174,7 +185,6 @@ bool Renderer::OnInit()
         m_ReadBackPitch = static_cast<uint32_t>((pitchSize + 255) & ~0xFFu);
 
         m_ReadBackIndex = 0;
-
     }
 
     // フル矩形用頂点バッファの初期化.
@@ -218,6 +228,21 @@ bool Renderer::OnInit()
 
     // レイトレ用ルートシグニチャ生成.
     {
+        asdx::DescriptorSetLayout<7, 1> layout;
+        layout.SetUAV(0, asdx::SV_ALL, 0);
+        layout.SetSRV(1, asdx::SV_ALL, 0);
+        layout.SetSRV(2, asdx::SV_ALL, 1);
+        layout.SetSRV(3, asdx::SV_ALL, 2);
+        layout.SetSRV(4, asdx::SV_ALL, 3);
+        layout.SetSRV(5, asdx::SV_ALL, 4);
+        layout.SetCBV(6, asdx::SV_ALL, 0);
+        layout.SetStaticSampler(0, asdx::SV_ALL, asdx::STATIC_SAMPLER_LINEAR_WRAP, 0);
+
+        if (!m_RayTracingRootSig.Init(pDevice, layout.GetDesc()))
+        {
+            ELOGA("Error : RayTracing RootSignature Failed.");
+            return false;
+        }
     }
 
     // レイトレ用パイプラインステート生成.
@@ -303,9 +328,10 @@ void Renderer::OnTerm()
 
     asdx::Quad::Instance().Term();
 
-    m_TonemapPSO    .Term();
-    m_TonemapRootSig.Term();
-    m_RayTracingPSO .Term();
+    m_TonemapPSO        .Term();
+    m_TonemapRootSig    .Term();
+    m_RayTracingPSO     .Term();
+    m_RayTracingRootSig .Term();
 
     for(size_t i=0; i<m_BLAS.size(); ++i)
     { m_BLAS[i].Term(); }
@@ -319,6 +345,8 @@ void Renderer::OnTerm()
         m_ReadBackTexture[i].Reset();
         m_ExportData[i].Pixels.clear();
     }
+
+    m_ModelMgr.Term();
 }
 
 //-----------------------------------------------------------------------------
@@ -326,12 +354,13 @@ void Renderer::OnTerm()
 //-----------------------------------------------------------------------------
 void Renderer::OnFrameMove(asdx::FrameEventArgs& args)
 {
-    //// 制限時間を超えた
-    //if (args.Time >= m_RenderTimeSec)
-    //{
-    //    // TODO : 終了処理.
-    //    return;
-    //}
+#if (CAMP_RELEASE)
+    // 制限時間を超えた
+    if (args.Time >= m_SceneDesc.TimeSec)
+    {
+        PostQuitMessage(0);
+        return;
+    }
 
     // CPUで読み取り.
     if (GetFrameCount() > 2)
@@ -350,6 +379,7 @@ void Renderer::OnFrameMove(asdx::FrameEventArgs& args)
         // 画像に出力.
         _beginthreadex(nullptr, 0, Export, &m_ExportData[idx], 0, nullptr);
     }
+#endif
 }
 
 //-----------------------------------------------------------------------------

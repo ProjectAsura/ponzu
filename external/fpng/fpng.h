@@ -47,6 +47,10 @@ namespace fpng
 	// num_chans must be 3 or 4. 
 	bool fpng_encode_image_to_memory(const void* pImage, uint32_t w, uint32_t h, uint32_t num_chans, std::vector<uint8_t>& out_buf, uint32_t flags = 0);
 
+#if 1 // [Customize] Start 
+	bool fpng_encode_image_to_memory(const void* pImage, uint32_t w, uint32_t h, uint32_t num_chans, std::vector<uint8_t>& out_buf, std::vector<uint8_t>& temp_buf, uint32_t flags = 0);
+#endif// [Customize] End
+
 #ifndef FPNG_NO_STDIO
 	// Fast PNG encoding to the specified file.
 	bool fpng_encode_image_to_file(const char* pFilename, const void* pImage, uint32_t w, uint32_t h, uint32_t num_chans, uint32_t flags = 0);
