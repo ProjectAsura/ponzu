@@ -77,10 +77,10 @@ public:
     //! @retval false   初期化に失敗.
     //-------------------------------------------------------------------------
     bool Init(
-        uint64_t maxVertexCount,
-        uint64_t maxIndexCount,
-        uint64_t maxTransformCount,
-        uint64_t maxMaterialCount);
+        uint32_t maxVertexCount,
+        uint32_t maxIndexCount,
+        uint32_t maxTransformCount,
+        uint32_t maxMaterialCount);
 
     //-------------------------------------------------------------------------
     //! @brief      終了処理を行います.
@@ -99,7 +99,7 @@ public:
     //! @param[in]      count   頂点数.
     //! @return     GPU仮想アドレスを返却します.
     //-------------------------------------------------------------------------
-    D3D12_GPU_VIRTUAL_ADDRESS AddVertices(const Vertex* ptr, uint64_t count);
+    D3D12_GPU_VIRTUAL_ADDRESS AddVertices(const Vertex* ptr, uint32_t count);
 
     //-------------------------------------------------------------------------
     //! @brief      頂点インデックスを登録します.
@@ -108,7 +108,7 @@ public:
     //! @param[in]      count   頂点イデックス数.
     //! @return     GPU仮想アドレスを返却します.
     //-------------------------------------------------------------------------
-    D3D12_GPU_VIRTUAL_ADDRESS AddInidices(const uint32_t* ptr, uint64_t count);
+    D3D12_GPU_VIRTUAL_ADDRESS AddInidices(const uint32_t* ptr, uint32_t count);
 
     //-------------------------------------------------------------------------
     //! @brief      トランスフォームを登録します.
@@ -117,7 +117,7 @@ public:
     //! @param[in]      count   トランスフォーム数.
     //! @return     GPU仮想アドレスを返却します.
     //-------------------------------------------------------------------------
-    D3D12_GPU_VIRTUAL_ADDRESS AddTransforms(const asdx::Transform3x4* ptr, uint64_t count);
+    D3D12_GPU_VIRTUAL_ADDRESS AddTransforms(const asdx::Transform3x4* ptr, uint32_t count);
 
     //-------------------------------------------------------------------------
     //! @brief      マテリアルを登録します.
@@ -126,7 +126,7 @@ public:
     //! @param[in]      count   マテリアル数.
     //! @return     GPU仮想アドレスを返却します.
     //-------------------------------------------------------------------------
-    D3D12_GPU_VIRTUAL_ADDRESS AddMaterials(const Material* ptr, uint64_t count);
+    D3D12_GPU_VIRTUAL_ADDRESS AddMaterials(const Material* ptr, uint32_t count);
 
     //-------------------------------------------------------------------------
     //! @brief      頂点バッファのシェーダリソースビューを取得します.
@@ -170,15 +170,20 @@ private:
     asdx::RefPtr<asdx::IShaderResourceView> m_TransformSRV;
     asdx::RefPtr<asdx::IShaderResourceView> m_MaterialSRV;
 
-    uint64_t    m_OffsetVB = 0;
-    uint64_t    m_OffsetIB = 0;
-    uint64_t    m_OffsetTB = 0;
-    uint64_t    m_OffsetMB = 0;
+    uint32_t    m_OffsetVB = 0;
+    uint32_t    m_OffsetIB = 0;
+    uint32_t    m_OffsetTB = 0;
+    uint32_t    m_OffsetMB = 0;
 
-    uint8_t*    m_pHeadVB = nullptr;
-    uint8_t*    m_pHeadIB = nullptr;
-    uint8_t*    m_pHeadTB = nullptr;
-    uint8_t*    m_pHeadMB = nullptr;
+    uint32_t    m_MaxCountVB = 0;
+    uint32_t    m_MaxCountIB = 0;
+    uint32_t    m_MaxCountTB = 0;
+    uint32_t    m_MaxCountMB = 0;
+
+    Vertex*                 m_pVertices     = nullptr;
+    uint32_t*               m_pIndices      = nullptr;
+    asdx::Transform3x4*     m_pTransforms   = nullptr;
+    Material*               m_pMaterials    = nullptr;
 
     D3D12_GPU_VIRTUAL_ADDRESS m_AddressVB = 0;
     D3D12_GPU_VIRTUAL_ADDRESS m_AddressIB = 0;

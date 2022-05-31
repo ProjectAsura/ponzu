@@ -19,6 +19,10 @@
 
 #include <fnd/asdxStopWatch.h>
 
+
+extern "C" { __declspec(dllexport) extern const UINT D3D12SDKVersion = 602;}
+extern "C" { __declspec(dllexport) extern const char* D3D12SDKPath = u8".\\D3D12\\"; }
+
 namespace {
 
 //-----------------------------------------------------------------------------
@@ -28,6 +32,14 @@ namespace {
 #include "../res/shader/Compile/TonemapPS.inc"
 #include "../res/shader/Compile/RtCamp.inc"
 
+struct Payload
+{
+    asdx::Vector3   Position;
+    uint32_t        MaterialId;
+    asdx::Vector3   Normal;
+    asdx::Vector3   Tangent;
+    asdx::Vector2   TexCoord;
+};
 
 //-----------------------------------------------------------------------------
 //      画像に出力します.
@@ -229,14 +241,15 @@ bool Renderer::OnInit()
     // レイトレ用ルートシグニチャ生成.
     {
         asdx::DescriptorSetLayout<7, 1> layout;
-        layout.SetUAV(0, asdx::SV_ALL, 0);
+        layout.SetTableUAV(0, asdx::SV_ALL, 0);
         layout.SetSRV(1, asdx::SV_ALL, 0);
         layout.SetSRV(2, asdx::SV_ALL, 1);
         layout.SetSRV(3, asdx::SV_ALL, 2);
         layout.SetSRV(4, asdx::SV_ALL, 3);
-        layout.SetSRV(5, asdx::SV_ALL, 4);
+        layout.SetTableSRV(5, asdx::SV_ALL, 4);
         layout.SetCBV(6, asdx::SV_ALL, 0);
         layout.SetStaticSampler(0, asdx::SV_ALL, asdx::STATIC_SAMPLER_LINEAR_WRAP, 0);
+        layout.SetFlags(D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED);
 
         if (!m_RayTracingRootSig.Init(pDevice, layout.GetDesc()))
         {
@@ -247,6 +260,39 @@ bool Renderer::OnInit()
 
     // レイトレ用パイプラインステート生成.
     {
+        D3D12_EXPORT_DESC exports[] = {
+            { L"OnGenerateRay"      , nullptr, D3D12_EXPORT_FLAG_NONE },
+            { L"OnClosestHit"       , nullptr, D3D12_EXPORT_FLAG_NONE },
+            { L"OnShadowClosestHit" , nullptr, D3D12_EXPORT_FLAG_NONE },
+            { L"OnMiss"             , nullptr, D3D12_EXPORT_FLAG_NONE },
+            { L"OnShadowMiss"       , nullptr, D3D12_EXPORT_FLAG_NONE },
+        };
+
+        D3D12_HIT_GROUP_DESC groups[2] = {};
+        groups[0].ClosestHitShaderImport    = L"OnClosestHit";
+        groups[0].HitGroupExport            = L"StandardHit";
+        groups[0].Type                      = D3D12_HIT_GROUP_TYPE_TRIANGLES;
+
+        groups[1].ClosestHitShaderImport    = L"OnShadowClosestHit";
+        groups[1].HitGroupExport            = L"ShadowHit";
+        groups[1].Type                      = D3D12_HIT_GROUP_TYPE_TRIANGLES;
+
+        asdx::RayTracingPipelineStateDesc desc = {};
+        desc.pGlobalRootSignature       = m_RayTracingRootSig.GetPtr();
+        desc.DXILLibrary                = { RtCamp, sizeof(RtCamp) };
+        desc.ExportCount                = _countof(exports);
+        desc.pExports                   = exports;
+        desc.HitGroupCount              = _countof(groups);
+        desc.pHitGroups                 = groups;
+        desc.MaxPayloadSize             = sizeof(Payload);
+        desc.MaxAttributeSize           = sizeof(asdx::Vector2);
+        desc.MaxTraceRecursionDepth     = 1;
+
+        if (!m_RayTracingPSO.Init(pDevice, desc))
+        {
+            ELOGA("Error : RayTracing PSO Failed.");
+            return false;
+        }
     }
 
     // トーンマップ用ルートシグニチャ生成.

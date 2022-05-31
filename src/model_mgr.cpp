@@ -23,18 +23,23 @@ namespace r3d {
 //-----------------------------------------------------------------------------
 bool ModelMgr::Init
 (
-    uint64_t maxVertexCount,
-    uint64_t maxIndexCount,
-    uint64_t maxTransformCount,
-    uint64_t maxMaterialCount
+    uint32_t maxVertexCount,
+    uint32_t maxIndexCount,
+    uint32_t maxTransformCount,
+    uint32_t maxMaterialCount
 )
 {
     auto pDevice = asdx::GetD3D12Device();
 
-    auto sizeVB = sizeof(Vertex) * maxVertexCount;
-    auto sizeIB = sizeof(uint32_t) * maxIndexCount;
-    auto sizeTB = sizeof(asdx::Transform3x4) * maxTransformCount;
-    auto sizeMB = sizeof(Material) * maxMaterialCount;
+    const auto sizeVB = maxVertexCount    * sizeof(Vertex);
+    const auto sizeIB = maxIndexCount     * sizeof(uint32_t);
+    const auto sizeTB = maxTransformCount * sizeof(asdx::Transform3x4);
+    const auto sizeMB = maxMaterialCount  * sizeof(Material);
+
+    m_MaxCountVB = maxVertexCount;
+    m_MaxCountIB = maxIndexCount;
+    m_MaxCountTB = maxTransformCount;
+    m_MaxCountMB = maxMaterialCount;
 
     if (!asdx::CreateUploadBuffer(pDevice, sizeVB, m_VB.GetAddress()))
     {
@@ -51,7 +56,7 @@ bool ModelMgr::Init
     {
         m_AddressVB = m_VB->GetGPUVirtualAddress();
 
-        auto hr = m_VB->Map(0, nullptr, reinterpret_cast<void**>(&m_pHeadVB));
+        auto hr = m_VB->Map(0, nullptr, reinterpret_cast<void**>(&m_pVertices));
         if (FAILED(hr))
         {
             ELOGA("Error : ID3D12Resource::Map() Failed. errcode = 0x%x", hr);
@@ -65,7 +70,7 @@ bool ModelMgr::Init
         return false;
     }
 
-    if (!asdx::CreateBufferSRV(pDevice, m_IB.GetPtr(), maxIndexCount, 0, m_IndexSRV.GetAddress()))
+    if (!asdx::CreateBufferSRV(pDevice, m_IB.GetPtr(), UINT(maxIndexCount), 0, m_IndexSRV.GetAddress()))
     {
         ELOGA("Error : Index SRV Create Failed.");
         return false;
@@ -74,7 +79,7 @@ bool ModelMgr::Init
     {
         m_AddressIB = m_IB->GetGPUVirtualAddress();
 
-        auto hr = m_IB->Map(0, nullptr, reinterpret_cast<void**>(&m_pHeadIB));
+        auto hr = m_IB->Map(0, nullptr, reinterpret_cast<void**>(&m_pIndices));
         if (FAILED(hr))
         {
             ELOGA("Error : ID3D12Resource::Map() Failed. errcode = 0x%x", hr);
@@ -97,7 +102,7 @@ bool ModelMgr::Init
     {
         m_AddressTB = m_TB->GetGPUVirtualAddress();
 
-        auto hr = m_TB->Map(0, nullptr, reinterpret_cast<void**>(&m_pHeadTB));
+        auto hr = m_TB->Map(0, nullptr, reinterpret_cast<void**>(&m_pTransforms));
         if (FAILED(hr))
         {
             ELOGA("Error : ID3D12Resource::Map() Failed. errcode = 0x%x", hr);
@@ -120,7 +125,7 @@ bool ModelMgr::Init
     {
         m_AddressMB = m_MB->GetGPUVirtualAddress();
 
-        auto hr = m_MB->Map(0, nullptr, reinterpret_cast<void**>(&m_pHeadMB));
+        auto hr = m_MB->Map(0, nullptr, reinterpret_cast<void**>(&m_pMaterials));
         if (FAILED(hr))
         {
             ELOGA("Error : ID3D12Resource::Map() Failed. errcode = 0x%x", hr);
@@ -151,10 +156,10 @@ void ModelMgr::Term()
     m_OffsetTB = 0;
     m_OffsetMB = 0;
 
-    m_pHeadVB = nullptr;
-    m_pHeadIB = nullptr;
-    m_pHeadTB = nullptr;
-    m_pHeadMB = nullptr;
+    m_pVertices   = nullptr;
+    m_pIndices    = nullptr;
+    m_pTransforms = nullptr;
+    m_pMaterials  = nullptr;
 }
 
 //-----------------------------------------------------------------------------
@@ -163,27 +168,30 @@ void ModelMgr::Term()
 void ModelMgr::Fixed()
 {
     m_VB->Unmap(0, nullptr);
-    m_pHeadVB = nullptr;
+    m_pVertices = nullptr;
 
     m_IB->Unmap(0, nullptr);
-    m_pHeadIB = nullptr;
+    m_pIndices = nullptr;
 
     m_TB->Unmap(0, nullptr);
-    m_pHeadTB = nullptr;
+    m_pTransforms = nullptr;
 
     m_MB->Unmap(0, nullptr);
-    m_pHeadMB = nullptr;
+    m_pMaterials = nullptr;
 }
 
 //-----------------------------------------------------------------------------
 //      頂点データを追加します.
 //-----------------------------------------------------------------------------
-D3D12_GPU_VIRTUAL_ADDRESS ModelMgr::AddVertices(const Vertex* ptr, uint64_t count)
+D3D12_GPU_VIRTUAL_ADDRESS ModelMgr::AddVertices(const Vertex* ptr, uint32_t count)
 {
+    assert(m_OffsetVB + count < m_MaxCountVB);
     D3D12_GPU_VIRTUAL_ADDRESS result = m_AddressVB + m_OffsetVB;
 
-    memcpy(m_pHeadVB + m_OffsetVB, ptr, sizeof(Vertex) * count);
-    m_OffsetVB += sizeof(Vertex) * count;
+    for(uint32_t i=0; i<count; ++i)
+    { m_pVertices[m_OffsetVB + i] = ptr[i]; }
+
+    m_OffsetVB += count;
 
     return result;
 }
@@ -191,12 +199,15 @@ D3D12_GPU_VIRTUAL_ADDRESS ModelMgr::AddVertices(const Vertex* ptr, uint64_t coun
 //-----------------------------------------------------------------------------
 //      インデックスデータを追加します.
 //-----------------------------------------------------------------------------
-D3D12_GPU_VIRTUAL_ADDRESS ModelMgr::AddInidices(const uint32_t* ptr, uint64_t count)
+D3D12_GPU_VIRTUAL_ADDRESS ModelMgr::AddInidices(const uint32_t* ptr, uint32_t count)
 {
+    assert(m_OffsetIB + count < m_MaxCountIB);
     D3D12_GPU_VIRTUAL_ADDRESS result = m_AddressIB + m_OffsetIB;
 
-    memcpy(m_pHeadIB + m_OffsetIB, ptr, sizeof(uint32_t) * count);
-    m_OffsetIB += sizeof(uint32_t) * count;
+    for(uint32_t i=0; i<count; ++i)
+    { m_pIndices[m_OffsetIB + i] = ptr[i] + m_OffsetIB; }
+
+    m_OffsetIB += count;
 
     return result;
 }
@@ -204,12 +215,15 @@ D3D12_GPU_VIRTUAL_ADDRESS ModelMgr::AddInidices(const uint32_t* ptr, uint64_t co
 //-----------------------------------------------------------------------------
 //      トランスフォームデータを追加します.
 //-----------------------------------------------------------------------------
-D3D12_GPU_VIRTUAL_ADDRESS ModelMgr::AddTransforms(const asdx::Transform3x4* ptr, uint64_t count)
+D3D12_GPU_VIRTUAL_ADDRESS ModelMgr::AddTransforms(const asdx::Transform3x4* ptr, uint32_t count)
 {
+    assert(m_OffsetTB + count < m_MaxCountTB);
     D3D12_GPU_VIRTUAL_ADDRESS result = m_AddressTB + m_OffsetTB;
 
-    memcpy(m_pHeadTB + m_OffsetTB, ptr, sizeof(asdx::Transform3x4) * count);
-    m_OffsetTB += sizeof(asdx::Transform3x4) * count;
+    for(uint32_t i=0; i<count; ++i)
+    { m_pTransforms[m_OffsetTB + i] = ptr[i]; }
+
+    m_OffsetTB += count;
 
     return result;
 }
@@ -217,12 +231,15 @@ D3D12_GPU_VIRTUAL_ADDRESS ModelMgr::AddTransforms(const asdx::Transform3x4* ptr,
 //-----------------------------------------------------------------------------
 //      マテリアルデータを追加します.
 //-----------------------------------------------------------------------------
-D3D12_GPU_VIRTUAL_ADDRESS ModelMgr::AddMaterials(const Material* ptr, uint64_t count)
+D3D12_GPU_VIRTUAL_ADDRESS ModelMgr::AddMaterials(const Material* ptr, uint32_t count)
 {
+    assert(m_OffsetMB + count < m_MaxCountMB);
     D3D12_GPU_VIRTUAL_ADDRESS result = m_AddressMB + m_OffsetMB;
 
-    memcpy(m_pHeadMB + m_OffsetMB, ptr, sizeof(Material) * count);
-    m_OffsetMB += sizeof(Material) * count;
+    for(uint32_t i=0; i<count; ++i)
+    { m_pMaterials[m_OffsetMB + i] = ptr[i]; }
+
+    m_OffsetMB += count;
 
     return result;
 }
