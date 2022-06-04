@@ -13,6 +13,18 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="ソース ファイル\external">
+      <UniqueIdentifier>{40f21bac-79c0-4336-ab4c-190043bee32c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ソース ファイル\external\fpng">
+      <UniqueIdentifier>{684877df-560c-428e-ba52-d017a5d1fbf8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ヘッダー ファイル\external">
+      <UniqueIdentifier>{386226ed-6be6-48e5-ad8a-edd3fea59b36}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ヘッダー ファイル\external\fpng">
+      <UniqueIdentifier>{f4d85110-4cfa-4bd5-b450-763bccef2fad}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\main.cpp">
@@ -21,21 +33,24 @@
     <ClCompile Include="..\src\renderer.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
-    <ClCompile Include="..\external\fpng\fpng.cpp">
-      <Filter>ソース ファイル</Filter>
-    </ClCompile>
     <ClCompile Include="..\src\model_mgr.cpp">
       <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="..\external\fpng\fpng.cpp">
+      <Filter>ソース ファイル\external\fpng</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\include\renderer.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
-    <ClInclude Include="..\external\fpng\fpng.h">
+    <ClInclude Include="..\include\model_mgr.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
-    <ClInclude Include="..\include\model_mgr.h">
+    <ClInclude Include="..\external\fpng\fpng.h">
+      <Filter>ヘッダー ファイル\external\fpng</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\mimalloc_wrapper.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
   </ItemGroup>
