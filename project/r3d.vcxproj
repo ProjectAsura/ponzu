@@ -31,12 +31,14 @@
     <ClCompile Include="..\external\fpng\fpng.cpp" />
     <ClCompile Include="..\src\main.cpp" />
     <ClCompile Include="..\src\model_mgr.cpp" />
+    <ClCompile Include="..\src\OBJLoader.cpp" />
     <ClCompile Include="..\src\renderer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\external\fpng\fpng.h" />
     <ClInclude Include="..\include\mimalloc_wrapper.h" />
     <ClInclude Include="..\include\model_mgr.h" />
+    <ClInclude Include="..\include\OBJLoader.h" />
     <ClInclude Include="..\include\renderer.h" />
   </ItemGroup>
   <ItemGroup>

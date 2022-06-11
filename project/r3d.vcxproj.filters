@@ -39,6 +39,9 @@
     <ClCompile Include="..\external\fpng\fpng.cpp">
       <Filter>ソース ファイル\external\fpng</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\OBJLoader.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\include\renderer.h">
@@ -51,6 +54,9 @@
       <Filter>ヘッダー ファイル\external\fpng</Filter>
     </ClInclude>
     <ClInclude Include="..\include\mimalloc_wrapper.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\OBJLoader.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
   </ItemGroup>
