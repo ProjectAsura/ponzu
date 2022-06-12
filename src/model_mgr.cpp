@@ -186,7 +186,7 @@ void ModelMgr::Fixed()
 D3D12_GPU_VIRTUAL_ADDRESS ModelMgr::AddVertices(const Vertex* ptr, uint32_t count)
 {
     assert(m_OffsetVB + count < m_MaxCountVB);
-    D3D12_GPU_VIRTUAL_ADDRESS result = m_AddressVB + m_OffsetVB;
+    D3D12_GPU_VIRTUAL_ADDRESS result = m_AddressVB + m_OffsetVB * sizeof(Vertex);
 
     for(uint32_t i=0; i<count; ++i)
     { m_pVertices[m_OffsetVB + i] = ptr[i]; }
@@ -202,10 +202,10 @@ D3D12_GPU_VIRTUAL_ADDRESS ModelMgr::AddVertices(const Vertex* ptr, uint32_t coun
 D3D12_GPU_VIRTUAL_ADDRESS ModelMgr::AddInidices(const uint32_t* ptr, uint32_t count)
 {
     assert(m_OffsetIB + count < m_MaxCountIB);
-    D3D12_GPU_VIRTUAL_ADDRESS result = m_AddressIB + m_OffsetIB;
+    D3D12_GPU_VIRTUAL_ADDRESS result = m_AddressIB + m_OffsetIB * sizeof(uint32_t);
 
     for(uint32_t i=0; i<count; ++i)
-    { m_pIndices[m_OffsetIB + i] = ptr[i] + m_OffsetIB; }
+    { m_pIndices[m_OffsetIB + i] = ptr[i]; }
 
     m_OffsetIB += count;
 
@@ -218,7 +218,7 @@ D3D12_GPU_VIRTUAL_ADDRESS ModelMgr::AddInidices(const uint32_t* ptr, uint32_t co
 D3D12_GPU_VIRTUAL_ADDRESS ModelMgr::AddTransforms(const asdx::Transform3x4* ptr, uint32_t count)
 {
     assert(m_OffsetTB + count < m_MaxCountTB);
-    D3D12_GPU_VIRTUAL_ADDRESS result = m_AddressTB + m_OffsetTB;
+    D3D12_GPU_VIRTUAL_ADDRESS result = m_AddressTB + m_OffsetTB * sizeof(asdx::Transform3x4);
 
     for(uint32_t i=0; i<count; ++i)
     { m_pTransforms[m_OffsetTB + i] = ptr[i]; }
@@ -234,7 +234,7 @@ D3D12_GPU_VIRTUAL_ADDRESS ModelMgr::AddTransforms(const asdx::Transform3x4* ptr,
 D3D12_GPU_VIRTUAL_ADDRESS ModelMgr::AddMaterials(const Material* ptr, uint32_t count)
 {
     assert(m_OffsetMB + count < m_MaxCountMB);
-    D3D12_GPU_VIRTUAL_ADDRESS result = m_AddressMB + m_OffsetMB;
+    D3D12_GPU_VIRTUAL_ADDRESS result = m_AddressMB + m_OffsetMB * sizeof(Material);
 
     for(uint32_t i=0; i<count; ++i)
     { m_pMaterials[m_OffsetMB + i] = ptr[i]; }

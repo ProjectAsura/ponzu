@@ -16,6 +16,7 @@
 // Include
 //-----------------------------------------------------------------------------
 #include <fw/asdxApp.h>
+#include <fw/asdxCameraController.h>
 #include <gfx/asdxRootSignature.h>
 #include <gfx/asdxPipelineState.h>
 #include <gfx/asdxRayTracing.h>
@@ -24,6 +25,7 @@
 #include <gfx/asdxQuad.h>
 #include <edit/asdxGuiMgr.h>
 #include <model_mgr.h>
+
 
 namespace r3d {
 
@@ -35,6 +37,15 @@ struct SceneDesc
     double      TimeSec;
     uint32_t    Width;
     uint32_t    Height;
+};
+
+///////////////////////////////////////////////////////////////////////////////
+// DebugMesh structure
+///////////////////////////////////////////////////////////////////////////////
+struct DebugMesh
+{
+    D3D12_VERTEX_BUFFER_VIEW    VBV;
+    D3D12_INDEX_BUFFER_VIEW     IBV;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -86,6 +97,17 @@ private:
     asdx::Tlas                      m_TLAS;
     asdx::ComputeTarget             m_Canvas;
     ModelMgr                        m_ModelMgr;
+    asdx::Texture                   m_IBL;
+    asdx::ConstantBuffer            m_SceneParam;
+    asdx::CameraController          m_CameraController;
+    asdx::ShaderTable               m_RayGenTable;
+    asdx::ShaderTable               m_MissTable;
+    asdx::ShaderTable               m_HitGroupTable;
+    asdx::ColorTarget               m_DebugColorTarget;
+    asdx::DepthTarget               m_DebugDepthTarget;
+    asdx::RootSignature             m_DebugRootSig;
+    asdx::PipelineState             m_DebugPSO;
+    std::vector<DebugMesh>          m_DebugMeshes;
 
     uint8_t                         m_ReadBackIndex = 0;
     uint8_t                         m_MapIndex      = 0;

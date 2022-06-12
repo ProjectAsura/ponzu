@@ -55,17 +55,36 @@ struct MaterialOBJ
 };
 
 ///////////////////////////////////////////////////////////////////////////////
+// VertexOBJ structure
+///////////////////////////////////////////////////////////////////////////////
+struct VertexOBJ
+{
+    asdx::Vector3   Position;
+    asdx::Vector3   Normal;
+    asdx::Vector3   Tangent;
+    asdx::Vector2   TexCoord;
+};
+
+///////////////////////////////////////////////////////////////////////////////
 // MeshOBJ structure
 ///////////////////////////////////////////////////////////////////////////////
 struct MeshOBJ
 {
-    std::vector<asdx::Vector3>  Positions;
-    std::vector<asdx::Vector3>  Normals;
-    std::vector<asdx::Vector2>  TexCoords;
-    std::vector<IndexOBJ>       Indices;
-    std::vector<SubsetOBJ>      Subsets;
-    std::vector<MaterialOBJ>    Materials;
+    std::string                 Name;
+    std::string                 MaterialName;
+    std::vector<VertexOBJ>      Vertices;
+    std::vector<uint32_t>       Indices;
 };
+
+///////////////////////////////////////////////////////////////////////////////
+// ModelOBJ structure
+///////////////////////////////////////////////////////////////////////////////
+struct ModelOBJ
+{
+    std::vector<MaterialOBJ>    Materials;
+    std::vector<MeshOBJ>        Meshes;
+};
+
 
 ///////////////////////////////////////////////////////////////////////////////
 // OBJLoader class
@@ -101,11 +120,11 @@ public:
     //! @brief      ファイルをロードします.
     //! 
     //! @param[in]      path        ファイルパスです.
-    //! @param[out]     mesh        メッシュの格納先です.
+    //! @param[out]     model       モデルの格納先です.
     //! @retval true    ロードに成功.
     //! @retval false   ロードに失敗.
     //-------------------------------------------------------------------------
-    bool Load(const char* path, MeshOBJ& mesh);
+    bool Load(const char* path, ModelOBJ& mesh);
 
     //-------------------------------------------------------------------------
     //! @brief      ディレクトリパスを取得します.
@@ -129,20 +148,20 @@ private:
     //! @brief      OBJファイルをロードします.
     //! 
     //! @param[in]      path        OBJファイルパスです.
-    //! @param[out]     mesh        メッシュの格納先です.
+    //! @param[out]     model       モデルの格納先です.
     //! @param[out]     materials   マテリアルの格納先です.
     //! @retval true    ロードに成功.
     //! @retval false   ロードに失敗.
     //-------------------------------------------------------------------------
-    bool LoadOBJ(const char* path, MeshOBJ& mesh);
+    bool LoadOBJ(const char* path, ModelOBJ& model);
 
     //-------------------------------------------------------------------------
     //! @brief      MTLファイルをロードします.
     //! 
     //! @param[in]      path        MTLファイルパスです.
-    //! @param[out]     mesh        メッシュの格納先です.
+    //! @param[out]     model       モデルの格納先です.
     //! @retval true    ロードに成功.
     //! @retval false   ロードに失敗.
     //-------------------------------------------------------------------------
-    bool LoadMTL(const char* path, MeshOBJ& mesh);
+    bool LoadMTL(const char* path, ModelOBJ& model);
 };

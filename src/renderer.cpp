@@ -9,16 +9,15 @@
 //-----------------------------------------------------------------------------
 #include <renderer.h>
 #include <fnd/asdxLogger.h>
+#include <fnd/asdxStopWatch.h>
+#include <fnd/asdxMisc.h>
 #include <process.h>
-
 #include <fpng.h>
+#include <OBJLoader.h>
 
 #if ASDX_ENABLE_IMGUI
 #include "../external/asdx12/external/imgui/imgui.h"
 #endif
-
-#include <fnd/asdxStopWatch.h>
-
 
 extern "C" { __declspec(dllexport) extern const UINT D3D12SDKVersion = 602;}
 extern "C" { __declspec(dllexport) extern const char* D3D12SDKPath = u8".\\D3D12\\"; }
@@ -31,7 +30,19 @@ namespace {
 #include "../res/shader/Compile/TonemapVS.inc"
 #include "../res/shader/Compile/TonemapPS.inc"
 #include "../res/shader/Compile/RtCamp.inc"
+#include "../res/shader/Compile/DebugVS.inc"
+#include "../res/shader/Compile/DebugPS.inc"
 
+static const D3D12_INPUT_ELEMENT_DESC kModelElements[] = {
+    { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+    { "NORMAL"  , 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+    { "TANGENT" , 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+    { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT   , 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+};
+
+///////////////////////////////////////////////////////////////////////////////
+// Payload structure
+///////////////////////////////////////////////////////////////////////////////
 struct Payload
 {
     asdx::Vector3   Position;
@@ -39,6 +50,23 @@ struct Payload
     asdx::Vector3   Normal;
     asdx::Vector3   Tangent;
     asdx::Vector2   TexCoord;
+};
+
+///////////////////////////////////////////////////////////////////////////////
+// SceneParam structure
+///////////////////////////////////////////////////////////////////////////////
+struct SceneParam
+{
+    asdx::Matrix    View;
+    asdx::Matrix    Proj;
+    asdx::Matrix    InvView;
+    asdx::Matrix    InvProj;
+    asdx::Matrix    InvViewProj;
+
+    uint32_t        MaxBounce;
+    uint32_t        FrameIndex;
+    float           SkyIntensity;
+    float           Exposure;
 };
 
 //-----------------------------------------------------------------------------
@@ -80,6 +108,21 @@ unsigned Export(void* args)
     return 0;
 }
 
+//-----------------------------------------------------------------------------
+//      マテリアルIDとジオメトリIDをパッキングします.
+//-----------------------------------------------------------------------------
+inline uint32_t PackInstanceId(uint32_t materialId, uint32_t geometryId)
+{ return ((geometryId & 0x3FFF) << 10) | (materialId & 0x3FF); }
+
+//-----------------------------------------------------------------------------
+//      マテリアルIDとジオメトリIDのパッキングを解除します.
+//-----------------------------------------------------------------------------
+inline void UnpackInstanceId(uint32_t instanceId, uint32_t& materialId, uint32_t& geometryId)
+{
+    materialId = instanceId & 0x3FF;
+    geometryId = (instanceId >> 10) & 0x3FFF;
+}
+
 } // namespace
 
 
@@ -97,6 +140,9 @@ Renderer::Renderer(const SceneDesc& desc)
 , m_SceneDesc(desc)
 {
     m_SwapChainFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
+#if !CAMP_RELEASE
+    //m_DeviceDesc.EnableCapture = true;
+#endif
 }
 
 //-----------------------------------------------------------------------------
@@ -126,7 +172,11 @@ bool Renderer::OnInit()
     fpng::fpng_init();
 
     // モデルマネージャ初期化.
-    //m_ModelMgr.Init();
+    if (!m_ModelMgr.Init(UINT16_MAX, UINT16_MAX, UINT16_MAX, UINT16_MAX))
+    {
+        ELOGA("Error : ModelMgr::Init() Failed.");
+        return false;
+    }
 
     // リードバックテクスチャ生成.
     {
@@ -295,6 +345,56 @@ bool Renderer::OnInit()
         }
     }
 
+    // レイ生成テーブル.
+    {
+        asdx::ShaderRecord record = {};
+        record.ShaderIdentifier = m_RayTracingPSO.GetShaderIdentifier(L"OnGenerateRay");
+
+        asdx::ShaderTable::Desc desc = {};
+        desc.RecordCount    = 1;
+        desc.pRecords       = &record;
+
+        if (!m_RayGenTable.Init(pDevice, &desc))
+        {
+            ELOGA("Error : RayGenTable Init Failed.");
+            return false;
+        }
+    }
+
+    // ミステーブル.
+    {
+        asdx::ShaderRecord record[2] = {};
+        record[0].ShaderIdentifier = m_RayTracingPSO.GetShaderIdentifier(L"OnMiss");
+        record[1].ShaderIdentifier = m_RayTracingPSO.GetShaderIdentifier(L"OnShadowMiss");
+
+        asdx::ShaderTable::Desc desc = {};
+        desc.RecordCount = 2;
+        desc.pRecords    = record;
+
+        if (!m_MissTable.Init(pDevice, &desc))
+        {
+            ELOGA("Error : MissTable Init Failed.");
+            return false;
+        }
+    }
+
+    // ヒットグループ.
+    {
+        asdx::ShaderRecord record[2];
+        record[0].ShaderIdentifier = m_RayTracingPSO.GetShaderIdentifier(L"StandardHit");
+        record[1].ShaderIdentifier = m_RayTracingPSO.GetShaderIdentifier(L"ShadowHit");
+
+        asdx::ShaderTable::Desc desc = {};
+        desc.RecordCount = 2;
+        desc.pRecords    = record;
+
+        if (!m_HitGroupTable.Init(pDevice, &desc))
+        {
+            ELOGA("Error : HitGroupTable Init Failed.");
+            return false;
+        }
+    }
+
     // トーンマップ用ルートシグニチャ生成.
     {
         asdx::DescriptorSetLayout<1, 1> layout;
@@ -334,10 +434,243 @@ bool Renderer::OnInit()
         }
     }
 
+    // カメラ初期化.
+    {
+        auto pos = asdx::Vector3(0.0f, 0.0f, 10.0f);
+        auto target = asdx::Vector3(0.0f, 0.0f, 0.0f);
+        auto upward = asdx::Vector3(0.0f, 1.0f, 0.0f);
+        m_CameraController.Init(pos, target, upward, 1.0f, 1000.0f);
+    }
+
+    // 定数バッファ初期化.
+    {
+        auto size = asdx::RoundUp(sizeof(SceneParam), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+        if (!m_SceneParam.Init(size))
+        {
+            ELOGA("Error : SceneParam Init Failed.");
+            return false;
+        }
+    }
+
+    // IBL読み込み.
+    {
+        std::string path;
+        if (!asdx::SearchFilePathA("../res/ibl/studio_garden_2k.dds", path))
+        {
+            ELOGA("Error : IBL File Not Found.");
+            return false;
+        }
+
+        asdx::ResTexture res;
+        if (!res.LoadFromFileA(path.c_str()))
+        {
+            ELOGA("Error : IBL Load Failed.");
+            return false;
+        }
+
+        if (!m_IBL.Init(m_GfxCmdList, res))
+        {
+            ELOGA("Error : IBL Init Failed.");
+            return false;
+        }
+    }
+
+    #if (!CAMP_RELEASE)
+    // デバッグカラーターゲット生成.
+    {
+        asdx::TargetDesc desc;
+        desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        desc.Width              = m_SceneDesc.Width;
+        desc.Height             = m_SceneDesc.Height;
+        desc.DepthOrArraySize   = 1;
+        desc.MipLevels          = 1;
+        desc.Format             = DXGI_FORMAT_R8G8B8A8_UNORM;
+        desc.SampleDesc.Count   = 1;
+        desc.SampleDesc.Quality = 0;
+        desc.InitState          = D3D12_RESOURCE_STATE_COMMON;
+        desc.ClearColor[0]      = 0.0f;
+        desc.ClearColor[1]      = 0.0f;
+        desc.ClearColor[2]      = 0.0f;
+        desc.ClearColor[3]      = 1.0f;
+
+        if (!m_DebugColorTarget.Init(&desc, false))
+        {
+            ELOGA("Error : DebugColorTarget Init Failed.");
+            return false;
+        }
+
+        m_GfxCmdList.BarrierTransition(
+            m_DebugColorTarget.GetResource(), 0,
+            D3D12_RESOURCE_STATE_COMMON,
+            D3D12_RESOURCE_STATE_RENDER_TARGET);
+    }
+
+    // デバッグ深度ターゲット生成.
+    {
+        asdx::TargetDesc desc;
+        desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        desc.Width              = m_SceneDesc.Width;
+        desc.Height             = m_SceneDesc.Height;
+        desc.DepthOrArraySize   = 1;
+        desc.MipLevels          = 1;
+        desc.Format             = DXGI_FORMAT_D32_FLOAT;
+        desc.SampleDesc.Count   = 1;
+        desc.SampleDesc.Quality = 0;
+        desc.InitState          = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+        desc.ClearDepth         = 1.0f;
+        desc.ClearStencil       = 0;
+
+        if (!m_DebugDepthTarget.Init(&desc))
+        {
+            ELOGA("Error : DebugDepthTarget Init Failed.");
+            return false;
+        }
+    }
+
+    // デバッグルートシグニチャ生成.
+    {
+        auto flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+        flags |= D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED;
+
+        asdx::DescriptorSetLayout<3, 1> layout;
+        layout.SetCBV(0, asdx::SV_VS, 0);
+        layout.SetCBV(1, asdx::SV_VS, 1);
+        layout.SetTableSRV(2, asdx::SV_PS, 0);
+        layout.SetStaticSampler(0, asdx::SV_ALL, asdx::STATIC_SAMPLER_LINEAR_WRAP, 0);
+        layout.SetFlags(flags);
+
+        if (!m_DebugRootSig.Init(pDevice, layout.GetDesc()))
+        {
+            ELOGA("Error : RayTracing RootSignature Failed.");
+            return false;
+        }
+    }
+
+    // デバッグパイプラインステート生成.
+    {
+        D3D12_GRAPHICS_PIPELINE_STATE_DESC desc = {};
+        desc.pRootSignature                 = m_DebugRootSig.GetPtr();
+        desc.VS                             = { DebugVS, sizeof(DebugVS) };
+        desc.PS                             = { DebugPS, sizeof(DebugPS) };
+        desc.BlendState                     = asdx::BLEND_DESC(asdx::BLEND_STATE_OPAQUE);
+        desc.DepthStencilState              = asdx::DEPTH_STENCIL_DESC(asdx::DEPTH_STATE_DEFAULT);
+        desc.RasterizerState                = asdx::RASTERIZER_DESC(asdx::RASTERIZER_STATE_CULL_NONE);
+        desc.SampleMask                     = D3D12_DEFAULT_SAMPLE_MASK;
+        desc.PrimitiveTopologyType          = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+        desc.NumRenderTargets               = 1;
+        desc.RTVFormats[0]                  = DXGI_FORMAT_R8G8B8A8_UNORM;
+        desc.DSVFormat                      = DXGI_FORMAT_D32_FLOAT;
+        desc.InputLayout.NumElements        = _countof(kModelElements);
+        desc.InputLayout.pInputElementDescs = kModelElements;
+        desc.SampleDesc.Count               = 1;
+        desc.SampleDesc.Quality             = 0;
+
+        if (!m_DebugPSO.Init(pDevice, &desc))
+        {
+            ELOGA("Error : PipelineState Failed.");
+            return false;
+        }
+    }
+    #endif
+
+
+    // Test
+    {
+        ModelOBJ model;
+        OBJLoader loader;
+        if (!loader.Load("../res/model/dosei_quad.obj", model))
+        {
+            ELOGA("Error : Model Load Failed.");
+            return false;
+        }
+
+        Material dummy;
+        dummy.Normal = 0;
+        dummy.BaseColor = 0;
+        dummy.ORM = 0;
+        m_ModelMgr.AddMaterials(&dummy, 1);
+
+        auto meshCount = model.Meshes.size();
+
+        m_BLAS.resize(meshCount);
+
+        std::vector<D3D12_RAYTRACING_INSTANCE_DESC> instanceDescs;
+        instanceDescs.resize(meshCount);
+
+        m_DebugMeshes.resize(meshCount);
+ 
+        for(size_t i=0; i<meshCount; ++i)
+        {
+            auto vertexCount = uint32_t(model.Meshes[i].Vertices.size());
+            auto vertices    = reinterpret_cast<Vertex*>(model.Meshes[i].Vertices.data());
+
+            auto indexCount = uint32_t(model.Meshes[i].Indices.size());
+            auto indices    = model.Meshes[i].Indices.data();
+
+            asdx::Transform3x4 transform;
+
+            auto addrVertex    = m_ModelMgr.AddVertices(vertices, vertexCount);
+            auto addrIndex     = m_ModelMgr.AddInidices(indices,  indexCount);
+            auto addrTransform = m_ModelMgr.AddTransforms(&transform, 1);
+
+            D3D12_RAYTRACING_GEOMETRY_DESC desc = {};
+            desc.Type                                   = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
+            desc.Flags                                  = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
+            desc.Triangles.Transform3x4                 = addrTransform;
+            desc.Triangles.IndexFormat                  = DXGI_FORMAT_R32_UINT;
+            desc.Triangles.IndexCount                   = indexCount;
+            desc.Triangles.IndexBuffer                  = addrIndex;
+            desc.Triangles.VertexFormat                 = DXGI_FORMAT_R32G32B32_FLOAT;
+            desc.Triangles.VertexBuffer.StartAddress    = addrVertex;
+            desc.Triangles.VertexBuffer.StrideInBytes   = sizeof(Vertex);
+            desc.Triangles.VertexCount                  = vertexCount;
+
+            if (!m_BLAS[i].Init(
+                pDevice,
+                1,
+                &desc, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE))
+            {
+                ELOGA("Error : Blas::Init() Failed.");
+                return false;
+            }
+
+            // ビルドコマンドを積んでおく.
+            m_BLAS[i].Build(m_GfxCmdList.GetCommandList());
+
+            memcpy(instanceDescs[i].Transform, transform.m, sizeof(float) * 12);
+            instanceDescs[i].InstanceID                             = PackInstanceId(0, uint32_t(i));
+            instanceDescs[i].InstanceMask                           = 0xFF;
+            instanceDescs[i].InstanceContributionToHitGroupIndex    = 0;
+            instanceDescs[i].Flags                                  = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
+            instanceDescs[i].AccelerationStructure                  = m_BLAS[i].GetResource()->GetGPUVirtualAddress();
+
+            m_DebugMeshes[i].VBV.BufferLocation = addrVertex;
+            m_DebugMeshes[i].VBV.SizeInBytes    = sizeof(Vertex) * vertexCount;
+            m_DebugMeshes[i].VBV.StrideInBytes  = sizeof(Vertex);
+
+            m_DebugMeshes[i].IBV.BufferLocation = addrIndex;
+            m_DebugMeshes[i].IBV.Format         = DXGI_FORMAT_R32_UINT;
+            m_DebugMeshes[i].IBV.SizeInBytes    = sizeof(uint32_t) * indexCount;
+        }
+
+        auto instanceCount = uint32_t(instanceDescs.size());
+        if (!m_TLAS.Init(
+            pDevice,
+            instanceCount,
+            instanceDescs.data(),
+            D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE))
+        {
+            ELOGA("Error : Tlas::Init() Failed.");
+            return false;
+        }
+
+        // ビルドコマンドを積んでおく.
+        m_TLAS.Build(m_GfxCmdList.GetCommandList());
+    }
+
     // 高速化機構生成.
     {
     }
-
 
     // セットアップコマンド実行.
     {
@@ -386,11 +719,24 @@ void Renderer::OnTerm()
     m_TLAS  .Term();
     m_Canvas.Term();
 
+    m_SceneParam.Term();
+    m_IBL       .Term();
+
+    m_RayGenTable   .Term();
+    m_MissTable     .Term();
+    m_HitGroupTable .Term();
+
     for(auto i=0; i<3; ++i)
     {
         m_ReadBackTexture[i].Reset();
         m_ExportData[i].Pixels.clear();
     }
+
+    m_DebugColorTarget.Term();
+    m_DebugDepthTarget.Term();
+    m_DebugRootSig    .Term();
+    m_DebugPSO        .Term();
+    m_DebugMeshes.clear();
 
     m_ModelMgr.Term();
 }
@@ -438,10 +784,90 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
     // コマンド記録開始.
     m_GfxCmdList.Reset();
 
-    // レイトレ実行.
+    // 定数バッファ更新.
     {
+        auto fovY   = asdx::ToRadian(37.5f);
+        auto aspect = float(m_SceneDesc.Width) / float(m_SceneDesc.Height);
+
+        auto view = m_CameraController.GetView();
+
+        SceneParam param = {};
+        param.View = view;
+        param.Proj = asdx::Matrix::CreatePerspectiveFieldOfView(
+            fovY,
+            aspect,
+            m_CameraController.GetNearClip(),
+            m_CameraController.GetFarClip());
+        param.InvView = asdx::Matrix::Invert(param.View);
+        param.InvProj = asdx::Matrix::Invert(param.Proj);
+        param.InvViewProj = param.InvProj * param.InvView;
+
+        param.MaxBounce     = 8;
+        param.FrameIndex    = GetFrameCount();
+        param.SkyIntensity  = 1.0f;
+        param.Exposure      = 1.0f;
+
+        m_SceneParam.SwapBuffer();
+        m_SceneParam.Update(&param, sizeof(param));
     }
 
+#if (!CAMP_RELEASE)
+    //{
+    //    auto pRTV = m_DebugColorTarget.GetRTV();
+    //    auto pDSV = m_DebugDepthTarget.GetDSV();
+    //    m_GfxCmdList.SetTarget(pRTV, pDSV);
+    //    m_GfxCmdList.SetViewport(m_DebugColorTarget.GetResource());
+    //    m_GfxCmdList.SetRootSignature(m_DebugRootSig.GetPtr(), false);
+    //    m_GfxCmdList.SetPipelineState(m_DebugPSO.GetPtr());
+
+    //    m_GfxCmdList.SetCBV(0, m_SceneParam.GetResource());
+    //    m_GfxCmdList.SetTable(2, m_ModelMgr.GetMaterialSRV());
+    //    m_GfxCmdList.SetPrimitiveToplogy(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    //    auto w = m_DebugColorTarget.GetDesc().Width;
+    //    auto h = m_DebugColorTarget.GetDesc().Height;
+
+
+    //    auto count = m_DebugMeshes.size();
+    //    for(size_t i=0; i<count; ++i)
+    //    {
+    //        auto vbv = m_DebugMeshes[i].VBV;
+    //        auto ibv = m_DebugMeshes[i].IBV;
+
+    //        m_GfxCmdList.SetVertexBuffers(0, 1, &vbv);
+    //        m_GfxCmdList.SetIndexBuffer(&ibv);
+    //        m_GfxCmdList.DrawIndexedInstanced(0, 1, 0, 0, 0);
+    //    }
+    //}
+#endif
+
+    // レイトレ実行.
+    {
+        m_GfxCmdList.SetStateObject(m_RayTracingPSO.GetStateObject());
+        m_GfxCmdList.SetRootSignature(m_RayTracingRootSig.GetPtr(), true);
+        m_GfxCmdList.SetTable(0, m_Canvas.GetUAV(), true);
+        m_GfxCmdList.SetSRV(1, m_TLAS.GetResource(), true);
+        m_GfxCmdList.SetSRV(2, m_ModelMgr.GetVertexSRV(), true);
+        m_GfxCmdList.SetSRV(3, m_ModelMgr.GetIndexSRV(), true);
+        m_GfxCmdList.SetSRV(4, m_ModelMgr.GetMaterialSRV(), true);
+        m_GfxCmdList.SetTable(5, m_IBL.GetView(), true);
+        m_GfxCmdList.SetCBV(6, m_SceneParam.GetResource(), true);
+
+        D3D12_DISPATCH_RAYS_DESC desc = {};
+        desc.RayGenerationShaderRecord  = m_RayGenTable.GetRecordView();
+        desc.MissShaderTable            = m_MissTable.GetTableView();
+        desc.HitGroupTable              = m_HitGroupTable.GetTableView();
+        desc.Width                      = m_SceneDesc.Width;
+        desc.Height                     = m_SceneDesc.Height;
+        desc.Depth                      = 1;
+
+        m_GfxCmdList.DispatchRays(&desc);
+
+        // バリアを張っておく.
+        m_GfxCmdList.BarrierUAV(m_Canvas.GetResource());
+    }
+
+    // スワップチェインに描画.
     {
         asdx::ScopedBarrier barrier0(
             m_GfxCmdList,
@@ -547,6 +973,8 @@ void Renderer::OnKey(const asdx::KeyEventArgs& args)
     asdx::GuiMgr::Instance().OnKey(
         args.IsKeyDown, args.IsAltDown, args.KeyCode);
 #endif
+
+    m_CameraController.OnKey(args.KeyCode, args.IsKeyDown, args.IsAltDown);
 }
 
 //-----------------------------------------------------------------------------
@@ -561,6 +989,16 @@ void Renderer::OnMouse(const asdx::MouseEventArgs& args)
         args.IsMiddleButtonDown,
         args.IsRightButtonDown);
 #endif
+
+    m_CameraController.OnMouse(
+        args.X,
+        args.Y,
+        args.WheelDelta,
+        args.IsLeftButtonDown,
+        args.IsRightButtonDown,
+        args.IsMiddleButtonDown,
+        args.IsSideButton1Down,
+        args.IsSideButton2Down);
 }
 
 //-----------------------------------------------------------------------------

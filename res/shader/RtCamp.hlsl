@@ -51,6 +51,9 @@ struct SceneParameter
 {
     float4x4 View;
     float4x4 Proj;
+    float4x4 InvView;
+    float4x4 InvProj;
+    float4x4 InvViewProj;
 
     uint    MaxBounce;
     uint    FrameIndex;
@@ -100,10 +103,30 @@ RayTracingAS                    SceneAS     : register(t0);
 ByteAddressBuffer               Vertices    : register(t1);
 ByteAddressBuffer               Indices     : register(t2);
 ByteAddressBuffer               Materials   : register(t3);
-Texture2D<float>                BackGround  : register(t4);
+Texture2D<float4>               BackGround  : register(t4);
 SamplerState                    LinearWrap  : register(s0);
 ConstantBuffer<SceneParameter>  SceneParam  : register(b0);
 
+//-----------------------------------------------------------------------------
+//      マテリアルIDとジオメトリをIDをパッキングします.
+//-----------------------------------------------------------------------------
+uint PackInstanceId(uint materialId, uint geometryId)
+{
+    return ((geometryId & 0x3FFF) << 10) | (materialId & 0x3FF);
+}
+
+//-----------------------------------------------------------------------------
+//      マテリアルIDとジオメトリIDのパッキングを解除します.
+//-----------------------------------------------------------------------------
+void UnpackInstanceId(uint instanceId, out uint materialId, out uint geometryId)
+{
+    materialId = instanceId & 0x3FF;
+    geometryId = (instanceId >> 10) & 0x3FFF;
+}
+
+//-----------------------------------------------------------------------------
+//      PCG
+//-----------------------------------------------------------------------------
 uint4 Pcg(uint4 v)
 {
     v = v * 1664525u + 101390422u;
@@ -122,22 +145,34 @@ uint4 Pcg(uint4 v)
     return v;
 }
 
+//-----------------------------------------------------------------------------
+//      floatに変換します.
+//-----------------------------------------------------------------------------
 float ToFloat(uint x)
 {
     return asfloat(0x3f800000 | (x >> 9)) - 1.0f;
 }
 
+//-----------------------------------------------------------------------------
+//      乱数を初期化します.
+//-----------------------------------------------------------------------------
 uint4 InitRandom(uint2 pixelCoords, uint frameIndex)
 {
     return uint4(pixelCoords.xy, frameIndex, 0);
 }
 
+//-----------------------------------------------------------------------------
+//      疑似乱数を取得します.
+//-----------------------------------------------------------------------------
 float Random(uint4 seed)
 {
     seed.w++;
     return ToFloat(Pcg(seed).x);
 }
 
+//-----------------------------------------------------------------------------
+//      レイのオフセット値を取得します.
+//-----------------------------------------------------------------------------
 float3 OffsetRay(const float3 p, const float3 n)
 {
     // Ray Tracing Gems, Chapter 6.
@@ -256,17 +291,18 @@ Vertex GetVertex(uint triangleIndex, float2 barycentrices)
 //-----------------------------------------------------------------------------
 RayDesc GeneratePinholeCameraRay(float2 pixel)
 {
-    float aspect      = SceneParam.Proj[1][1] / SceneParam.Proj[0][0];
-    float tanHalfFovY = 1.0f / SceneParam.Proj[1][1];
+    float4 orig   = float4(0.0f, 0.0f, 0.0f, 1.0f);           // カメラの位置.
+    float4 screen = float4(pixel, 0.0f, 1.0f); // スクリーンの位置.
+
+    orig   = mul(SceneParam.InvView, orig);
+    screen = mul(SceneParam.InvViewProj, screen);
+    screen.xyz /= screen.w;
 
     RayDesc ray;
-    ray.Origin = SceneParam.View[3].xyz;
-    ray.Direction = normalize(
-        (SceneParam.View[0].xyz * pixel.x * tanHalfFovY * aspect) -
-        (SceneParam.View[1].xyz * pixel.y * tanHalfFovY) +
-        (SceneParam.View[2].xyz));
-    ray.TMin = 0.0f;
-    ray.TMax = FLT_MAX;
+    ray.Origin      = orig;
+    ray.Direction   = normalize(screen.xyz - orig.xyz);
+    ray.TMin        = 0.0f;
+    ray.TMax        = FLT_MAX;
 
     return ray;
 }
@@ -299,6 +335,15 @@ bool CastShadowRay(float3 pos, float3 normal, float3 dir, float tmax)
 }
 
 //-----------------------------------------------------------------------------
+//      IBLをサンプルします.
+//-----------------------------------------------------------------------------
+float4 SampleIBL(float3 dir)
+{
+    float2 uv = ToSphereMapCoord(dir);
+    return BackGround.SampleLevel(LinearWrap, uv, 0.0f);
+}
+
+//-----------------------------------------------------------------------------
 //      レイ生成シェーダです.
 //-----------------------------------------------------------------------------
 [shader("raygeneration")]
@@ -306,7 +351,10 @@ void OnGenerateRay()
 {
     float2 pixel = float2(DispatchRaysIndex().xy);
     const float2 resolution = float2(DispatchRaysDimensions().xy);
-    pixel = (((pixel + 0.5f) / resolution) * 2.0f - 1.0f);
+
+    float2 uv = (pixel + 0.5f) / resolution;
+    uv.y = 1.0f - uv.y;
+    pixel = uv * 2.0f - 1.0f;
 
     // ペイロード初期化.
     Payload payload = (Payload)0;
@@ -327,6 +375,7 @@ void OnGenerateRay()
 
     // レンダーターゲットに格納.
     Canvas[DispatchRaysIndex().xy] = payload.HasHit() ? float4(1.0f, 0.0f, 0.0f, 1.0f) : float4(0.0f, 0.0f, 0.0f, 1.0f);
+    //Canvas[DispatchRaysIndex().xy] = SampleIBL(ray.Direction);
 }
 
 //-----------------------------------------------------------------------------
