@@ -40,12 +40,14 @@ struct SceneDesc
 };
 
 ///////////////////////////////////////////////////////////////////////////////
-// DebugMesh structure
+// MeshDrawCall structure
 ///////////////////////////////////////////////////////////////////////////////
-struct DebugMesh
+struct MeshDrawCall
 {
-    D3D12_VERTEX_BUFFER_VIEW    VBV;
-    D3D12_INDEX_BUFFER_VIEW     IBV;
+    uint32_t    StartIndex;
+    uint32_t    IndexCount;
+    uint32_t    BaseVertex;
+    uint32_t    InstanceId;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -103,11 +105,12 @@ private:
     asdx::ShaderTable               m_RayGenTable;
     asdx::ShaderTable               m_MissTable;
     asdx::ShaderTable               m_HitGroupTable;
-    asdx::ColorTarget               m_DebugColorTarget;
-    asdx::DepthTarget               m_DebugDepthTarget;
-    asdx::RootSignature             m_DebugRootSig;
-    asdx::PipelineState             m_DebugPSO;
-    std::vector<DebugMesh>          m_DebugMeshes;
+    asdx::ColorTarget               m_AlbedoTarget;
+    asdx::ColorTarget               m_NormalTarget;
+    asdx::DepthTarget               m_ModelDepthTarget;
+    asdx::RootSignature             m_ModelRootSig;
+    asdx::PipelineState             m_ModelPSO;
+    std::vector<MeshDrawCall>       m_MeshDrawCalls;
 
     uint8_t                         m_ReadBackIndex = 0;
     uint8_t                         m_MapIndex      = 0;

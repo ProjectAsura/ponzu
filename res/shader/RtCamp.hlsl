@@ -210,9 +210,9 @@ Material GetMaterial(uint materialId, float2 uv, float mip)
     uint  address = materialId * MATERIAL_STRIDE;
     uint4 data    = Materials.Load4(address);
 
-    float4 bc  = float4(0.0f, 0.0f, 0.0f, 1.0f);
+    float4 bc  = float4(1.0f, 1.0f, 1.0f, 1.0f);
     float3 n   = float3(0.0f, 0.0f, 1.0f);
-    float3 orm = float3(1.0f, 0.0f, 0.0f);
+    float3 orm = float3(1.0f, 1.0f, 0.0f);
     float3 e   = float3(0.0f, 0.0f, 0.0f);
 
     if (data.x != INVALID_ID)
@@ -299,7 +299,7 @@ RayDesc GeneratePinholeCameraRay(float2 pixel)
     screen.xyz /= screen.w;
 
     RayDesc ray;
-    ray.Origin      = orig;
+    ray.Origin      = orig.xyz;
     ray.Direction   = normalize(screen.xyz - orig.xyz);
     ray.TMin        = 0.0f;
     ray.TMax        = FLT_MAX;
@@ -313,10 +313,10 @@ RayDesc GeneratePinholeCameraRay(float2 pixel)
 bool CastShadowRay(float3 pos, float3 normal, float3 dir, float tmax)
 {
     RayDesc ray;
-    ray.Origin = OffsetRay(pos, normal);
-    ray.Direction = dir;
-    ray.TMin = 0.0f;
-    ray.TMax = tmax;
+    ray.Origin      = OffsetRay(pos, normal);
+    ray.Direction   = dir;
+    ray.TMin        = 0.0f;
+    ray.TMax        = tmax;
 
     ShadowPayload payload;
     payload.Visible = true;

@@ -70,10 +70,10 @@
     <FxCompile Include="..\res\shader\RtCamp.hlsl">
       <Filter>リソース ファイル</Filter>
     </FxCompile>
-    <FxCompile Include="..\res\shader\DebugVS.hlsl">
+    <FxCompile Include="..\res\shader\ModelVS.hlsl">
       <Filter>リソース ファイル</Filter>
     </FxCompile>
-    <FxCompile Include="..\res\shader\DebugPS.hlsl">
+    <FxCompile Include="..\res\shader\ModelPS.hlsl">
       <Filter>リソース ファイル</Filter>
     </FxCompile>
   </ItemGroup>

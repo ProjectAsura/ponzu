@@ -30,8 +30,8 @@ namespace {
 #include "../res/shader/Compile/TonemapVS.inc"
 #include "../res/shader/Compile/TonemapPS.inc"
 #include "../res/shader/Compile/RtCamp.inc"
-#include "../res/shader/Compile/DebugVS.inc"
-#include "../res/shader/Compile/DebugPS.inc"
+#include "../res/shader/Compile/ModelVS.inc"
+#include "../res/shader/Compile/ModelPS.inc"
 
 static const D3D12_INPUT_ELEMENT_DESC kModelElements[] = {
     { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
@@ -141,7 +141,7 @@ Renderer::Renderer(const SceneDesc& desc)
 {
     m_SwapChainFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 #if !CAMP_RELEASE
-    //m_DeviceDesc.EnableCapture = true;
+    m_DeviceDesc.EnableCapture = true;
 #endif
 }
 
@@ -475,8 +475,7 @@ bool Renderer::OnInit()
         }
     }
 
-    #if (!CAMP_RELEASE)
-    // デバッグカラーターゲット生成.
+    // アルベドバッファ.
     {
         asdx::TargetDesc desc;
         desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
@@ -493,19 +492,48 @@ bool Renderer::OnInit()
         desc.ClearColor[2]      = 0.0f;
         desc.ClearColor[3]      = 1.0f;
 
-        if (!m_DebugColorTarget.Init(&desc, false))
+        if (!m_AlbedoTarget.Init(&desc, true))
         {
             ELOGA("Error : DebugColorTarget Init Failed.");
             return false;
         }
 
         m_GfxCmdList.BarrierTransition(
-            m_DebugColorTarget.GetResource(), 0,
+            m_AlbedoTarget.GetResource(), 0,
             D3D12_RESOURCE_STATE_COMMON,
-            D3D12_RESOURCE_STATE_RENDER_TARGET);
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
     }
 
-    // デバッグ深度ターゲット生成.
+    // 法線バッファ.
+    {
+        asdx::TargetDesc desc;
+        desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        desc.Width              = m_SceneDesc.Width;
+        desc.Height             = m_SceneDesc.Height;
+        desc.DepthOrArraySize   = 1;
+        desc.MipLevels          = 1;
+        desc.Format             = DXGI_FORMAT_R8G8B8A8_UNORM;
+        desc.SampleDesc.Count   = 1;
+        desc.SampleDesc.Quality = 0;
+        desc.InitState          = D3D12_RESOURCE_STATE_COMMON;
+        desc.ClearColor[0]      = 0.5f;
+        desc.ClearColor[1]      = 0.5f;
+        desc.ClearColor[2]      = 1.0f;
+        desc.ClearColor[3]      = 1.0f;
+
+        if (!m_NormalTarget.Init(&desc, false))
+        {
+            ELOGA("Error : NormalTarget Init Failed.");
+            return false;
+        }
+
+        m_GfxCmdList.BarrierTransition(
+            m_NormalTarget.GetResource(), 0,
+            D3D12_RESOURCE_STATE_COMMON,
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    }
+
+    // 深度ターゲット生成.
     {
         asdx::TargetDesc desc;
         desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
@@ -520,59 +548,59 @@ bool Renderer::OnInit()
         desc.ClearDepth         = 1.0f;
         desc.ClearStencil       = 0;
 
-        if (!m_DebugDepthTarget.Init(&desc))
+        if (!m_ModelDepthTarget.Init(&desc))
         {
             ELOGA("Error : DebugDepthTarget Init Failed.");
             return false;
         }
     }
 
-    // デバッグルートシグニチャ生成.
+    // G-Bufferルートシグニチャ生成.
     {
         auto flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
         flags |= D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED;
 
-        asdx::DescriptorSetLayout<3, 1> layout;
+        asdx::DescriptorSetLayout<4, 1> layout;
         layout.SetCBV(0, asdx::SV_VS, 0);
-        layout.SetCBV(1, asdx::SV_VS, 1);
-        layout.SetTableSRV(2, asdx::SV_PS, 0);
+        layout.SetContants(1, asdx::SV_ALL, 1, 1);
+        layout.SetSRV(2, asdx::SV_VS, 0);
+        layout.SetSRV(3, asdx::SV_PS, 1);
         layout.SetStaticSampler(0, asdx::SV_ALL, asdx::STATIC_SAMPLER_LINEAR_WRAP, 0);
         layout.SetFlags(flags);
 
-        if (!m_DebugRootSig.Init(pDevice, layout.GetDesc()))
+        if (!m_ModelRootSig.Init(pDevice, layout.GetDesc()))
         {
             ELOGA("Error : RayTracing RootSignature Failed.");
             return false;
         }
     }
 
-    // デバッグパイプラインステート生成.
+    // G-Bufferパイプラインステート生成.
     {
         D3D12_GRAPHICS_PIPELINE_STATE_DESC desc = {};
-        desc.pRootSignature                 = m_DebugRootSig.GetPtr();
-        desc.VS                             = { DebugVS, sizeof(DebugVS) };
-        desc.PS                             = { DebugPS, sizeof(DebugPS) };
+        desc.pRootSignature                 = m_ModelRootSig.GetPtr();
+        desc.VS                             = { ModelVS, sizeof(ModelVS) };
+        desc.PS                             = { ModelPS, sizeof(ModelPS) };
         desc.BlendState                     = asdx::BLEND_DESC(asdx::BLEND_STATE_OPAQUE);
         desc.DepthStencilState              = asdx::DEPTH_STENCIL_DESC(asdx::DEPTH_STATE_DEFAULT);
         desc.RasterizerState                = asdx::RASTERIZER_DESC(asdx::RASTERIZER_STATE_CULL_NONE);
         desc.SampleMask                     = D3D12_DEFAULT_SAMPLE_MASK;
         desc.PrimitiveTopologyType          = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-        desc.NumRenderTargets               = 1;
-        desc.RTVFormats[0]                  = DXGI_FORMAT_R8G8B8A8_UNORM;
+        desc.NumRenderTargets               = 2;
+        desc.RTVFormats[0]                  = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+        desc.RTVFormats[1]                  = DXGI_FORMAT_R8G8B8A8_UNORM;
         desc.DSVFormat                      = DXGI_FORMAT_D32_FLOAT;
         desc.InputLayout.NumElements        = _countof(kModelElements);
         desc.InputLayout.pInputElementDescs = kModelElements;
         desc.SampleDesc.Count               = 1;
         desc.SampleDesc.Quality             = 0;
 
-        if (!m_DebugPSO.Init(pDevice, &desc))
+        if (!m_ModelPSO.Init(pDevice, &desc))
         {
             ELOGA("Error : PipelineState Failed.");
             return false;
         }
     }
-    #endif
-
 
     // Test
     {
@@ -597,7 +625,10 @@ bool Renderer::OnInit()
         std::vector<D3D12_RAYTRACING_INSTANCE_DESC> instanceDescs;
         instanceDescs.resize(meshCount);
 
-        m_DebugMeshes.resize(meshCount);
+        m_MeshDrawCalls.resize(meshCount);
+
+        uint32_t indexOffset = 0;
+        uint32_t vertexOffset = 0;
  
         for(size_t i=0; i<meshCount; ++i)
         {
@@ -637,20 +668,22 @@ bool Renderer::OnInit()
             // ビルドコマンドを積んでおく.
             m_BLAS[i].Build(m_GfxCmdList.GetCommandList());
 
+            auto instanceId = PackInstanceId(0, uint32_t(i));
+
             memcpy(instanceDescs[i].Transform, transform.m, sizeof(float) * 12);
-            instanceDescs[i].InstanceID                             = PackInstanceId(0, uint32_t(i));
+            instanceDescs[i].InstanceID                             = instanceId;
             instanceDescs[i].InstanceMask                           = 0xFF;
             instanceDescs[i].InstanceContributionToHitGroupIndex    = 0;
             instanceDescs[i].Flags                                  = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
             instanceDescs[i].AccelerationStructure                  = m_BLAS[i].GetResource()->GetGPUVirtualAddress();
 
-            m_DebugMeshes[i].VBV.BufferLocation = addrVertex;
-            m_DebugMeshes[i].VBV.SizeInBytes    = sizeof(Vertex) * vertexCount;
-            m_DebugMeshes[i].VBV.StrideInBytes  = sizeof(Vertex);
+            m_MeshDrawCalls[i].StartIndex = indexOffset;
+            m_MeshDrawCalls[i].IndexCount = indexCount;
+            m_MeshDrawCalls[i].BaseVertex = vertexOffset;
+            m_MeshDrawCalls[i].InstanceId = instanceId;
 
-            m_DebugMeshes[i].IBV.BufferLocation = addrIndex;
-            m_DebugMeshes[i].IBV.Format         = DXGI_FORMAT_R32_UINT;
-            m_DebugMeshes[i].IBV.SizeInBytes    = sizeof(uint32_t) * indexCount;
+            indexOffset  += indexCount;
+            vertexOffset += vertexCount;
         }
 
         auto instanceCount = uint32_t(instanceDescs.size());
@@ -732,11 +765,12 @@ void Renderer::OnTerm()
         m_ExportData[i].Pixels.clear();
     }
 
-    m_DebugColorTarget.Term();
-    m_DebugDepthTarget.Term();
-    m_DebugRootSig    .Term();
-    m_DebugPSO        .Term();
-    m_DebugMeshes.clear();
+    m_AlbedoTarget    .Term();
+    m_NormalTarget    .Term();
+    m_ModelDepthTarget.Term();
+    m_ModelRootSig    .Term();
+    m_ModelPSO        .Term();
+    m_MeshDrawCalls.clear();
 
     m_ModelMgr.Term();
 }
@@ -811,35 +845,70 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         m_SceneParam.Update(&param, sizeof(param));
     }
 
-#if (!CAMP_RELEASE)
-    //{
-    //    auto pRTV = m_DebugColorTarget.GetRTV();
-    //    auto pDSV = m_DebugDepthTarget.GetDSV();
-    //    m_GfxCmdList.SetTarget(pRTV, pDSV);
-    //    m_GfxCmdList.SetViewport(m_DebugColorTarget.GetResource());
-    //    m_GfxCmdList.SetRootSignature(m_DebugRootSig.GetPtr(), false);
-    //    m_GfxCmdList.SetPipelineState(m_DebugPSO.GetPtr());
+    // デノイズ用 G-Buffer.
+    {
+        asdx::ScopedBarrier barrier0(m_GfxCmdList, m_AlbedoTarget.GetResource(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
+        asdx::ScopedBarrier barrier1(m_GfxCmdList, m_NormalTarget.GetResource(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-    //    m_GfxCmdList.SetCBV(0, m_SceneParam.GetResource());
-    //    m_GfxCmdList.SetTable(2, m_ModelMgr.GetMaterialSRV());
-    //    m_GfxCmdList.SetPrimitiveToplogy(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        auto pRTV0 = m_AlbedoTarget.GetRTV();
+        auto pRTV1 = m_NormalTarget.GetRTV();
+        auto pDSV  = m_ModelDepthTarget.GetDSV();
 
-    //    auto w = m_DebugColorTarget.GetDesc().Width;
-    //    auto h = m_DebugColorTarget.GetDesc().Height;
+        float clearColor [4] = { 0.0f, 0.0f, 0.0f, 1.0f };
+        float clearNormal[4] = { 0.5f, 0.5f, 1.0f, 1.0f };
 
+        m_GfxCmdList.ClearRTV(pRTV0, clearColor);
+        m_GfxCmdList.ClearRTV(pRTV1, clearNormal);
+        m_GfxCmdList.ClearDSV(pDSV, 1.0f);
 
-    //    auto count = m_DebugMeshes.size();
-    //    for(size_t i=0; i<count; ++i)
-    //    {
-    //        auto vbv = m_DebugMeshes[i].VBV;
-    //        auto ibv = m_DebugMeshes[i].IBV;
+        D3D12_CPU_DESCRIPTOR_HANDLE handleRTVs[] = {
+            pRTV0->GetHandleCPU(),
+            pRTV1->GetHandleCPU(),
+        };
 
-    //        m_GfxCmdList.SetVertexBuffers(0, 1, &vbv);
-    //        m_GfxCmdList.SetIndexBuffer(&ibv);
-    //        m_GfxCmdList.DrawIndexedInstanced(0, 1, 0, 0, 0);
-    //    }
-    //}
-#endif
+        auto handleDSV = pDSV->GetHandleCPU();
+
+        m_GfxCmdList.GetCommandList()->OMSetRenderTargets(
+            2, 
+            handleRTVs,
+            FALSE,
+            &handleDSV);
+        m_GfxCmdList.SetViewport(m_AlbedoTarget.GetResource());
+        m_GfxCmdList.SetRootSignature(m_ModelRootSig.GetPtr(), false);
+        m_GfxCmdList.SetPipelineState(m_ModelPSO.GetPtr());
+
+        m_GfxCmdList.SetCBV(0, m_SceneParam.GetResource());
+        m_GfxCmdList.SetSRV(2, m_ModelMgr.GetTransformSRV());
+        m_GfxCmdList.SetSRV(3, m_ModelMgr.GetMaterialSRV());
+        m_GfxCmdList.SetPrimitiveToplogy(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+        D3D12_VERTEX_BUFFER_VIEW vbv = {};
+        vbv.BufferLocation  = m_ModelMgr.GetAddressVB();
+        vbv.SizeInBytes     = m_ModelMgr.GetSizeVB();
+        vbv.StrideInBytes   = sizeof(Vertex);
+
+        D3D12_INDEX_BUFFER_VIEW ibv = {};
+        ibv.BufferLocation  = m_ModelMgr.GetAddressIB();
+        ibv.SizeInBytes     = m_ModelMgr.GetSizeIB();
+        ibv.Format          = DXGI_FORMAT_R32_UINT;
+
+        m_GfxCmdList.SetVertexBuffers(0, 1, &vbv);
+        m_GfxCmdList.SetIndexBuffer(&ibv);
+
+        auto count = m_MeshDrawCalls.size();
+        for(size_t i=0; i<count; ++i)
+        {
+            auto& info = m_MeshDrawCalls[i];
+
+            m_GfxCmdList.SetConstants(1, 1, &info.InstanceId, 0);
+            m_GfxCmdList.DrawIndexedInstanced(
+                info.IndexCount,
+                1,
+                info.StartIndex,
+                info.BaseVertex,
+                0);
+        }
+    }
 
     // レイトレ実行.
     {
@@ -974,7 +1043,9 @@ void Renderer::OnKey(const asdx::KeyEventArgs& args)
         args.IsKeyDown, args.IsAltDown, args.KeyCode);
 #endif
 
+#if (!CAMP_RELEASE)
     m_CameraController.OnKey(args.KeyCode, args.IsKeyDown, args.IsAltDown);
+#endif
 }
 
 //-----------------------------------------------------------------------------
@@ -990,15 +1061,22 @@ void Renderer::OnMouse(const asdx::MouseEventArgs& args)
         args.IsRightButtonDown);
 #endif
 
-    m_CameraController.OnMouse(
-        args.X,
-        args.Y,
-        args.WheelDelta,
-        args.IsLeftButtonDown,
-        args.IsRightButtonDown,
-        args.IsMiddleButtonDown,
-        args.IsSideButton1Down,
-        args.IsSideButton2Down);
+#if (!CAMP_RELEASE)
+    auto isAltDown = !!(GetKeyState(VK_MENU) & 0x8000);
+
+    if (isAltDown)
+    {
+        m_CameraController.OnMouse(
+            args.X,
+            args.Y,
+            args.WheelDelta,
+            args.IsLeftButtonDown,
+            args.IsRightButtonDown,
+            args.IsMiddleButtonDown,
+            args.IsSideButton1Down,
+            args.IsSideButton2Down);
+    }
+#endif
 }
 
 //-----------------------------------------------------------------------------
@@ -1030,7 +1108,13 @@ void Renderer::Draw2D()
 
     if (ImGui::Begin(u8"デバッグ設定", &m_DebugSetting))
     {
-        ImGui::Text(u8"あああああああああああ");
+        auto albedo = const_cast<asdx::IShaderResourceView*>(m_AlbedoTarget.GetSRV());
+        auto normal = const_cast<asdx::IShaderResourceView*>(m_NormalTarget.GetSRV());
+
+        ImVec2 texSize(320, 180);
+
+        ImGui::Image(static_cast<ImTextureID>(albedo), texSize);
+        ImGui::Image(static_cast<ImTextureID>(normal), texSize);
     }
     ImGui::End();
 
