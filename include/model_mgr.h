@@ -27,6 +27,17 @@ struct Vertex
 };
 
 ///////////////////////////////////////////////////////////////////////////////
+// Mesh structure
+///////////////////////////////////////////////////////////////////////////////
+struct Mesh
+{
+    uint32_t    VertexCount;    //!< 頂点数です.
+    uint32_t    IndexCount;     //!< インデックス数です.
+    Vertex*     Vertices;       //!< 頂点データです.
+    uint32_t*   Indices;        //!< インデックスデータです.
+};
+
+///////////////////////////////////////////////////////////////////////////////
 // Material structure
 ///////////////////////////////////////////////////////////////////////////////
 struct Material
@@ -34,6 +45,36 @@ struct Material
     uint32_t    BaseColor;  //!< ベースカラー.
     uint32_t    Normal;     //!< 法線マップ.
     uint32_t    ORM;        //!< オクルージョン/ラフネス/メタリック.
+};
+
+///////////////////////////////////////////////////////////////////////////////
+// GeometryHandle structure
+///////////////////////////////////////////////////////////////////////////////
+struct GeometryHandle
+{
+    D3D12_GPU_VIRTUAL_ADDRESS   AddressVB  = 0;    //!< 頂点バッファのGPU仮想アドレスです.
+    D3D12_GPU_VIRTUAL_ADDRESS   AddressIB  = 0;    //!< インデックスバッファのGPU仮想アドレスです.
+    uint32_t                    IndexVB    = 0;    //!< 頂点バッファのハンドルです.
+    uint32_t                    IndexIB    = 0;    //!< インデックスバッファのハンドルです.
+};
+
+///////////////////////////////////////////////////////////////////////////////
+// Instance structure
+///////////////////////////////////////////////////////////////////////////////
+struct Instance
+{
+    uint32_t        VertexBufferId; //!< 頂点バッファのハンドルです.
+    uint32_t        IndexBufferId;  //!< インデックスバッファの
+    uint32_t        MaterialId;     //!< マテリアルID.
+};
+
+///////////////////////////////////////////////////////////////////////////////
+// InstanceHandle structure
+///////////////////////////////////////////////////////////////////////////////
+struct InstanceHandle
+{
+    uint32_t                    InstanceId; //!< インスタンスID.
+    D3D12_GPU_VIRTUAL_ADDRESS   AddressTB;  //!< トランスフォームバッファのGPU仮想アドレスです.
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -69,17 +110,13 @@ public:
     //-------------------------------------------------------------------------
     //! @brief      初期化処理を行います.
     //! 
-    //! @param[in]      maxVertexCount      最大頂点数.
-    //! @param[in]      maxIndexCount       最大頂点インデックス数.
-    //! @param[in]      maxTransformCount   最大トランスフォーム数.
-    //! @param[in]      maxMaterialCount    最大マテリアル数.
+    //! @param[in]      maxInstanceCount    最大インスタンス数です.
+    //! @param[in]      maxMaterialCount    最大マテリアル数です.
     //! @retval true    初期化に成功.
     //! @retval false   初期化に失敗.
     //-------------------------------------------------------------------------
     bool Init(
-        uint32_t maxVertexCount,
-        uint32_t maxIndexCount,
-        uint32_t maxTransformCount,
+        uint32_t maxInstanceCount,
         uint32_t maxMaterialCount);
 
     //-------------------------------------------------------------------------
@@ -93,31 +130,21 @@ public:
     void Fixed();
 
     //-------------------------------------------------------------------------
-    //! @brief      頂点データを登録します.
+    //! @brief      メッシュを登録します.
     //! 
-    //! @param[in]      ptr     頂点データ.
-    //! @param[in]      count   頂点数.
-    //! @return     GPU仮想アドレスを返却します.
+    //! @param[in]      mesh        登録するメッシュ.
+    //! @return     ジオメトリハンドルを返却します.
     //-------------------------------------------------------------------------
-    D3D12_GPU_VIRTUAL_ADDRESS AddVertices(const Vertex* ptr, uint32_t count);
+    GeometryHandle AddMesh(const Mesh& mesh);
 
     //-------------------------------------------------------------------------
-    //! @brief      頂点インデックスを登録します.
+    //! @brief      インスタンスを登録します.
     //! 
-    //! @param[in]      ptr     頂点インデックス.
-    //! @param[in]      count   頂点イデックス数.
-    //! @return     GPU仮想アドレスを返却します.
+    //! @param[in]      instance        インスタンスデータ.
+    //! @param[in]      transform       変換行列.
+    //! @return     インスタンスハンドルを返却します.
     //-------------------------------------------------------------------------
-    D3D12_GPU_VIRTUAL_ADDRESS AddInidices(const uint32_t* ptr, uint32_t count);
-
-    //-------------------------------------------------------------------------
-    //! @brief      トランスフォームを登録します.
-    //! 
-    //! @param[in]      ptr     トランフォームデータ.
-    //! @param[in]      count   トランスフォーム数.
-    //! @return     GPU仮想アドレスを返却します.
-    //-------------------------------------------------------------------------
-    D3D12_GPU_VIRTUAL_ADDRESS AddTransforms(const asdx::Transform3x4* ptr, uint32_t count);
+    InstanceHandle AddInstance(const Instance& instance, const asdx::Transform3x4& transform);
 
     //-------------------------------------------------------------------------
     //! @brief      マテリアルを登録します.
@@ -129,40 +156,22 @@ public:
     D3D12_GPU_VIRTUAL_ADDRESS AddMaterials(const Material* ptr, uint32_t count);
 
     //-------------------------------------------------------------------------
-    //! @brief      頂点バッファのシェーダリソースビューを取得します.
-    //! 
-    //! @return     頂点バッファのシェーダリソースビューを返却します.
+    //! @brief      インスタンスバッファのシェーダリソースビューを取得します.
     //-------------------------------------------------------------------------
-    asdx::IShaderResourceView* GetVertexSRV() const;
-
-    //-------------------------------------------------------------------------
-    //! @brief      インデックスバッファのシェーダリソースビューを取得します.
-    //! 
-    //! @return     インデックスバッファのシェーダリソースビューを返却します.
-    //-------------------------------------------------------------------------
-    asdx::IShaderResourceView* GetIndexSRV() const;
+    asdx::IShaderResourceView* GetIB() const;
 
     //-------------------------------------------------------------------------
     //! @brief      トランスフォームバッファのシェーダリソースビューを取得します.
-    //! 
-    //! @return     トランスフォームバッファのシェーダリソースビューを返却します.
     //-------------------------------------------------------------------------
-    asdx::IShaderResourceView* GetTransformSRV() const;
+    asdx::IShaderResourceView* GetTB() const;
 
     //-------------------------------------------------------------------------
     //! @brief      マテリアルバッファのシェーダリソースビューを取得します.
-    //! 
-    //! @return     マテリアルバッファのシェーダリソースビューを返却します.
     //-------------------------------------------------------------------------
-    asdx::IShaderResourceView* GetMaterialSRV() const;
+    asdx::IShaderResourceView* GetMB() const;
 
     //--------------------------------------------------------------------------
-    //! @brief      頂点バッファのGPU仮想アドレスを取得します.
-    //--------------------------------------------------------------------------
-    D3D12_GPU_VIRTUAL_ADDRESS GetAddressVB() const;
-
-    //--------------------------------------------------------------------------
-    //! @brief      インデックスバッファのGPU仮想アドレスを取得します.
+    //! @brief      インスタンスバッファのGPU仮想アドレスを取得します.
     //--------------------------------------------------------------------------
     D3D12_GPU_VIRTUAL_ADDRESS GetAddressIB() const;
 
@@ -177,12 +186,7 @@ public:
     D3D12_GPU_VIRTUAL_ADDRESS GetAddressMB() const;
 
     //-------------------------------------------------------------------------
-    //! @brief      頂点バッファサイズを取得します.
-    //-------------------------------------------------------------------------
-    uint32_t GetSizeVB() const;
-
-    //-------------------------------------------------------------------------
-    //! @brief      インデックスバッファサイズを取得します.
+    //! @brief      インスタンスバッファサイズを取得します.
     //-------------------------------------------------------------------------
     uint32_t GetSizeIB() const;
 
@@ -197,35 +201,40 @@ public:
     uint32_t GetSizeMB() const;
 
 private:
+    ///////////////////////////////////////////////////////////////////////////
+    // MeshBuffer structure
+    ///////////////////////////////////////////////////////////////////////////
+    struct MeshBuffer
+    {
+        asdx::RefPtr<ID3D12Resource>            VB;
+        asdx::RefPtr<ID3D12Resource>            IB;
+        asdx::RefPtr<asdx::IShaderResourceView> VB_SRV;
+        asdx::RefPtr<asdx::IShaderResourceView> IB_SRV;
+    };
+
     //=========================================================================
     // private variables.
     //=========================================================================
-    asdx::RefPtr<ID3D12Resource>    m_VB;   //!< 頂点バッファ.
-    asdx::RefPtr<ID3D12Resource>    m_IB;   //!< インデックスバッファ.
+    asdx::RefPtr<ID3D12Resource>    m_IB;   //!< インスタンスバッファ.
     asdx::RefPtr<ID3D12Resource>    m_TB;   //!< トランスフォームバッファ.
     asdx::RefPtr<ID3D12Resource>    m_MB;   //!< マテリアルバッファ.
 
-    asdx::RefPtr<asdx::IShaderResourceView> m_VertexSRV;
-    asdx::RefPtr<asdx::IShaderResourceView> m_IndexSRV;
-    asdx::RefPtr<asdx::IShaderResourceView> m_TransformSRV;
-    asdx::RefPtr<asdx::IShaderResourceView> m_MaterialSRV;
+    asdx::RefPtr<asdx::IShaderResourceView> m_IB_SRV;
+    asdx::RefPtr<asdx::IShaderResourceView> m_TB_SRV;
+    asdx::RefPtr<asdx::IShaderResourceView> m_MB_SRV;
 
-    uint32_t    m_OffsetVB = 0;
-    uint32_t    m_OffsetIB = 0;
-    uint32_t    m_OffsetTB = 0;
-    uint32_t    m_OffsetMB = 0;
+    std::vector<MeshBuffer>     m_Meshes;
 
-    uint32_t    m_MaxCountVB = 0;
-    uint32_t    m_MaxCountIB = 0;
-    uint32_t    m_MaxCountTB = 0;
-    uint32_t    m_MaxCountMB = 0;
+    uint32_t    m_OffsetInstance = 0;
+    uint32_t    m_OffsetMaterial = 0;
 
-    Vertex*                 m_pVertices     = nullptr;
-    uint32_t*               m_pIndices      = nullptr;
+    uint32_t    m_MaxInstanceCount;
+    uint32_t    m_MaxMaterialCount;
+
+    Instance*               m_pInstances    = nullptr;
     asdx::Transform3x4*     m_pTransforms   = nullptr;
     Material*               m_pMaterials    = nullptr;
 
-    D3D12_GPU_VIRTUAL_ADDRESS m_AddressVB = 0;
     D3D12_GPU_VIRTUAL_ADDRESS m_AddressIB = 0;
     D3D12_GPU_VIRTUAL_ADDRESS m_AddressTB = 0;
     D3D12_GPU_VIRTUAL_ADDRESS m_AddressMB = 0;

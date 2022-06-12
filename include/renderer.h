@@ -44,10 +44,12 @@ struct SceneDesc
 ///////////////////////////////////////////////////////////////////////////////
 struct MeshDrawCall
 {
-    uint32_t    StartIndex;
-    uint32_t    IndexCount;
-    uint32_t    BaseVertex;
-    uint32_t    InstanceId;
+    uint32_t                    StartIndex;
+    uint32_t                    IndexCount;
+    uint32_t                    BaseVertex;
+    uint32_t                    InstanceId;
+    D3D12_VERTEX_BUFFER_VIEW    VBV;
+    D3D12_INDEX_BUFFER_VIEW     IBV;
 };
 
 ///////////////////////////////////////////////////////////////////////////////

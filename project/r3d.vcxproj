@@ -23,9 +23,6 @@
     <ProjectReference Include="..\external\asdx12\project\asdx12.vcxproj">
       <Project>{ecd906d6-5deb-4b5b-b919-05c147194c1d}</Project>
     </ProjectReference>
-    <ProjectReference Include="..\external\mimalloc-2.0.6\ide\vs2019\mimalloc-override.vcxproj">
-      <Project>{abb5eae7-b3e6-432e-b636-333449892ea7}</Project>
-    </ProjectReference>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\external\fpng\fpng.cpp" />
@@ -33,6 +30,7 @@
     <ClCompile Include="..\src\model_mgr.cpp" />
     <ClCompile Include="..\src\OBJLoader.cpp" />
     <ClCompile Include="..\src\renderer.cpp" />
+    <ClCompile Include="..\src\scene.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\external\fpng\fpng.h" />
@@ -40,6 +38,7 @@
     <ClInclude Include="..\include\model_mgr.h" />
     <ClInclude Include="..\include\OBJLoader.h" />
     <ClInclude Include="..\include\renderer.h" />
+    <ClInclude Include="..\include\scene.h" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="..\res\shader\ModelPS.hlsl">

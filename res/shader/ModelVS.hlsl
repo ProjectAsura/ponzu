@@ -59,15 +59,6 @@ ConstantBuffer<ObjectParameter> ObjectParam : register(b1);
 ByteAddressBuffer               Transforms  : register(t0);
 
 //-----------------------------------------------------------------------------
-//      マテリアルIDとジオメトリIDのパッキングを解除します.
-//-----------------------------------------------------------------------------
-void UnpackInstanceId(uint instanceId, out uint materialId, out uint geometryId)
-{
-    materialId = instanceId & 0x3FF;
-    geometryId = (instanceId >> 10) & 0x3FFF;
-}
-
-//-----------------------------------------------------------------------------
 //      ワールド行列を取得します.
 //-----------------------------------------------------------------------------
 float3x4 GetWorldMatrix(uint geometryId)
@@ -87,11 +78,7 @@ VSOutput main(VSInput input)
 {
     VSOutput output = (VSOutput)0;
 
-    uint materialId = 0;
-    uint geometryId = 0;
-    UnpackInstanceId(ObjectParam.InstanceId, materialId, geometryId);
-
-    float3x4 world = GetWorldMatrix(geometryId);
+    float3x4 world = GetWorldMatrix(ObjectParam.InstanceId);
 
     float4 localPos = float4(input.Position, 1.0f);
     float4 worldPos = float4(mul(world, localPos), 1.0f);

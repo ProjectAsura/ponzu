@@ -40,6 +40,9 @@ static const D3D12_INPUT_ELEMENT_DESC kModelElements[] = {
     { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT   , 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 };
 
+static_assert(sizeof(r3d::Vertex) == sizeof(VertexOBJ), "Vertex size not matched!");
+
+
 ///////////////////////////////////////////////////////////////////////////////
 // Payload structure
 ///////////////////////////////////////////////////////////////////////////////
@@ -141,7 +144,7 @@ Renderer::Renderer(const SceneDesc& desc)
 {
     m_SwapChainFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 #if !CAMP_RELEASE
-    m_DeviceDesc.EnableCapture = true;
+    //m_DeviceDesc.EnableCapture = true;
 #endif
 }
 
@@ -172,7 +175,7 @@ bool Renderer::OnInit()
     fpng::fpng_init();
 
     // モデルマネージャ初期化.
-    if (!m_ModelMgr.Init(UINT16_MAX, UINT16_MAX, UINT16_MAX, UINT16_MAX))
+    if (!m_ModelMgr.Init(UINT16_MAX, UINT16_MAX))
     {
         ELOGA("Error : ModelMgr::Init() Failed.");
         return false;
@@ -290,14 +293,13 @@ bool Renderer::OnInit()
 
     // レイトレ用ルートシグニチャ生成.
     {
-        asdx::DescriptorSetLayout<7, 1> layout;
+        asdx::DescriptorSetLayout<6, 1> layout;
         layout.SetTableUAV(0, asdx::SV_ALL, 0);
         layout.SetSRV(1, asdx::SV_ALL, 0);
         layout.SetSRV(2, asdx::SV_ALL, 1);
         layout.SetSRV(3, asdx::SV_ALL, 2);
-        layout.SetSRV(4, asdx::SV_ALL, 3);
-        layout.SetTableSRV(5, asdx::SV_ALL, 4);
-        layout.SetCBV(6, asdx::SV_ALL, 0);
+        layout.SetTableSRV(4, asdx::SV_ALL, 3);
+        layout.SetCBV(5, asdx::SV_ALL, 0);
         layout.SetStaticSampler(0, asdx::SV_ALL, asdx::STATIC_SAMPLER_LINEAR_WRAP, 0);
         layout.SetFlags(D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED);
 
@@ -626,35 +628,37 @@ bool Renderer::OnInit()
         instanceDescs.resize(meshCount);
 
         m_MeshDrawCalls.resize(meshCount);
-
-        uint32_t indexOffset = 0;
-        uint32_t vertexOffset = 0;
  
         for(size_t i=0; i<meshCount; ++i)
         {
-            auto vertexCount = uint32_t(model.Meshes[i].Vertices.size());
-            auto vertices    = reinterpret_cast<Vertex*>(model.Meshes[i].Vertices.data());
+            r3d::Mesh mesh;
+            mesh.VertexCount = uint32_t(model.Meshes[i].Vertices.size());
+            mesh.Vertices    = reinterpret_cast<Vertex*>(model.Meshes[i].Vertices.data());
+            mesh.IndexCount  = uint32_t(model.Meshes[i].Indices.size());
+            mesh.Indices     = model.Meshes[i].Indices.data();
 
-            auto indexCount = uint32_t(model.Meshes[i].Indices.size());
-            auto indices    = model.Meshes[i].Indices.data();
+            auto geometryHandle = m_ModelMgr.AddMesh(mesh);
 
+            r3d::Instance instance;
+            instance.VertexBufferId = geometryHandle.IndexVB;
+            instance.IndexBufferId  = geometryHandle.IndexIB;
+            instance.MaterialId     = 0;
+
+            // 単位行列.
             asdx::Transform3x4 transform;
-
-            auto addrVertex    = m_ModelMgr.AddVertices(vertices, vertexCount);
-            auto addrIndex     = m_ModelMgr.AddInidices(indices,  indexCount);
-            auto addrTransform = m_ModelMgr.AddTransforms(&transform, 1);
+            auto instanceHandle = m_ModelMgr.AddInstance(instance, transform);
 
             D3D12_RAYTRACING_GEOMETRY_DESC desc = {};
             desc.Type                                   = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
             desc.Flags                                  = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
-            desc.Triangles.Transform3x4                 = addrTransform;
+            desc.Triangles.Transform3x4                 = instanceHandle.AddressTB;
             desc.Triangles.IndexFormat                  = DXGI_FORMAT_R32_UINT;
-            desc.Triangles.IndexCount                   = indexCount;
-            desc.Triangles.IndexBuffer                  = addrIndex;
+            desc.Triangles.IndexCount                   = mesh.IndexCount;
+            desc.Triangles.IndexBuffer                  = geometryHandle.AddressIB;
             desc.Triangles.VertexFormat                 = DXGI_FORMAT_R32G32B32_FLOAT;
-            desc.Triangles.VertexBuffer.StartAddress    = addrVertex;
+            desc.Triangles.VertexBuffer.StartAddress    = geometryHandle.AddressVB;
             desc.Triangles.VertexBuffer.StrideInBytes   = sizeof(Vertex);
-            desc.Triangles.VertexCount                  = vertexCount;
+            desc.Triangles.VertexCount                  = mesh.VertexCount;
 
             if (!m_BLAS[i].Init(
                 pDevice,
@@ -668,22 +672,29 @@ bool Renderer::OnInit()
             // ビルドコマンドを積んでおく.
             m_BLAS[i].Build(m_GfxCmdList.GetCommandList());
 
-            auto instanceId = PackInstanceId(0, uint32_t(i));
-
             memcpy(instanceDescs[i].Transform, transform.m, sizeof(float) * 12);
-            instanceDescs[i].InstanceID                             = instanceId;
+            instanceDescs[i].InstanceID                             = instanceHandle.InstanceId;
             instanceDescs[i].InstanceMask                           = 0xFF;
             instanceDescs[i].InstanceContributionToHitGroupIndex    = 0;
             instanceDescs[i].Flags                                  = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
             instanceDescs[i].AccelerationStructure                  = m_BLAS[i].GetResource()->GetGPUVirtualAddress();
 
-            m_MeshDrawCalls[i].StartIndex = indexOffset;
-            m_MeshDrawCalls[i].IndexCount = indexCount;
-            m_MeshDrawCalls[i].BaseVertex = vertexOffset;
-            m_MeshDrawCalls[i].InstanceId = instanceId;
+            D3D12_VERTEX_BUFFER_VIEW vbv = {};
+            vbv.BufferLocation = geometryHandle.AddressVB;
+            vbv.SizeInBytes    = sizeof(Vertex) * mesh.VertexCount;
+            vbv.StrideInBytes  = sizeof(Vertex);
 
-            indexOffset  += indexCount;
-            vertexOffset += vertexCount;
+            D3D12_INDEX_BUFFER_VIEW ibv = {};
+            ibv.BufferLocation = geometryHandle.AddressIB;
+            ibv.SizeInBytes    = sizeof(uint32_t) * mesh.IndexCount;
+            ibv.Format         = DXGI_FORMAT_R32_UINT;
+
+            m_MeshDrawCalls[i].StartIndex = 0;
+            m_MeshDrawCalls[i].IndexCount = mesh.IndexCount;
+            m_MeshDrawCalls[i].BaseVertex = 0;
+            m_MeshDrawCalls[i].InstanceId = instanceHandle.InstanceId;
+            m_MeshDrawCalls[i].VBV        = vbv;
+            m_MeshDrawCalls[i].IBV        = ibv;
         }
 
         auto instanceCount = uint32_t(instanceDescs.size());
@@ -770,7 +781,7 @@ void Renderer::OnTerm()
     m_ModelDepthTarget.Term();
     m_ModelRootSig    .Term();
     m_ModelPSO        .Term();
-    m_MeshDrawCalls.clear();
+    //m_MeshDrawCalls.clear();
 
     m_ModelMgr.Term();
 }
@@ -873,32 +884,23 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
             handleRTVs,
             FALSE,
             &handleDSV);
+
         m_GfxCmdList.SetViewport(m_AlbedoTarget.GetResource());
         m_GfxCmdList.SetRootSignature(m_ModelRootSig.GetPtr(), false);
         m_GfxCmdList.SetPipelineState(m_ModelPSO.GetPtr());
 
         m_GfxCmdList.SetCBV(0, m_SceneParam.GetResource());
-        m_GfxCmdList.SetSRV(2, m_ModelMgr.GetTransformSRV());
-        m_GfxCmdList.SetSRV(3, m_ModelMgr.GetMaterialSRV());
+        m_GfxCmdList.SetSRV(2, m_ModelMgr.GetTB());
+        m_GfxCmdList.SetSRV(3, m_ModelMgr.GetMB());
         m_GfxCmdList.SetPrimitiveToplogy(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-        D3D12_VERTEX_BUFFER_VIEW vbv = {};
-        vbv.BufferLocation  = m_ModelMgr.GetAddressVB();
-        vbv.SizeInBytes     = m_ModelMgr.GetSizeVB();
-        vbv.StrideInBytes   = sizeof(Vertex);
-
-        D3D12_INDEX_BUFFER_VIEW ibv = {};
-        ibv.BufferLocation  = m_ModelMgr.GetAddressIB();
-        ibv.SizeInBytes     = m_ModelMgr.GetSizeIB();
-        ibv.Format          = DXGI_FORMAT_R32_UINT;
-
-        m_GfxCmdList.SetVertexBuffers(0, 1, &vbv);
-        m_GfxCmdList.SetIndexBuffer(&ibv);
 
         auto count = m_MeshDrawCalls.size();
         for(size_t i=0; i<count; ++i)
         {
             auto& info = m_MeshDrawCalls[i];
+
+            m_GfxCmdList.SetVertexBuffers(0, 1, &info.VBV);
+            m_GfxCmdList.SetIndexBuffer(&info.IBV);
 
             m_GfxCmdList.SetConstants(1, 1, &info.InstanceId, 0);
             m_GfxCmdList.DrawIndexedInstanced(
@@ -916,11 +918,10 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         m_GfxCmdList.SetRootSignature(m_RayTracingRootSig.GetPtr(), true);
         m_GfxCmdList.SetTable(0, m_Canvas.GetUAV(), true);
         m_GfxCmdList.SetSRV(1, m_TLAS.GetResource(), true);
-        m_GfxCmdList.SetSRV(2, m_ModelMgr.GetVertexSRV(), true);
-        m_GfxCmdList.SetSRV(3, m_ModelMgr.GetIndexSRV(), true);
-        m_GfxCmdList.SetSRV(4, m_ModelMgr.GetMaterialSRV(), true);
-        m_GfxCmdList.SetTable(5, m_IBL.GetView(), true);
-        m_GfxCmdList.SetCBV(6, m_SceneParam.GetResource(), true);
+        m_GfxCmdList.SetSRV(2, m_ModelMgr.GetIB(), true);
+        m_GfxCmdList.SetSRV(3, m_ModelMgr.GetMB(), true);
+        m_GfxCmdList.SetTable(4, m_IBL.GetView(), true);
+        m_GfxCmdList.SetCBV(5, m_SceneParam.GetResource(), true);
 
         D3D12_DISPATCH_RAYS_DESC desc = {};
         desc.RayGenerationShaderRecord  = m_RayGenTable.GetRecordView();

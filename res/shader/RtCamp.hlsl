@@ -27,13 +27,13 @@ typedef RaytracingAccelerationStructure       RayTracingAS;
 struct Payload
 {
     float3      Position;
-    uint        MaterialId;
     float3      Normal;
     float3      Tangent;
     float2      TexCoord;
+    uint        InstanceId;
 
     bool HasHit()
-    { return MaterialId != INVALID_ID; }
+    { return InstanceId != INVALID_ID; }
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -73,6 +73,16 @@ struct Vertex
 };
 
 ///////////////////////////////////////////////////////////////////////////////
+// Instance structure
+///////////////////////////////////////////////////////////////////////////////
+struct Instance
+{
+    uint    VertexId;
+    uint    IndexId;
+    uint    MaterialId;
+};
+
+///////////////////////////////////////////////////////////////////////////////
 // Material structure
 ///////////////////////////////////////////////////////////////////////////////
 struct Material
@@ -89,40 +99,27 @@ struct Material
 #define VERTEX_STRIDE       (44)
 #define INDEX_STRIDE        (12)
 #define MATERIAL_STRIDE     (12)
+#define INSTANCE_STRIDE     (12)
+
 #define POSITION_OFFSET     (0)
 #define NORMAL_OFFSET       (12)
 #define TANGENT_OFFSET      (24)
 #define TEXCOORD_OFFSET     (36)
 
+#define VERTEX_ID_OFFSET    (0)
+#define INDEX_ID_OFFSET     (4)
+#define MATERIAL_ID_OFFSET  (8)
 
 //-----------------------------------------------------------------------------
 // Resources
 //-----------------------------------------------------------------------------
 RWTexture2D<float4>             Canvas      : register(u0);
 RayTracingAS                    SceneAS     : register(t0);
-ByteAddressBuffer               Vertices    : register(t1);
-ByteAddressBuffer               Indices     : register(t2);
-ByteAddressBuffer               Materials   : register(t3);
-Texture2D<float4>               BackGround  : register(t4);
+ByteAddressBuffer               Instances   : register(t1);
+ByteAddressBuffer               Materials   : register(t2);
+Texture2D<float4>               BackGround  : register(t3);
 SamplerState                    LinearWrap  : register(s0);
 ConstantBuffer<SceneParameter>  SceneParam  : register(b0);
-
-//-----------------------------------------------------------------------------
-//      マテリアルIDとジオメトリをIDをパッキングします.
-//-----------------------------------------------------------------------------
-uint PackInstanceId(uint materialId, uint geometryId)
-{
-    return ((geometryId & 0x3FFF) << 10) | (materialId & 0x3FF);
-}
-
-//-----------------------------------------------------------------------------
-//      マテリアルIDとジオメトリIDのパッキングを解除します.
-//-----------------------------------------------------------------------------
-void UnpackInstanceId(uint instanceId, out uint materialId, out uint geometryId)
-{
-    materialId = instanceId & 0x3FF;
-    geometryId = (instanceId >> 10) & 0x3FFF;
-}
 
 //-----------------------------------------------------------------------------
 //      PCG
@@ -196,17 +193,20 @@ float3 OffsetRay(const float3 p, const float3 n)
 //-----------------------------------------------------------------------------
 //      頂点インデックスを取得します.
 //-----------------------------------------------------------------------------
-uint3 GetIndices(uint triangleIndex)
+uint3 GetIndices(uint indexId, uint triangleIndex)
 {
     uint address = triangleIndex * INDEX_STRIDE;
-    return Indices.Load3(address);
+    ByteAddressBuffer indices = ResourceDescriptorHeap[indexId];
+    return indices.Load3(address);
 }
 
 //-----------------------------------------------------------------------------
 //      マテリアルを取得します.
 //-----------------------------------------------------------------------------
-Material GetMaterial(uint materialId, float2 uv, float mip)
+Material GetMaterial(uint instanceId, float2 uv, float mip)
 {
+    uint  materialId = Instances.Load(instanceId * INSTANCE_STRIDE + 8);
+
     uint  address = materialId * MATERIAL_STRIDE;
     uint4 data    = Materials.Load4(address);
 
@@ -256,9 +256,11 @@ Material GetMaterial(uint materialId, float2 uv, float mip)
 //-----------------------------------------------------------------------------
 //      頂点データを取得します.
 //-----------------------------------------------------------------------------
-Vertex GetVertex(uint triangleIndex, float2 barycentrices)
+Vertex GetVertex(uint instanceId, uint triangleIndex, float2 barycentrices)
 {
-    uint3 indices = GetIndices(triangleIndex);
+    uint2 resId = Instances.Load2(instanceId * INSTANCE_STRIDE);
+
+    uint3 indices = GetIndices(resId.y, triangleIndex);
     Vertex vertex = (Vertex)0;
 
     // 重心座標を求める.
@@ -267,21 +269,23 @@ Vertex GetVertex(uint triangleIndex, float2 barycentrices)
         barycentrices.x,
         barycentrices.y);
 
+    ByteAddressBuffer vertices = ResourceDescriptorHeap[resId.x];
+
     [unroll]
     for(uint i=0; i<3; ++i)
     {
         uint address = indices[i] * VERTEX_STRIDE;
 
-        float4 pos = float4(asfloat(Vertices.Load3(address)), 1.0f);
+        float4 pos = float4(asfloat(vertices.Load3(address)), 1.0f);
 
         vertex.Position += mul(ObjectToWorld3x4(), pos).xyz * factor[i];
-        vertex.Normal   += asfloat(Vertices.Load3(address + NORMAL_OFFSET)) * factor[i];
-        vertex.Tangent  += asfloat(Vertices.Load3(address + TANGENT_OFFSET)) * factor[i];
-        vertex.TexCoord += asfloat(Vertices.Load2(address + TEXCOORD_OFFSET)) * factor[i];
+        vertex.Normal   += asfloat(vertices.Load3(address + NORMAL_OFFSET)) * factor[i];
+        vertex.Tangent  += asfloat(vertices.Load3(address + TANGENT_OFFSET)) * factor[i];
+        vertex.TexCoord += asfloat(vertices.Load2(address + TEXCOORD_OFFSET)) * factor[i];
     }
 
-    vertex.Normal  = normalize(mul(ObjectToWorld3x4(), float4(vertex.Normal,  0.0f)).xyz);
-    vertex.Tangent = normalize(mul(ObjectToWorld3x4(), float4(vertex.Tangent, 0.0f)).xyz);
+    vertex.Normal     = normalize(mul(ObjectToWorld3x4(), float4(vertex.Normal,  0.0f)).xyz);
+    vertex.Tangent    = normalize(mul(ObjectToWorld3x4(), float4(vertex.Tangent, 0.0f)).xyz);
 
     return vertex;
 }
@@ -384,13 +388,13 @@ void OnGenerateRay()
 [shader("closesthit")]
 void OnClosestHit(inout Payload payload, in HitArgs args)
 {
-    Vertex vert = GetVertex(PrimitiveIndex(), args.barycentrics);
+    Vertex vert = GetVertex(InstanceID(), PrimitiveIndex(), args.barycentrics);
 
     payload.Position   = vert.Position;
     payload.Normal     = vert.Normal;
     payload.Tangent    = vert.Tangent;
     payload.TexCoord   = vert.TexCoord;
-    payload.MaterialId = InstanceID();
+    payload.InstanceId = InstanceID();
 }
 
 //-----------------------------------------------------------------------------
@@ -408,7 +412,7 @@ void OnShadowClosestHit(inout ShadowPayload payload, in HitArgs args)
 [shader("miss")]
 void OnMiss(inout Payload payload)
 {
-    payload.MaterialId = INVALID_ID;
+    payload.InstanceId = INVALID_ID;
 }
 
 //-----------------------------------------------------------------------------
