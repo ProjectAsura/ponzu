@@ -77,7 +77,6 @@ private:
     // private variables.
     //=========================================================================
     std::vector<DrawCall>       m_DrawCalls;
-
     std::vector<asdx::Blas>     m_BLAS;
     asdx::Tlas                  m_TLAS;
     asdx::Texture               m_IBL;

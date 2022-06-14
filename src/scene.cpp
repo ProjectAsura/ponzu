@@ -231,20 +231,23 @@ bool Scene::InitFromXml(const char* path)
     Deserialize(root, elementIbl);
 
     // IBLデータ生成.
+    if (!elementIbl.Path.empty())
     {
+        asdx::ResTexture texture;
     }
 
-    // マテリアルデータ構築.
     std::vector<Material> resMaterials;
-    {
-    }
-
-    // メッシュデータ構築.
     std::vector<Mesh> resMeshes;
+    if (!elementMeshes.empty())
     {
     }
 
     // インスタンスデータ構築.
+    if (!elementInstances.empty())
+    {
+    }
+
+    // 定数バッファ作成.
     {
     }
 
