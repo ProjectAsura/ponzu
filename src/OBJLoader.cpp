@@ -414,7 +414,7 @@ bool OBJLoader::LoadOBJ(const char* path, ModelOBJ& model)
             auto& index = indices[id];
 
             mesh.Vertices[j].Position = positions[index.P];
-            mesh.Indices[j] = j;
+            mesh.Indices[j] = uint32_t(j);
 
             if (!normals.empty())
             { mesh.Vertices[j].Normal = normals[index.N]; }

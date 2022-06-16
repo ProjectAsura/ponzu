@@ -1054,16 +1054,20 @@ void Renderer::OnKey(const asdx::KeyEventArgs& args)
 //-----------------------------------------------------------------------------
 void Renderer::OnMouse(const asdx::MouseEventArgs& args)
 {
+    auto isAltDown = !!(GetKeyState(VK_MENU) & 0x8000);
+
 #if ASDX_ENABLE_IMGUI
-    asdx::GuiMgr::Instance().OnMouse(
-        args.X, args.Y, args.WheelDelta,
-        args.IsLeftButtonDown,
-        args.IsMiddleButtonDown,
-        args.IsRightButtonDown);
+    if (!isAltDown)
+    {
+        asdx::GuiMgr::Instance().OnMouse(
+            args.X, args.Y, args.WheelDelta,
+            args.IsLeftButtonDown,
+            args.IsMiddleButtonDown,
+            args.IsRightButtonDown);
+    }
 #endif
 
 #if (!CAMP_RELEASE)
-    auto isAltDown = !!(GetKeyState(VK_MENU) & 0x8000);
 
     if (isAltDown)
     {

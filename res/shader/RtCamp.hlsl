@@ -378,7 +378,7 @@ void OnGenerateRay()
         payload);
 
     // レンダーターゲットに格納.
-    Canvas[DispatchRaysIndex().xy] = payload.HasHit() ? float4(1.0f, 0.0f, 0.0f, 1.0f) : float4(0.0f, 0.0f, 0.0f, 1.0f);
+    Canvas[DispatchRaysIndex().xy] = payload.HasHit() ? float4(1.0f, 0.0f, 0.0f, 1.0f) : SampleIBL(ray.Direction);
     //Canvas[DispatchRaysIndex().xy] = SampleIBL(ray.Direction);
 }
 

@@ -56,9 +56,6 @@
     <ClInclude Include="..\external\fpng\fpng.h">
       <Filter>ヘッダー ファイル\external\fpng</Filter>
     </ClInclude>
-    <ClInclude Include="..\include\mimalloc_wrapper.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
     <ClInclude Include="..\include\OBJLoader.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>

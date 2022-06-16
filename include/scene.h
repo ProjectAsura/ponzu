@@ -9,7 +9,6 @@
 // Includes
 //-----------------------------------------------------------------------------
 #include <fnd/asdxMath.h>
-#include <gfx/asdxTexture.h>
 #include <gfx/asdxConstantBuffer.h>
 #include <vector>
 #include <model_mgr.h>
@@ -31,14 +30,50 @@ struct PinholeCamera
 };
 
 ///////////////////////////////////////////////////////////////////////////////
-// DrawCall structure
+// SceneTexture class
 ///////////////////////////////////////////////////////////////////////////////
-struct DrawCall
+class SceneTexture
 {
-    uint32_t                    IndexCount;
-    uint32_t                    InstanceId;
-    D3D12_VERTEX_BUFFER_VIEW    VBV;
-    D3D12_INDEX_BUFFER_VIEW     IBV;
+    //=========================================================================
+    // list of friend classes and methods.
+    //=========================================================================
+    /* NOTHING */
+
+public:
+    //=========================================================================
+    // public variables.
+    //=========================================================================
+    /* NOTHING */
+
+    //=========================================================================
+    // public methods.
+    //=========================================================================
+
+    //-------------------------------------------------------------------------
+    //! @brief      初期化処理を行います.
+    //-------------------------------------------------------------------------
+    bool Init(ID3D12GraphicsCommandList6* pCmdList, const void* resTexture);
+
+    //-------------------------------------------------------------------------
+    //! @brief      終了処理を行います.
+    //-------------------------------------------------------------------------
+    void Term();
+
+    //-------------------------------------------------------------------------
+    //! @brief      シェーダリソースビューを取得します.
+    //-------------------------------------------------------------------------
+    asdx::IShaderResourceView* GetView() const;
+
+private:
+    //=========================================================================
+    // private variables.
+    //=========================================================================
+    asdx::RefPtr<asdx::IShaderResourceView> m_View;
+
+    //=========================================================================
+    // private methods.
+    //=========================================================================
+    /* NOTHING */
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -60,7 +95,7 @@ public:
     //=========================================================================
     // public methods.
     //=========================================================================
-    bool InitFromXml(const char* path);
+    bool Init(const char* path, ID3D12GraphicsCommandList6* pCmdList);
     void Term();
 
     asdx::IConstantBufferView* GetParamCBV() const;
@@ -70,23 +105,48 @@ public:
     asdx::IShaderResourceView* GetMB() const;
     asdx::IShaderResourceView* GetIBL() const;
 
-    void Draw(ID3D12GraphicsCommandList* pCmdList);
+    void Draw(ID3D12GraphicsCommandList6* pCmdList);
 
 private:
+    ///////////////////////////////////////////////////////////////////////////
+    // SceneInstance structure
+    ///////////////////////////////////////////////////////////////////////////
+    struct SceneInstance
+    {
+        uint32_t    InstanceId;
+        uint32_t    MeshId;
+    };
+
+    ///////////////////////////////////////////////////////////////////////////
+    // DrawCall structure
+    ///////////////////////////////////////////////////////////////////////////
+    struct DrawCall
+    {
+        uint32_t                    IndexCount;
+        D3D12_VERTEX_BUFFER_VIEW    VBV;
+        D3D12_INDEX_BUFFER_VIEW     IBV;
+        uint32_t                    IndexVB;
+        uint32_t                    IndexIB;
+        uint32_t                    MaterialId;
+    };
+
     //=========================================================================
     // private variables.
     //=========================================================================
-    std::vector<DrawCall>       m_DrawCalls;
-    std::vector<asdx::Blas>     m_BLAS;
-    asdx::Tlas                  m_TLAS;
-    asdx::Texture               m_IBL;
-    asdx::ConstantBuffer        m_Param;
-    ModelMgr                    m_ModelMgr;
+    void*                                   m_pBinary = nullptr;
+    std::vector<DrawCall>                   m_DrawCalls;
+    std::vector<SceneInstance>              m_Instances;
+    std::vector<asdx::Blas>                 m_BLAS;
+    asdx::Tlas                              m_TLAS;
+    SceneTexture                            m_IBL;
+    std::vector<SceneTexture>               m_Textures;
+    asdx::ConstantBuffer                    m_Param;
+    ModelMgr                                m_ModelMgr;
 
     //=========================================================================
     // private methods.
     //=========================================================================
-    /* NOTHING */
+    uint32_t GetTextureHandle(uint32_t index);
 };
 
 } // namespace r3d
