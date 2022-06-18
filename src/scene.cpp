@@ -442,8 +442,9 @@ bool Scene::Init(const char* path, ID3D12GraphicsCommandList6* pCmdList)
 
     // テクスチャセットアップ.
     {
-        auto count = resScene->TextureCount();
+        auto count       = resScene->TextureCount();
         auto resTextures = resScene->Textures();
+        assert(resTextures != nullptr);
         m_Textures.resize(count);
 
         for(auto i=0u; i<count; ++i)
@@ -458,7 +459,7 @@ bool Scene::Init(const char* path, ID3D12GraphicsCommandList6* pCmdList)
 
     // マテリアル登録.
     {
-        auto count = resScene->MaterialCount();
+        auto count        = resScene->MaterialCount();
         auto resMaterials = resScene->Materials();
         assert(resMaterials != nullptr);
 
