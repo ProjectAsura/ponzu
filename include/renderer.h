@@ -109,6 +109,7 @@ private:
     asdx::ShaderTable               m_HitGroupTable;
     asdx::ColorTarget               m_AlbedoTarget;
     asdx::ColorTarget               m_NormalTarget;
+    asdx::ColorTarget               m_VelocityTarget;
     asdx::DepthTarget               m_ModelDepthTarget;
     asdx::RootSignature             m_ModelRootSig;
     asdx::PipelineState             m_ModelPSO;
@@ -120,6 +121,16 @@ private:
     uint32_t                        m_ReadBackPitch = 0;
     ExportData                      m_ExportData[3];
     uint32_t                        m_CaptureIndex  = 0;
+
+    asdx::Matrix        m_PrevView;
+    asdx::Matrix        m_PrevProj;
+    asdx::Matrix        m_PrevInvView;
+    asdx::Matrix        m_PrevInvProj;
+    asdx::Matrix        m_PrevInvViewProj;
+
+    asdx::Texture       m_DefaultBaseColor;
+    asdx::Texture       m_DefaultNormal;
+    asdx::Texture       m_DefaultORM;
 
 #if (!CAMP_RELEASE)
     bool    m_DebugSetting = true;

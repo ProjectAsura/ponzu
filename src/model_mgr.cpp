@@ -23,6 +23,7 @@ namespace r3d {
 //-----------------------------------------------------------------------------
 bool ModelMgr::Init
 (
+    asdx::CommandList& cmdList,
     uint32_t maxInstanceCount,
     uint32_t maxMaterialCount
 )
@@ -38,6 +39,179 @@ bool ModelMgr::Init
 
     m_OffsetInstance = 0;
     m_OffsetMaterial = 0;
+
+    // デフォルトベースカラー生成.
+    {
+        asdx::ResTexture res;
+        res.Dimension       = asdx::TEXTURE_DIMENSION_2D;
+        res.Width           = 32;
+        res.Height          = 32;
+        res.Depth           = 0;
+        res.Format          = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+        res.MipMapCount     = 1;
+        res.SurfaceCount    = 1;
+        res.pResources      = new asdx::SubResource[1];
+
+        auto& subRes = res.pResources[0];
+
+        subRes.Width        = 32;
+        subRes.Height       = 32;
+        subRes.MipIndex     = 0;
+        subRes.Pitch        = sizeof(uint8_t) * 4 * subRes.Width;
+        subRes.SlicePitch   = subRes.Pitch * subRes.Height;
+        subRes.pPixels      = new uint8_t [subRes.SlicePitch];
+
+        for(auto y=0u; y<res.Height; y++)
+        {
+            for(auto x=0u; x<res.Width; x++)
+            {
+                auto idx = y * 4 * res.Width + x * 4;
+                // 18%グレー.
+                subRes.pPixels[idx + 0] = 119;
+                subRes.pPixels[idx + 1] = 119;
+                subRes.pPixels[idx + 2] = 119;
+                subRes.pPixels[idx + 3] = 255;
+            }
+        }
+
+        if (!m_DefaultBaseColor.Init(cmdList, res))
+        {
+            ELOGA("Error : Default Base Color Init Failed.");
+            res.Dispose();
+            return false;
+        }
+
+        res.Dispose();
+    }
+
+    // フラット法線生成.
+    {
+        asdx::ResTexture res;
+        res.Dimension       = asdx::TEXTURE_DIMENSION_2D;
+        res.Width           = 32;
+        res.Height          = 32;
+        res.Depth           = 0;
+        res.Format          = DXGI_FORMAT_R8G8B8A8_UNORM;
+        res.MipMapCount     = 1;
+        res.SurfaceCount    = 1;
+        res.pResources      = new asdx::SubResource[1];
+
+        auto& subRes = res.pResources[0];
+
+        subRes.Width        = 32;
+        subRes.Height       = 32;
+        subRes.MipIndex     = 0;
+        subRes.Pitch        = sizeof(uint8_t) * 4 * subRes.Width;
+        subRes.SlicePitch   = subRes.Pitch * subRes.Height;
+        subRes.pPixels      = new uint8_t [subRes.SlicePitch];
+
+        for(auto y=0u; y<res.Height; y++)
+        {
+            for(auto x=0u; x<res.Width; x++)
+            {
+                auto idx = y * 4 * res.Width + x * 4;
+                subRes.pPixels[idx + 0] = 128;
+                subRes.pPixels[idx + 1] = 128;
+                subRes.pPixels[idx + 2] = 255;
+                subRes.pPixels[idx + 3] = 255;
+            }
+        }
+
+        if (!m_DefaultNormal.Init(cmdList, res))
+        {
+            ELOGA("Error : Default Normal Init Failed.");
+            res.Dispose();
+            return false;
+        }
+
+        res.Dispose();
+    }
+
+    // デフォルトORM生成.
+    {
+        asdx::ResTexture res;
+        res.Dimension       = asdx::TEXTURE_DIMENSION_2D;
+        res.Width           = 32;
+        res.Height          = 32;
+        res.Depth           = 0;
+        res.Format          = DXGI_FORMAT_R8G8B8A8_UNORM;
+        res.MipMapCount     = 1;
+        res.SurfaceCount    = 1;
+        res.pResources      = new asdx::SubResource[1];
+
+        auto& subRes = res.pResources[0];
+
+        subRes.Width        = 32;
+        subRes.Height       = 32;
+        subRes.MipIndex     = 0;
+        subRes.Pitch        = sizeof(uint8_t) * 4 * subRes.Width;
+        subRes.SlicePitch   = subRes.Pitch * subRes.Height;
+        subRes.pPixels      = new uint8_t [subRes.SlicePitch];
+
+        for(auto y=0u; y<res.Height; y++)
+        {
+            for(auto x=0u; x<res.Width; x++)
+            {
+                auto idx = y * 4 * res.Width + x * 4;
+                subRes.pPixels[idx + 0] = 255;
+                subRes.pPixels[idx + 1] = 128;
+                subRes.pPixels[idx + 2] = 0;
+                subRes.pPixels[idx + 3] = 255;
+            }
+        }
+
+        if (!m_DefaultORM.Init(cmdList, res))
+        {
+            ELOGA("Error : Default ORM Init Failed.");
+            res.Dispose();
+            return false;
+        }
+
+        res.Dispose();
+    }
+
+    // デフォルトエミッシブ生成.
+    {
+        asdx::ResTexture res;
+        res.Dimension       = asdx::TEXTURE_DIMENSION_2D;
+        res.Width           = 32;
+        res.Height          = 32;
+        res.Depth           = 0;
+        res.Format          = DXGI_FORMAT_R8G8B8A8_UNORM;
+        res.MipMapCount     = 1;
+        res.SurfaceCount    = 1;
+        res.pResources      = new asdx::SubResource[1];
+
+        auto& subRes = res.pResources[0];
+
+        subRes.Width        = 32;
+        subRes.Height       = 32;
+        subRes.MipIndex     = 0;
+        subRes.Pitch        = sizeof(uint8_t) * 4 * subRes.Width;
+        subRes.SlicePitch   = subRes.Pitch * subRes.Height;
+        subRes.pPixels      = new uint8_t [subRes.SlicePitch];
+
+        for(auto y=0u; y<res.Height; y++)
+        {
+            for(auto x=0u; x<res.Width; x++)
+            {
+                auto idx = y * 4 * res.Width + x * 4;
+                subRes.pPixels[idx + 0] = 0;
+                subRes.pPixels[idx + 1] = 0;
+                subRes.pPixels[idx + 2] = 0;
+                subRes.pPixels[idx + 3] = 0;
+            }
+        }
+
+        if (!m_DefaultEmissive.Init(cmdList, res))
+        {
+            ELOGA("Error : Default Emissive Init Failed.");
+            res.Dispose();
+            return false;
+        }
+
+        res.Dispose();
+    }
 
     //--------------------
     // インスタンスデータ.
@@ -150,6 +324,11 @@ void ModelMgr::Term()
 
     m_Meshes.clear();
     m_Meshes.shrink_to_fit();
+
+    m_DefaultBaseColor  .Term();
+    m_DefaultNormal     .Term();
+    m_DefaultORM        .Term();
+    m_DefaultEmissive   .Term();
 }
 
 //-----------------------------------------------------------------------------
@@ -270,7 +449,14 @@ D3D12_GPU_VIRTUAL_ADDRESS ModelMgr::AddMaterials(const Material* ptr, uint32_t c
     D3D12_GPU_VIRTUAL_ADDRESS result = m_AddressMB + m_OffsetMaterial * sizeof(Material);
 
     for(uint32_t i=0; i<count; ++i)
-    { m_pMaterials[m_OffsetMaterial + i] = ptr[i]; }
+    {
+        auto& src = ptr[i];
+        auto& dst = m_pMaterials[m_OffsetMaterial + i];
+        dst.BaseColor = GetBaseColor(src.BaseColor);
+        dst.Normal    = GetNormal(src.Normal);
+        dst.ORM       = GetOrm(src.ORM);
+        dst.Emissive  = GetEmissive(src.Emissive);
+    }
 
     m_OffsetMaterial += count;
 
@@ -330,5 +516,45 @@ uint32_t ModelMgr::GetSizeTB() const
 //-----------------------------------------------------------------------------
 uint32_t ModelMgr::GetSizeMB() const
 { return m_MaxMaterialCount * sizeof(Material); }
+
+//-----------------------------------------------------------------------------
+//      ベースカラーハンドルを取得します.
+//-----------------------------------------------------------------------------
+uint32_t ModelMgr::GetBaseColor(uint32_t handle)
+{
+    return (handle == INVALID_MATERIAL_MAP) 
+        ? m_DefaultBaseColor.GetView()->GetDescriptorIndex()
+        : handle;
+}
+
+//-----------------------------------------------------------------------------
+//      法線ハンドルを取得します.
+//-----------------------------------------------------------------------------
+uint32_t ModelMgr::GetNormal(uint32_t handle)
+{
+    return (handle == INVALID_MATERIAL_MAP)
+        ? m_DefaultNormal.GetView()->GetDescriptorIndex()
+        : handle;
+}
+
+//-----------------------------------------------------------------------------
+//      ORMハンドルを取得します.
+//-----------------------------------------------------------------------------
+uint32_t ModelMgr::GetOrm(uint32_t handle)
+{
+    return (handle == INVALID_MATERIAL_MAP)
+        ? m_DefaultORM.GetView()->GetDescriptorIndex()
+        : handle;
+}
+
+//-----------------------------------------------------------------------------
+//      エミッシブハンドルを取得します.
+//-----------------------------------------------------------------------------
+uint32_t ModelMgr::GetEmissive(uint32_t handle)
+{
+    return (handle == INVALID_MATERIAL_MAP)
+        ? m_DefaultEmissive.GetView()->GetDescriptorIndex()
+        : handle;
+}
 
 } // namespace r3d

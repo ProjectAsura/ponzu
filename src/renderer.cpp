@@ -66,6 +66,12 @@ struct SceneParam
     asdx::Matrix    InvProj;
     asdx::Matrix    InvViewProj;
 
+    asdx::Matrix    PrevView;
+    asdx::Matrix    PrevProj;
+    asdx::Matrix    PrevInvView;
+    asdx::Matrix    PrevInvProj;
+    asdx::Matrix    PrevInvViewProj;
+
     uint32_t        MaxBounce;
     uint32_t        FrameIndex;
     float           SkyIntensity;
@@ -143,8 +149,17 @@ Renderer::Renderer(const SceneDesc& desc)
 , m_SceneDesc(desc)
 {
     m_SwapChainFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
-#if !CAMP_RELEASE
-    //m_DeviceDesc.EnableCapture = true;
+
+#if CAMP_RELEASE
+    m_DeviceDesc.EnableBreakOnError   = false;
+    m_DeviceDesc.EnableBreakOnWarning = false;
+    m_DeviceDesc.EnableDRED           = false;
+    m_DeviceDesc.EnableDebug          = false;
+    m_DeivceDesc.EnableCapture        = false;
+#else
+    m_DeviceDesc.EnableCapture        = true;
+    m_DeviceDesc.EnableBreakOnWarning = false;
+    m_DeviceDesc.EnableDRED           = true;
 #endif
 }
 
@@ -171,15 +186,17 @@ bool Renderer::OnInit()
         return false;
     }
 
+
     // PNGライブラリ初期化.
     fpng::fpng_init();
 
     // モデルマネージャ初期化.
-    if (!m_ModelMgr.Init(UINT16_MAX, UINT16_MAX))
+    if (!m_ModelMgr.Init(m_GfxCmdList, UINT16_MAX, UINT16_MAX))
     {
         ELOGA("Error : ModelMgr::Init() Failed.");
         return false;
     }
+
 
     // リードバックテクスチャ生成.
     {
@@ -557,16 +574,47 @@ bool Renderer::OnInit()
         }
     }
 
+    // 速度ターゲット生成.
+    {
+        asdx::TargetDesc desc;
+        desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        desc.Width              = m_SceneDesc.Width;
+        desc.Height             = m_SceneDesc.Height;
+        desc.DepthOrArraySize   = 1;
+        desc.MipLevels          = 1;
+        desc.Format             = DXGI_FORMAT_R16G16_FLOAT;
+        desc.SampleDesc.Count   = 1;
+        desc.SampleDesc.Quality = 0;
+        desc.InitState          = D3D12_RESOURCE_STATE_COMMON;
+        desc.ClearColor[0]      = 0.0f;
+        desc.ClearColor[1]      = 0.0f;
+        desc.ClearColor[2]      = 0.0f;
+        desc.ClearColor[3]      = 0.0f;
+
+        if (!m_VelocityTarget.Init(&desc, false))
+        {
+            ELOGA("Error : NormalTarget Init Failed.");
+            return false;
+        }
+
+        m_GfxCmdList.BarrierTransition(
+            m_VelocityTarget.GetResource(), 0,
+            D3D12_RESOURCE_STATE_COMMON,
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+    }
+
     // G-Bufferルートシグニチャ生成.
     {
         auto flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
         flags |= D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED;
 
-        asdx::DescriptorSetLayout<4, 1> layout;
+        asdx::DescriptorSetLayout<5, 1> layout;
         layout.SetCBV(0, asdx::SV_VS, 0);
         layout.SetContants(1, asdx::SV_ALL, 1, 1);
         layout.SetSRV(2, asdx::SV_VS, 0);
         layout.SetSRV(3, asdx::SV_PS, 1);
+        layout.SetSRV(4, asdx::SV_PS, 2);
         layout.SetStaticSampler(0, asdx::SV_ALL, asdx::STATIC_SAMPLER_LINEAR_WRAP, 0);
         layout.SetFlags(flags);
 
@@ -588,9 +636,10 @@ bool Renderer::OnInit()
         desc.RasterizerState                = asdx::RASTERIZER_DESC(asdx::RASTERIZER_STATE_CULL_NONE);
         desc.SampleMask                     = D3D12_DEFAULT_SAMPLE_MASK;
         desc.PrimitiveTopologyType          = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-        desc.NumRenderTargets               = 2;
+        desc.NumRenderTargets               = 3;
         desc.RTVFormats[0]                  = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
         desc.RTVFormats[1]                  = DXGI_FORMAT_R8G8B8A8_UNORM;
+        desc.RTVFormats[2]                  = DXGI_FORMAT_R16G16_FLOAT;
         desc.DSVFormat                      = DXGI_FORMAT_D32_FLOAT;
         desc.InputLayout.NumElements        = _countof(kModelElements);
         desc.InputLayout.pInputElementDescs = kModelElements;
@@ -615,9 +664,10 @@ bool Renderer::OnInit()
         }
 
         Material dummy;
-        dummy.Normal = 0;
-        dummy.BaseColor = 0;
-        dummy.ORM = 0;
+        dummy.Normal = INVALID_MATERIAL_MAP;
+        dummy.BaseColor = INVALID_MATERIAL_MAP;
+        dummy.ORM = INVALID_MATERIAL_MAP;
+        dummy.Emissive = INVALID_MATERIAL_MAP;
         m_ModelMgr.AddMaterials(&dummy, 1);
 
         auto meshCount = model.Meshes.size();
@@ -736,6 +786,25 @@ bool Renderer::OnInit()
         // 完了を待機.
         pGraphicsQueue->Sync(m_FrameWaitPoint);
     }
+
+    // 初回フレーム計算用に設定しておく.
+    {
+        auto fovY   = asdx::ToRadian(37.5f);
+        auto aspect = float(m_SceneDesc.Width) / float(m_SceneDesc.Height);
+
+        auto view = m_CameraController.GetView();
+        auto proj = asdx::Matrix::CreatePerspectiveFieldOfView(
+            fovY,
+            aspect,
+            m_CameraController.GetNearClip(),
+            m_CameraController.GetFarClip());
+
+        m_PrevView          = view;
+        m_PrevProj          = proj;
+        m_PrevInvView       = asdx::Matrix::Invert(view);
+        m_PrevInvProj       = asdx::Matrix::Invert(proj);
+        m_PrevInvViewProj   = m_PrevInvProj * m_PrevInvView;
+    }
  
     return true;
 }
@@ -778,6 +847,7 @@ void Renderer::OnTerm()
 
     m_AlbedoTarget    .Term();
     m_NormalTarget    .Term();
+    m_VelocityTarget  .Term();
     m_ModelDepthTarget.Term();
     m_ModelRootSig    .Term();
     m_ModelPSO        .Term();
@@ -834,18 +904,22 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         auto fovY   = asdx::ToRadian(37.5f);
         auto aspect = float(m_SceneDesc.Width) / float(m_SceneDesc.Height);
 
-        auto view = m_CameraController.GetView();
-
         SceneParam param = {};
-        param.View = view;
+        param.View = m_CameraController.GetView();
         param.Proj = asdx::Matrix::CreatePerspectiveFieldOfView(
             fovY,
             aspect,
             m_CameraController.GetNearClip(),
             m_CameraController.GetFarClip());
-        param.InvView = asdx::Matrix::Invert(param.View);
-        param.InvProj = asdx::Matrix::Invert(param.Proj);
-        param.InvViewProj = param.InvProj * param.InvView;
+        param.InvView       = asdx::Matrix::Invert(param.View);
+        param.InvProj       = asdx::Matrix::Invert(param.Proj);
+        param.InvViewProj   = param.InvProj * param.InvView;
+
+        param.PrevView          = m_PrevView;
+        param.PrevProj          = m_PrevProj;
+        param.PrevInvView       = m_PrevInvView;
+        param.PrevInvProj       = m_PrevInvProj;
+        param.PrevInvViewProj   = m_PrevInvViewProj;
 
         param.MaxBounce     = 8;
         param.FrameIndex    = GetFrameCount();
@@ -854,33 +928,45 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
 
         m_SceneParam.SwapBuffer();
         m_SceneParam.Update(&param, sizeof(param));
+
+        // 次のフレーム用に記録.
+        m_PrevView          = param.View;
+        m_PrevProj          = param.Proj;
+        m_PrevInvView       = param.InvView;
+        m_PrevInvProj       = param.InvProj;
+        m_PrevInvViewProj   = param.InvViewProj;
     }
 
     // デノイズ用 G-Buffer.
     {
         asdx::ScopedBarrier barrier0(m_GfxCmdList, m_AlbedoTarget.GetResource(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
         asdx::ScopedBarrier barrier1(m_GfxCmdList, m_NormalTarget.GetResource(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
+        asdx::ScopedBarrier barrier2(m_GfxCmdList, m_VelocityTarget.GetResource(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
         auto pRTV0 = m_AlbedoTarget.GetRTV();
         auto pRTV1 = m_NormalTarget.GetRTV();
+        auto pRTV2 = m_VelocityTarget.GetRTV();
         auto pDSV  = m_ModelDepthTarget.GetDSV();
 
         float clearColor [4] = { 0.0f, 0.0f, 0.0f, 1.0f };
         float clearNormal[4] = { 0.5f, 0.5f, 1.0f, 1.0f };
+        float clearVelocity[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
 
         m_GfxCmdList.ClearRTV(pRTV0, clearColor);
         m_GfxCmdList.ClearRTV(pRTV1, clearNormal);
+        m_GfxCmdList.ClearRTV(pRTV2, clearVelocity);
         m_GfxCmdList.ClearDSV(pDSV, 1.0f);
 
         D3D12_CPU_DESCRIPTOR_HANDLE handleRTVs[] = {
             pRTV0->GetHandleCPU(),
             pRTV1->GetHandleCPU(),
+            pRTV2->GetHandleCPU(),
         };
 
         auto handleDSV = pDSV->GetHandleCPU();
 
         m_GfxCmdList.GetCommandList()->OMSetRenderTargets(
-            2, 
+            _countof(handleRTVs), 
             handleRTVs,
             FALSE,
             &handleDSV);
@@ -892,6 +978,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         m_GfxCmdList.SetCBV(0, m_SceneParam.GetResource());
         m_GfxCmdList.SetSRV(2, m_ModelMgr.GetTB());
         m_GfxCmdList.SetSRV(3, m_ModelMgr.GetMB());
+        m_GfxCmdList.SetSRV(4, m_ModelMgr.GetIB());
         m_GfxCmdList.SetPrimitiveToplogy(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
         auto count = m_MeshDrawCalls.size();
@@ -1113,13 +1200,15 @@ void Renderer::Draw2D()
 
     if (ImGui::Begin(u8"デバッグ設定", &m_DebugSetting))
     {
-        auto albedo = const_cast<asdx::IShaderResourceView*>(m_AlbedoTarget.GetSRV());
-        auto normal = const_cast<asdx::IShaderResourceView*>(m_NormalTarget.GetSRV());
+        auto albedo   = const_cast<asdx::IShaderResourceView*>(m_AlbedoTarget  .GetSRV());
+        auto normal   = const_cast<asdx::IShaderResourceView*>(m_NormalTarget  .GetSRV());
+        auto velocity = const_cast<asdx::IShaderResourceView*>(m_VelocityTarget.GetSRV());
 
         ImVec2 texSize(320, 180);
 
-        ImGui::Image(static_cast<ImTextureID>(albedo), texSize);
-        ImGui::Image(static_cast<ImTextureID>(normal), texSize);
+        ImGui::Image(static_cast<ImTextureID>(albedo)   , texSize);
+        ImGui::Image(static_cast<ImTextureID>(normal)   , texSize);
+        ImGui::Image(static_cast<ImTextureID>(velocity) , texSize);
     }
     ImGui::End();
 

@@ -4,6 +4,12 @@
 // Copyright(c) Project Asura. All right reserved.
 //-----------------------------------------------------------------------------
 
+//-----------------------------------------------------------------------------
+// Includes
+//-----------------------------------------------------------------------------
+#include <SceneParam.hlsli>
+
+
 #define TRANSFORM_STRIDE    (48)
 
 
@@ -27,20 +33,8 @@ struct VSOutput
     float3 Normal       : NORMAL;
     float3 Tangent      : TANGENT;
     float2 TexCoord     : TEXCOORD0;
-};
-
-///////////////////////////////////////////////////////////////////////////////
-// SceneParameter structure
-///////////////////////////////////////////////////////////////////////////////
-struct SceneParameter
-{
-    float4x4 View;
-    float4x4 Proj;
-
-    uint    MaxBounce;
-    uint    FrameIndex;
-    float   SkyIntensity;
-    float   Exposure;
+    float4 CurrProjPos  : CURR_PROJ_POS;
+    float4 PrevProjPos  : PREV_PROJ_POS;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -85,13 +79,18 @@ VSOutput main(VSInput input)
     float4 viewPos  = mul(SceneParam.View, worldPos);
     float4 projPos  = mul(SceneParam.Proj, viewPos);
 
+    float4 prevViewPos = mul(SceneParam.PrevView, worldPos);
+    float4 prevProjPos = mul(SceneParam.PrevProj, prevViewPos);
+
     float3 worldNormal  = normalize(mul((float3x3)world, input.Normal));
     float3 worldTangent = normalize(mul((float3x3)world, input.Tangent));
 
-    output.Position = projPos;
-    output.Normal   = worldNormal;
-    output.Tangent  = worldTangent;
-    output.TexCoord = input.TexCoord;
+    output.Position    = projPos;
+    output.Normal      = worldNormal;
+    output.Tangent     = worldTangent;
+    output.TexCoord    = input.TexCoord;
+    output.CurrProjPos = projPos;
+    output.PrevProjPos = prevProjPos;
 
     return output;
 }

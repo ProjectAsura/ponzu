@@ -4,17 +4,25 @@
 // Copyright(c) Project Asura. All right reserved.
 //-----------------------------------------------------------------------------
 
+//-----------------------------------------------------------------------------
+// Includes
+//-----------------------------------------------------------------------------
+#include <Math.hlsli>
+
 #define MATERIAL_STRIDE     (12)
+#define INSTANCE_STRIDE     (12)
 
 ///////////////////////////////////////////////////////////////////////////////
 // VSOutput structure
 ///////////////////////////////////////////////////////////////////////////////
 struct VSOutput
 {
-    float4 Position : SV_POSITION;
-    float3 Normal   : NORMAL;
-    float3 Tangent  : TANGENT;
-    float2 TexCoord : TEXCOORD0;
+    float4 Position     : SV_POSITION;
+    float3 Normal       : NORMAL;
+    float3 Tangent      : TANGENT;
+    float2 TexCoord     : TEXCOORD0;
+    float4 CurrProjPos  : CURR_PROJ_POS;
+    float4 PrevProjPos  : PREV_PROJ_POS;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -22,8 +30,9 @@ struct VSOutput
 ///////////////////////////////////////////////////////////////////////////////
 struct PSOutput
 {
-    float4 Albedo : SV_TARGET0;
-    float4 Normal : SV_TARGET1;
+    float4 Albedo   : SV_TARGET0;
+    float4 Normal   : SV_TARGET1;
+    float2 Velocity : SV_TARGET2;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -34,22 +43,23 @@ struct ObjectParameter
     uint   InstanceId;
 };
 
+///////////////////////////////////////////////////////////////////////////////
+// Instance structure
+///////////////////////////////////////////////////////////////////////////////
+struct Instance
+{
+    uint    VertexId;
+    uint    IndexId;
+    uint    MaterialId;
+};
+
 //-----------------------------------------------------------------------------
 // Resources
 //-----------------------------------------------------------------------------
 ConstantBuffer<ObjectParameter> ObjectParam : register(b1);
 ByteAddressBuffer               Materials   : register(t1);
+ByteAddressBuffer               Instances   : register(t2);
 SamplerState                    LinearWrap  : register(s0);
-
-
-//-----------------------------------------------------------------------------
-//      マテリアルIDとジオメトリIDのパッキングを解除します.
-//-----------------------------------------------------------------------------
-void UnpackInstanceId(uint instanceId, out uint materialId, out uint geometryId)
-{
-    materialId = instanceId & 0x3FF;
-    geometryId = (instanceId >> 10) & 0x3FFF;
-}
 
 //-----------------------------------------------------------------------------
 //      メインエントリーポイントです.
@@ -58,46 +68,26 @@ PSOutput main(const VSOutput input)
 {
     PSOutput output = (PSOutput)0;
 
-#if 0
-    uint materialId = 0;
-    uint geometryId = 0;
-    UnpackInstanceId(ObjectParam.InstanceId, materialId, geometryId);
+    float2 currPosCS = input.CurrProjPos.xy / input.CurrProjPos.w;
+    float2 prevPosCS = input.PrevProjPos.xy / input.PrevProjPos.w;
+    float2 velocity  = (currPosCS - prevPosCS);
+
+    uint materialId = Instances.Load(ObjectParam.InstanceId * INSTANCE_STRIDE + 8);
 
     uint  address = materialId * MATERIAL_STRIDE;
     uint4 data    = Materials.Load4(address);
 
-    output.Albedo = float4(1.0f, 1.0f, 1.0f, 1.0f);
-    output.Normal = float4(input.Normal * 0.5f + 0.5f, 1.0f);
+    Texture2D<float4> baseColorMap = ResourceDescriptorHeap[data.x];
+    float4 bc = baseColorMap.Sample(LinearWrap, input.TexCoord);
 
-    if (data.x != INVALID_ID)
-    {
-        Texture2D<float4> baseColorMap = ResourceDescriptorHeap[data.x];
-        output.Albedo = baseColorMap.SampleLevel(LinearWrap, uv, mip);
-    }
+    Texture2D<float4> normalMap = ResourceDescriptorHeap[data.y];
+    float3 n = normalMap.Sample(LinearWrap, input.TexCoord).xyz * 2.0f - 1.0f;
+    float3 bitangent = normalize(cross(input.Tangent, input.Normal));
+    float3 normal = FromTangentSpaceToWorld(n, input.Tangent, bitangent, input.Normal);
 
-    if (data.y != INVALID_ID)
-    {
-        Texture2D<float2> normalMap = ResourceDescriptorHeap[data.y];
-        float2 n_xy = normalMap.SampleLevel(LinearWrap, uv, mip);
-        float  n_z  = sqrt(abs(1.0f - dot(n_xy, n_xy)));
-        output.Normal = float4(n_xy * 0.5f + 0.5f, n_z * 0.5f + 0.5f, 1.0f);
-    }
-
-    //if (data.z != INVALID_ID)
-    //{
-    //    Texture2D<float4> ormMap = ResourceDescriptorHeap[data.z];
-    //    orm = ormMap.SampleLevel(LinearWrap, uv, mip).rgb;
-    //}
-
-    //if (data.w != INVALID_ID)
-    //{
-    //    Texture2D<float4> emissiveMap = ResourceDescriptorHeap[data.w];
-    //    e = emissiveMap.SampleLevel(LinearWrap, uv, mip).rgb;
-    //}
-#else
-    output.Albedo = float4(1.0f, 1.0f, 1.0f, 1.0f);
-    output.Normal = float4(input.Normal * 0.5f + 0.5f, 1.0f);
-#endif
+    output.Albedo   = bc;
+    output.Normal   = float4(normal * 0.5f + 0.5f, 1.0f);
+    output.Velocity = velocity;
 
     return output;
 }

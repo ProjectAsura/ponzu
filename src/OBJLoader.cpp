@@ -190,13 +190,34 @@ void CalcTangents(MeshOBJ& mesh)
         tan1 -= n1 * dp1;
         tan2 -= n2 * dp2;
 
-        tan0 = asdx::Vector3::SafeNormalize(tan0, tan0);
-        tan1 = asdx::Vector3::SafeNormalize(tan1, tan1);
-        tan2 = asdx::Vector3::SafeNormalize(tan2, tan2);
+        asdx::Vector3 T0, T1, T2;
+        asdx::Vector3 B0, B1, B2;
+
+        asdx::CalcONB(n0, T0, B1);
+        asdx::CalcONB(n1, T1, B1);
+        asdx::CalcONB(n2, T2, B2);
+
+        tan0 = asdx::Vector3::SafeNormalize(tan0, T0);
+        tan1 = asdx::Vector3::SafeNormalize(tan1, T1);
+        tan2 = asdx::Vector3::SafeNormalize(tan2, T2);
 
         mesh.Vertices[i0].Tangent = tan0;
         mesh.Vertices[i1].Tangent = tan1;
         mesh.Vertices[i2].Tangent = tan2;
+    }
+}
+
+//-----------------------------------------------------------------------------
+//      接線ベクトルを計算します.
+//-----------------------------------------------------------------------------
+void CalcTangentRoughly(MeshOBJ& mesh)
+{
+    auto vertexCount = mesh.Vertices.size();
+    for(size_t i=0; i<vertexCount; ++i)
+    {
+        asdx::Vector3 T, B;
+        asdx::CalcONB(mesh.Vertices[i].Normal, T, B);
+        mesh.Vertices[i].Tangent = T;
     }
 }
 
@@ -428,6 +449,8 @@ bool OBJLoader::LoadOBJ(const char* path, ModelOBJ& model)
 
         if (!texcoords.empty())
         { CalcTangents(mesh); }
+        else
+        { CalcTangentRoughly(mesh); }
     }
 
     positions.clear();
@@ -474,57 +497,31 @@ bool OBJLoader::LoadMTL(const char* path, ModelOBJ& model)
             stream >> model.Materials[index].Name;
         }
         else if (0 == strcmp(buf, "Ka"))
-        {
-            stream >> model.Materials[index].Ka.x >> model.Materials[index].Ka.y >> model.Materials[index].Ka.z;
-        }
+        { stream >> model.Materials[index].Ka.x >> model.Materials[index].Ka.y >> model.Materials[index].Ka.z; }
         else if (0 == strcmp(buf, "Kd"))
-        {
-            stream >> model.Materials[index].Kd.x >> model.Materials[index].Kd.y >> model.Materials[index].Kd.z;
-        }
+        { stream >> model.Materials[index].Kd.x >> model.Materials[index].Kd.y >> model.Materials[index].Kd.z; }
         else if (0 == strcmp(buf, "Ks"))
-        {
-            stream >> model.Materials[index].Ks.x >> model.Materials[index].Ks.y >> model.Materials[index].Ks.z;
-        }
+        { stream >> model.Materials[index].Ks.x >> model.Materials[index].Ks.y >> model.Materials[index].Ks.z; }
         else if (0 == strcmp(buf, "Ke"))
-        {
-            stream >> model.Materials[index].Ke.x >> model.Materials[index].Ke.y >> model.Materials[index].Ke.z;
-        }
+        { stream >> model.Materials[index].Ke.x >> model.Materials[index].Ke.y >> model.Materials[index].Ke.z; }
         else if (0 == strcmp(buf, "d") || 0 == strcmp(buf, "Tr"))
-        {
-            stream >> model.Materials[index].Tr;
-        }
+        { stream >> model.Materials[index].Tr; }
         else if (0 == strcmp(buf, "Ns"))
-        {
-            stream >> model.Materials[index].Ns;
-        }
+        { stream >> model.Materials[index].Ns; }
         else if (0 == strcmp(buf, "map_Ka"))
-        {
-            stream >> model.Materials[index].map_Ka;
-        }
+        { stream >> model.Materials[index].map_Ka; }
         else if (0 == strcmp(buf, "map_Kd"))
-        {
-            stream >> model.Materials[index].map_Kd;
-        }
+        { stream >> model.Materials[index].map_Kd; }
         else if (0 == strcmp(buf, "map_Ks"))
-        {
-            stream >> model.Materials[index].map_Ks;
-        }
+        { stream >> model.Materials[index].map_Ks; }
         else if (0 == strcmp(buf, "map_Ke"))
-        {
-            stream >> model.Materials[index].map_Ke;
-        }
+        { stream >> model.Materials[index].map_Ke; }
         else if (0 == _stricmp(buf, "map_bump") || 0 == strcmp(buf, "bump"))
-        {
-            stream >> model.Materials[index].map_bump;
-        }
+        { stream >> model.Materials[index].map_bump; }
         else if (0 == strcmp(buf, "disp"))
-        {
-            stream >> model.Materials[index].disp;
-        }
+        { stream >> model.Materials[index].disp; }
         else if (0 == strcmp(buf, "norm"))
-        {
-            stream >> model.Materials[index].norm;
-        }
+        { stream >> model.Materials[index].norm; }
 
         stream.ignore(OBJ_BUFFER_LENGTH, '\n');
     }

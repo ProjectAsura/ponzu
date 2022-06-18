@@ -9,6 +9,7 @@
 //-----------------------------------------------------------------------------
 #include <Math.hlsli>
 #include <BRDF.hlsli>
+#include <SceneParam.hlsli>
 
 #define INVALID_ID          (-1)
 #define STANDARD_RAY_INDEX  (0)
@@ -26,11 +27,9 @@ typedef RaytracingAccelerationStructure       RayTracingAS;
 ///////////////////////////////////////////////////////////////////////////////
 struct Payload
 {
-    float3      Position;
-    float3      Normal;
-    float3      Tangent;
-    float2      TexCoord;
-    uint        InstanceId;
+    uint    InstanceId;
+    uint    PrimitiveId;
+    float2  Barycentrics;
 
     bool HasHit()
     { return InstanceId != INVALID_ID; }
@@ -45,31 +44,15 @@ struct ShadowPayload
 };
 
 ///////////////////////////////////////////////////////////////////////////////
-// SceneParameter structure
-///////////////////////////////////////////////////////////////////////////////
-struct SceneParameter
-{
-    float4x4 View;
-    float4x4 Proj;
-    float4x4 InvView;
-    float4x4 InvProj;
-    float4x4 InvViewProj;
-
-    uint    MaxBounce;
-    uint    FrameIndex;
-    float   SkyIntensity;
-    float   Exposure;
-};
-
-///////////////////////////////////////////////////////////////////////////////
 // Vertex structure
 ///////////////////////////////////////////////////////////////////////////////
 struct Vertex
 {
-    float3      Position;
-    float3      Normal;
-    float3      Tangent;
-    float2      TexCoord;
+    float3  Position;
+    float3  Normal;
+    float3  Tangent;
+    float2  TexCoord;
+    float3  GeometryNormal;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -87,13 +70,12 @@ struct Instance
 ///////////////////////////////////////////////////////////////////////////////
 struct Material
 {
-    float3  BaseColor;
+    float4  BaseColor;
     float3  Normal;
     float   Occlusion;
     float   Roughness;
     float   Metalness;
     float3  Emissive;
-    float   Opacity;
 };
 
 #define VERTEX_STRIDE       (44)
@@ -210,41 +192,22 @@ Material GetMaterial(uint instanceId, float2 uv, float mip)
     uint  address = materialId * MATERIAL_STRIDE;
     uint4 data    = Materials.Load4(address);
 
-    float4 bc  = float4(1.0f, 1.0f, 1.0f, 1.0f);
-    float3 n   = float3(0.0f, 0.0f, 1.0f);
-    float3 orm = float3(1.0f, 1.0f, 0.0f);
-    float3 e   = float3(0.0f, 0.0f, 0.0f);
+    Texture2D<float4> baseColorMap = ResourceDescriptorHeap[data.x];
+    float4 bc = baseColorMap.SampleLevel(LinearWrap, uv, mip);
 
-    if (data.x != INVALID_ID)
-    {
-        Texture2D<float4> baseColorMap = ResourceDescriptorHeap[data.x];
-        bc = baseColorMap.SampleLevel(LinearWrap, uv, mip);
-    }
+    Texture2D<float4> normalMap = ResourceDescriptorHeap[data.y];
+    float3 n = normalMap.SampleLevel(LinearWrap, uv, mip).xyz * 2.0f - 1.0f;
+    n = normalize(n);
 
-    if (data.y != INVALID_ID)
-    {
-        Texture2D<float2> normalMap = ResourceDescriptorHeap[data.y];
-        float2 n_xy = normalMap.SampleLevel(LinearWrap, uv, mip);
-        float  n_z  = sqrt(abs(1.0f - dot(n_xy, n_xy)));
-        n = float3(n_xy, n_z);
-    }
+    Texture2D<float4> ormMap = ResourceDescriptorHeap[data.z];
+    float3 orm = ormMap.SampleLevel(LinearWrap, uv, mip).rgb;
 
-    if (data.z != INVALID_ID)
-    {
-        Texture2D<float4> ormMap = ResourceDescriptorHeap[data.z];
-        orm = ormMap.SampleLevel(LinearWrap, uv, mip).rgb;
-    }
-
-    if (data.w != INVALID_ID)
-    {
-        Texture2D<float4> emissiveMap = ResourceDescriptorHeap[data.w];
-        e = emissiveMap.SampleLevel(LinearWrap, uv, mip).rgb;
-    }
+    Texture2D<float4> emissiveMap = ResourceDescriptorHeap[data.w];
+    float3 e = emissiveMap.SampleLevel(LinearWrap, uv, mip).rgb;
 
     Material param;
-    param.BaseColor = bc.rgb;
-    param.Opacity   = bc.a;
-    param.Normal    = normalize(n);
+    param.BaseColor = bc;
+    param.Normal    = n;
     param.Occlusion = orm.x;
     param.Roughness = orm.y;
     param.Metalness = orm.z;
@@ -271,12 +234,15 @@ Vertex GetVertex(uint instanceId, uint triangleIndex, float2 barycentrices)
 
     ByteAddressBuffer vertices = ResourceDescriptorHeap[resId.x];
 
+    float3 v[3];
+
     [unroll]
     for(uint i=0; i<3; ++i)
     {
         uint address = indices[i] * VERTEX_STRIDE;
 
-        float4 pos = float4(asfloat(vertices.Load3(address)), 1.0f);
+        v[i] = asfloat(vertices.Load3(address));
+        float4 pos = float4(v[i], 1.0f);
 
         vertex.Position += mul(ObjectToWorld3x4(), pos).xyz * factor[i];
         vertex.Normal   += asfloat(vertices.Load3(address + NORMAL_OFFSET)) * factor[i];
@@ -284,8 +250,12 @@ Vertex GetVertex(uint instanceId, uint triangleIndex, float2 barycentrices)
         vertex.TexCoord += asfloat(vertices.Load2(address + TEXCOORD_OFFSET)) * factor[i];
     }
 
-    vertex.Normal     = normalize(mul(ObjectToWorld3x4(), float4(vertex.Normal,  0.0f)).xyz);
-    vertex.Tangent    = normalize(mul(ObjectToWorld3x4(), float4(vertex.Tangent, 0.0f)).xyz);
+    vertex.Normal  = normalize(mul(ObjectToWorld3x4(), float4(vertex.Normal,  0.0f)).xyz);
+    vertex.Tangent = normalize(mul(ObjectToWorld3x4(), float4(vertex.Tangent, 0.0f)).xyz);
+
+    float3 e0 = v[2] - v[0];
+    float3 e1 = v[1] - v[0];
+    vertex.GeometryNormal = normalize(cross(e0, e1));
 
     return vertex;
 }
@@ -295,8 +265,8 @@ Vertex GetVertex(uint instanceId, uint triangleIndex, float2 barycentrices)
 //-----------------------------------------------------------------------------
 RayDesc GeneratePinholeCameraRay(float2 pixel)
 {
-    float4 orig   = float4(0.0f, 0.0f, 0.0f, 1.0f);           // カメラの位置.
-    float4 screen = float4(pixel, 0.0f, 1.0f); // スクリーンの位置.
+    float4 orig   = float4(0.0f,  0.0f, 0.0f, 1.0f); // カメラの位置.
+    float4 screen = float4(pixel, 0.0f, 1.0f);       // スクリーンの位置.
 
     orig   = mul(SceneParam.InvView, orig);
     screen = mul(SceneParam.InvViewProj, screen);
@@ -344,8 +314,14 @@ bool CastShadowRay(float3 pos, float3 normal, float3 dir, float tmax)
 float4 SampleIBL(float3 dir)
 {
     float2 uv = ToSphereMapCoord(dir);
-    return BackGround.SampleLevel(LinearWrap, uv, 0.0f);
+    return BackGround.SampleLevel(LinearWrap, uv, 0.0f) * SceneParam.SkyIntensity;
 }
+
+//-----------------------------------------------------------------------------
+//      輝度値を求めます.
+//-----------------------------------------------------------------------------
+float Luminance(float3 rgb)
+{ return dot(rgb, float3(0.2126f, 0.7152f, 0.0722f)); }
 
 //-----------------------------------------------------------------------------
 //      レイ生成シェーダです.
@@ -366,6 +342,7 @@ void OnGenerateRay()
     // レイを設定.
     RayDesc ray = GeneratePinholeCameraRay(pixel);
 
+#if 1
     // レイを追跡
     TraceRay(
         SceneAS,
@@ -380,6 +357,86 @@ void OnGenerateRay()
     // レンダーターゲットに格納.
     Canvas[DispatchRaysIndex().xy] = payload.HasHit() ? float4(1.0f, 0.0f, 0.0f, 1.0f) : SampleIBL(ray.Direction);
     //Canvas[DispatchRaysIndex().xy] = SampleIBL(ray.Direction);
+#else
+    uint4 randState = InitRandom(DispatchRaysIndex().xy, SceneParam.FrameIndex);
+
+    float3 W = float4(1.0f, 1.0f, 1.0f);  // 重み.
+    float3 L = float4(0.0f, 0.0f, 0.0f);  // 放射輝度.
+
+    for(int bounce=0; depth<SceneParam.MaxBounce; ++bounce)
+    {
+        // 交差判定.
+        TraceRay(
+            SceneAS,
+            RAY_FLAG_NONE,
+            0xFF,
+            STANDARD_RAY_INDEX,
+            0,
+            STANDARD_RAY_INDEX,
+            ray,
+            payload);
+
+        if (!payload.HasHit())
+        {
+            L += W * SampleIBL(ray.Direction);
+            break;
+        }
+
+        // 頂点データ取得.
+        Vertex vertex = GetVertex(payload.InstanceId, payload.PrimitiveId, payload.Barycentrics);
+
+        float3 geometryNormal = vertex.GeometryNormal;
+        float3 N = vertex.Normal;
+        float3 T = vertex.Tangent;
+        float3 V = -ray.Direction;
+        if (dot(geometryNormal, V) < 0.0f) geometryNormal = -geometryNormal;
+        if (dot(geometryNormal, N) < 0.0f) 
+        {
+            N = -N;
+            T = -T;
+        }
+
+        // マテリアル取得.
+        Material material = GetMaterial(payload.InstanceId, vertex.TexCoord, 0.0f);
+
+        // 自己発光による放射輝度.
+        L += W * material.Emissive;
+
+        // RIS
+        {
+        }
+
+        // 法線ベクトルを計算.
+        float3 B = normalize(cross(T, N));
+        float3 normal = FromTangentSpaceToWorld(material.Normal, T, B, N);
+
+        // シェーディング処理.
+        float3 dir;
+
+
+        // ロシアンルーレット.
+        if (bounce > SceneParam.MinBounce)
+        {
+            float p = min(0.95f, Lumiance(W));
+            if (p < Random(randState))
+            { break; }
+            else
+            { W /= p; }
+        }
+
+        // 重みがゼロに成ったら以降の更新は無駄なので打ち切りにする.
+        if (all(W < FLT_EPSILON.xxx))
+        { break; }
+
+        // レイを更新.
+        ray.Orig      = OffsetRay(vertex.Position, geometryNormal);
+        ray.Direction = dir;
+    }
+
+    float invSampleCount = 1.0f; // TODO.
+    float3 prevL = Canvas[DispatchRaysIndex().xy].rgb;
+    Canvas[DispatchRaysIndex().xy] = float4(prevL + L * invSampleCount, 1.0f);
+#endif
 }
 
 //-----------------------------------------------------------------------------
@@ -388,22 +445,9 @@ void OnGenerateRay()
 [shader("closesthit")]
 void OnClosestHit(inout Payload payload, in HitArgs args)
 {
-    Vertex vert = GetVertex(InstanceID(), PrimitiveIndex(), args.barycentrics);
-
-    payload.Position   = vert.Position;
-    payload.Normal     = vert.Normal;
-    payload.Tangent    = vert.Tangent;
-    payload.TexCoord   = vert.TexCoord;
-    payload.InstanceId = InstanceID();
-}
-
-//-----------------------------------------------------------------------------
-//      シャドウレイヒット時のシェーダ.
-//-----------------------------------------------------------------------------
-[shader("closesthit")]
-void OnShadowClosestHit(inout ShadowPayload payload, in HitArgs args)
-{
-    payload.Visible = true;
+    payload.InstanceId   = InstanceID();
+    payload.PrimitiveId  = PrimitiveIndex();
+    payload.Barycentrics = args.barycentrics;
 }
 
 //-----------------------------------------------------------------------------
@@ -413,6 +457,15 @@ void OnShadowClosestHit(inout ShadowPayload payload, in HitArgs args)
 void OnMiss(inout Payload payload)
 {
     payload.InstanceId = INVALID_ID;
+}
+
+//-----------------------------------------------------------------------------
+//      シャドウレイヒット時のシェーダ.
+//-----------------------------------------------------------------------------
+[shader("closesthit")]
+void OnShadowClosestHit(inout ShadowPayload payload, in HitArgs args)
+{
+    payload.Visible = true;
 }
 
 //-----------------------------------------------------------------------------

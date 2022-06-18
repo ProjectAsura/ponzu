@@ -11,6 +11,8 @@
 #include <d3d12.h>
 #include <fnd/asdxRef.h>
 #include <gfx/asdxRayTracing.h>
+#include <gfx/asdxCommandList.h>
+#include <gfx/asdxTexture.h>
 
 
 namespace r3d {
@@ -119,6 +121,7 @@ public:
     //! @retval false   初期化に失敗.
     //-------------------------------------------------------------------------
     bool Init(
+        asdx::CommandList& cmdList,
         uint32_t maxInstanceCount,
         uint32_t maxMaterialCount);
 
@@ -242,10 +245,18 @@ private:
     D3D12_GPU_VIRTUAL_ADDRESS m_AddressTB = 0;
     D3D12_GPU_VIRTUAL_ADDRESS m_AddressMB = 0;
 
+    asdx::Texture   m_DefaultBaseColor;
+    asdx::Texture   m_DefaultNormal;
+    asdx::Texture   m_DefaultORM;
+    asdx::Texture   m_DefaultEmissive;
+
     //=========================================================================
     // private methods.
     //=========================================================================
-    /* NOTHING */
+    uint32_t GetBaseColor(uint32_t handle);
+    uint32_t GetNormal(uint32_t handle);
+    uint32_t GetOrm(uint32_t handle);
+    uint32_t GetEmissive(uint32_t handle);
 };
 
 } // namespace r3d
