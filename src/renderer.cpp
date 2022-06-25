@@ -73,9 +73,9 @@ struct SceneParam
     asdx::Matrix    PrevInvViewProj;
 
     uint32_t        MaxBounce;
+    uint32_t        MinBounce;
     uint32_t        FrameIndex;
     float           SkyIntensity;
-    float           Exposure;
 };
 
 //-----------------------------------------------------------------------------
@@ -921,10 +921,10 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         param.PrevInvProj       = m_PrevInvProj;
         param.PrevInvViewProj   = m_PrevInvViewProj;
 
-        param.MaxBounce     = 8;
+        param.MaxBounce     = 10;
+        param.MinBounce     = 2;
         param.FrameIndex    = GetFrameCount();
         param.SkyIntensity  = 1.0f;
-        param.Exposure      = 1.0f;
 
         m_SceneParam.SwapBuffer();
         m_SceneParam.Update(&param, sizeof(param));

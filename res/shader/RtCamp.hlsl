@@ -72,7 +72,6 @@ struct Material
 {
     float4  BaseColor;
     float3  Normal;
-    float   Occlusion;
     float   Roughness;
     float   Metalness;
     float3  Emissive;
@@ -133,9 +132,9 @@ float ToFloat(uint x)
 }
 
 //-----------------------------------------------------------------------------
-//      乱数を初期化します.
+//      乱数のシード値を設定します..
 //-----------------------------------------------------------------------------
-uint4 InitRandom(uint2 pixelCoords, uint frameIndex)
+uint4 SetSeed(uint2 pixelCoords, uint frameIndex)
 {
     return uint4(pixelCoords.xy, frameIndex, 0);
 }
@@ -208,7 +207,7 @@ Material GetMaterial(uint instanceId, float2 uv, float mip)
     Material param;
     param.BaseColor = bc;
     param.Normal    = n;
-    param.Occlusion = orm.x;
+    //param.Occlusion = orm.x;
     param.Roughness = orm.y;
     param.Metalness = orm.z;
     param.Emissive  = e;
@@ -358,7 +357,7 @@ void OnGenerateRay()
     Canvas[DispatchRaysIndex().xy] = payload.HasHit() ? float4(1.0f, 0.0f, 0.0f, 1.0f) : SampleIBL(ray.Direction);
     //Canvas[DispatchRaysIndex().xy] = SampleIBL(ray.Direction);
 #else
-    uint4 randState = InitRandom(DispatchRaysIndex().xy, SceneParam.FrameIndex);
+    uint4 seed = SetSeed(DispatchRaysIndex().xy, SceneParam.FrameIndex);
 
     float3 W = float4(1.0f, 1.0f, 1.0f);  // 重み.
     float3 L = float4(0.0f, 0.0f, 0.0f);  // 放射輝度.
@@ -389,8 +388,11 @@ void OnGenerateRay()
         float3 N = vertex.Normal;
         float3 T = vertex.Tangent;
         float3 V = -ray.Direction;
-        if (dot(geometryNormal, V) < 0.0f) geometryNormal = -geometryNormal;
-        if (dot(geometryNormal, N) < 0.0f) 
+        if (dot(geometryNormal, V) < 0.0f)
+        {
+            geometryNormal = -geometryNormal;
+        }
+        if (dot(geometryNormal, N) < 0.0f)
         {
             N = -N;
             T = -T;
@@ -418,7 +420,7 @@ void OnGenerateRay()
         if (bounce > SceneParam.MinBounce)
         {
             float p = min(0.95f, Lumiance(W));
-            if (p < Random(randState))
+            if (p < Random(seed))
             { break; }
             else
             { W /= p; }
