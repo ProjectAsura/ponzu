@@ -27,6 +27,11 @@ struct SceneParameter
     uint    MinBounce;
     uint    FrameIndex;
     float   SkyIntensity;
+
+    bool    EnableAccumulation;
+    uint    AccumulatedFrames;
+    float   ExposureAdjustment;
+    uint    Reserved;
 };
 
 #endif//SCENE_PARAM_HLSLI

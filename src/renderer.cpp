@@ -11,6 +11,7 @@
 #include <fnd/asdxLogger.h>
 #include <fnd/asdxStopWatch.h>
 #include <fnd/asdxMisc.h>
+#include <gfx/asdxShaderCompiler.h>
 #include <process.h>
 #include <fpng.h>
 #include <OBJLoader.h>
@@ -76,6 +77,11 @@ struct SceneParam
     uint32_t        MinBounce;
     uint32_t        FrameIndex;
     float           SkyIntensity;
+
+    uint32_t        EnableAccumulation;
+    uint32_t        AccumulatedFrames;
+    float           ExposureAdjustment;
+    uint32_t        Reserved;
 };
 
 //-----------------------------------------------------------------------------
@@ -115,21 +121,6 @@ unsigned Export(void* args)
     //ILOGA("timer = %lf", timer.GetElapsedMsec());
 
     return 0;
-}
-
-//-----------------------------------------------------------------------------
-//      マテリアルIDとジオメトリIDをパッキングします.
-//-----------------------------------------------------------------------------
-inline uint32_t PackInstanceId(uint32_t materialId, uint32_t geometryId)
-{ return ((geometryId & 0x3FFF) << 10) | (materialId & 0x3FF); }
-
-//-----------------------------------------------------------------------------
-//      マテリアルIDとジオメトリIDのパッキングを解除します.
-//-----------------------------------------------------------------------------
-inline void UnpackInstanceId(uint32_t instanceId, uint32_t& materialId, uint32_t& geometryId)
-{
-    materialId = instanceId & 0x3FF;
-    geometryId = (instanceId >> 10) & 0x3FFF;
 }
 
 } // namespace
@@ -295,7 +286,7 @@ bool Renderer::OnInit()
         desc.Width              = m_SceneDesc.Width;
         desc.Height             = m_SceneDesc.Height;
         desc.DepthOrArraySize   = 1;
-        desc.Format             = DXGI_FORMAT_R32G32B32A32_FLOAT;
+        desc.Format             = DXGI_FORMAT_R16G16B16A16_FLOAT;
         desc.MipLevels          = 1;
         desc.SampleDesc.Count   = 1;
         desc.SampleDesc.Quality = 0;
@@ -303,20 +294,21 @@ bool Renderer::OnInit()
 
         if (!m_Canvas.Init(&desc))
         {
-            ELOGA("Error : ComputeTarget::Init() Failed.");
+            ELOGA("Error : Canvas Init Failed.");
             return false;
         }
     }
 
     // レイトレ用ルートシグニチャ生成.
     {
-        asdx::DescriptorSetLayout<6, 1> layout;
+        asdx::DescriptorSetLayout<7, 1> layout;
         layout.SetTableUAV(0, asdx::SV_ALL, 0);
         layout.SetSRV(1, asdx::SV_ALL, 0);
         layout.SetSRV(2, asdx::SV_ALL, 1);
         layout.SetSRV(3, asdx::SV_ALL, 2);
-        layout.SetTableSRV(4, asdx::SV_ALL, 3);
-        layout.SetCBV(5, asdx::SV_ALL, 0);
+        layout.SetSRV(4, asdx::SV_ALL, 3);
+        layout.SetTableSRV(5, asdx::SV_ALL, 4);
+        layout.SetCBV(6, asdx::SV_ALL, 0);
         layout.SetStaticSampler(0, asdx::SV_ALL, asdx::STATIC_SAMPLER_LINEAR_WRAP, 0);
         layout.SetFlags(D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED);
 
@@ -416,8 +408,9 @@ bool Renderer::OnInit()
 
     // トーンマップ用ルートシグニチャ生成.
     {
-        asdx::DescriptorSetLayout<1, 1> layout;
+        asdx::DescriptorSetLayout<2, 1> layout;
         layout.SetTableSRV(0, asdx::SV_PS, 0);
+        layout.SetCBV(1, asdx::SV_PS, 0);
         layout.SetStaticSampler(0, asdx::SV_PS, asdx::STATIC_SAMPLER_LINEAR_CLAMP, 0);
         layout.SetFlags(D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
@@ -455,10 +448,10 @@ bool Renderer::OnInit()
 
     // カメラ初期化.
     {
-        auto pos = asdx::Vector3(0.0f, 0.0f, 10.0f);
+        auto pos = asdx::Vector3(0.0f, 0.0f, 5000.0f);
         auto target = asdx::Vector3(0.0f, 0.0f, 0.0f);
         auto upward = asdx::Vector3(0.0f, 1.0f, 0.0f);
-        m_CameraController.Init(pos, target, upward, 1.0f, 1000.0f);
+        m_CameraController.Init(pos, target, upward, 1.0f, 10000.0f);
     }
 
     // 定数バッファ初期化.
@@ -820,6 +813,13 @@ void Renderer::OnTerm()
 
     asdx::Quad::Instance().Term();
 
+#if (!CAMP_RELEASE)
+    m_DevRayTracingPSO  .Term();
+    m_DevRayGenTable    .Term();
+    m_DevMissTable      .Term();
+    m_DevHitGroupTable  .Term();
+#endif
+
     m_TonemapPSO        .Term();
     m_TonemapRootSig    .Term();
     m_RayTracingPSO     .Term();
@@ -904,8 +904,20 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         auto fovY   = asdx::ToRadian(37.5f);
         auto aspect = float(m_SceneDesc.Width) / float(m_SceneDesc.Height);
 
+        auto dirtyView = false;
+        auto view = m_CameraController.GetView();
+
+        // カメラ変更があったかどうか?
+        if (memcmp(&view, &m_PrevView, sizeof(asdx::Matrix)) != 0)
+        {
+            dirtyView = true;
+            m_AccumulatedFrames = 0;
+        }
+
+        m_AccumulatedFrames++;
+
         SceneParam param = {};
-        param.View = m_CameraController.GetView();
+        param.View = view;
         param.Proj = asdx::Matrix::CreatePerspectiveFieldOfView(
             fovY,
             aspect,
@@ -925,6 +937,10 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         param.MinBounce     = 2;
         param.FrameIndex    = GetFrameCount();
         param.SkyIntensity  = 1.0f;
+
+        param.EnableAccumulation = !dirtyView;
+        param.AccumulatedFrames  = m_AccumulatedFrames;
+        param.ExposureAdjustment = 1.0f;
 
         m_SceneParam.SwapBuffer();
         m_SceneParam.Update(&param, sizeof(param));
@@ -1001,19 +1017,36 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
 
     // レイトレ実行.
     {
-        m_GfxCmdList.SetStateObject(m_RayTracingPSO.GetStateObject());
+        auto stateObject    = m_RayTracingPSO.GetStateObject();
+        auto rayGenTable    = m_RayGenTable  .GetRecordView();
+        auto missTable      = m_MissTable    .GetTableView();
+        auto hitGroupTable  = m_HitGroupTable.GetTableView();
+
+    #if (!CAMP_RELEASE)
+        // リロードしたシェーダに差し替え.
+        if (m_ReloadShader)
+        {
+            stateObject   = m_DevRayTracingPSO.GetStateObject();
+            rayGenTable   = m_DevRayGenTable  .GetRecordView();
+            missTable     = m_DevMissTable    .GetTableView();
+            hitGroupTable = m_DevHitGroupTable.GetTableView();
+        }
+    #endif
+
+        m_GfxCmdList.SetStateObject(stateObject);
         m_GfxCmdList.SetRootSignature(m_RayTracingRootSig.GetPtr(), true);
         m_GfxCmdList.SetTable(0, m_Canvas.GetUAV(), true);
         m_GfxCmdList.SetSRV(1, m_TLAS.GetResource(), true);
         m_GfxCmdList.SetSRV(2, m_ModelMgr.GetIB(), true);
         m_GfxCmdList.SetSRV(3, m_ModelMgr.GetMB(), true);
-        m_GfxCmdList.SetTable(4, m_IBL.GetView(), true);
-        m_GfxCmdList.SetCBV(5, m_SceneParam.GetResource(), true);
+        m_GfxCmdList.SetSRV(4, m_ModelMgr.GetTB(), true);
+        m_GfxCmdList.SetTable(5, m_IBL.GetView(), true);
+        m_GfxCmdList.SetCBV(6, m_SceneParam.GetResource(), true);
 
         D3D12_DISPATCH_RAYS_DESC desc = {};
-        desc.RayGenerationShaderRecord  = m_RayGenTable.GetRecordView();
-        desc.MissShaderTable            = m_MissTable.GetTableView();
-        desc.HitGroupTable              = m_HitGroupTable.GetTableView();
+        desc.RayGenerationShaderRecord  = rayGenTable;
+        desc.MissShaderTable            = missTable;
+        desc.HitGroupTable              = hitGroupTable;
         desc.Width                      = m_SceneDesc.Width;
         desc.Height                     = m_SceneDesc.Height;
         desc.Depth                      = 1;
@@ -1043,6 +1076,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         m_GfxCmdList.SetRootSignature(m_TonemapRootSig.GetPtr(), false);
         m_GfxCmdList.SetPipelineState(m_TonemapPSO.GetPtr());
         m_GfxCmdList.SetTable(0, m_Canvas.GetSRV());
+        m_GfxCmdList.SetCBV(1, m_SceneParam.GetResource());
         asdx::Quad::Instance().Draw(m_GfxCmdList.GetCommandList());
 
         // 2D描画.
@@ -1112,6 +1146,15 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
 
     // フレーム同期.
     asdx::FrameSync();
+
+#if (!CAMP_RELEASE)
+    // シェーダリロード.
+    if (m_RequestReload)
+    {
+        ReloadShader();
+        m_RequestReload = false;
+    }
+#endif
 }
 
 //-----------------------------------------------------------------------------
@@ -1126,13 +1169,26 @@ void Renderer::OnResize(const asdx::ResizeEventArgs& args)
 //-----------------------------------------------------------------------------
 void Renderer::OnKey(const asdx::KeyEventArgs& args)
 {
-#if ASDX_ENABLE_IMGUI
-    asdx::GuiMgr::Instance().OnKey(
-        args.IsKeyDown, args.IsAltDown, args.KeyCode);
-#endif
-
 #if (!CAMP_RELEASE)
+    #if ASDX_ENABLE_IMGUI
+        asdx::GuiMgr::Instance().OnKey(
+            args.IsKeyDown, args.IsAltDown, args.KeyCode);
+    #endif
+
     m_CameraController.OnKey(args.KeyCode, args.IsKeyDown, args.IsAltDown);
+
+    if (args.IsKeyDown)
+    {
+        switch(args.KeyCode)
+        {
+        case VK_F7:
+            {
+                // シェーダをリロードします.
+                m_RequestReload = true;
+            }
+            break;
+        }
+    }
 #endif
 }
 
@@ -1141,20 +1197,19 @@ void Renderer::OnKey(const asdx::KeyEventArgs& args)
 //-----------------------------------------------------------------------------
 void Renderer::OnMouse(const asdx::MouseEventArgs& args)
 {
+#if (!CAMP_RELEASE)
     auto isAltDown = !!(GetKeyState(VK_MENU) & 0x8000);
 
-#if ASDX_ENABLE_IMGUI
-    if (!isAltDown)
-    {
-        asdx::GuiMgr::Instance().OnMouse(
-            args.X, args.Y, args.WheelDelta,
-            args.IsLeftButtonDown,
-            args.IsMiddleButtonDown,
-            args.IsRightButtonDown);
-    }
-#endif
-
-#if (!CAMP_RELEASE)
+    #if ASDX_ENABLE_IMGUI
+        if (!isAltDown)
+        {
+            asdx::GuiMgr::Instance().OnMouse(
+                args.X, args.Y, args.WheelDelta,
+                args.IsLeftButtonDown,
+                args.IsMiddleButtonDown,
+                args.IsRightButtonDown);
+        }
+    #endif
 
     if (isAltDown)
     {
@@ -1176,8 +1231,10 @@ void Renderer::OnMouse(const asdx::MouseEventArgs& args)
 //-----------------------------------------------------------------------------
 void Renderer::OnTyping(uint32_t keyCode)
 {
-#if ASDX_ENABLE_IMGUI
-    asdx::GuiMgr::Instance().OnTyping(keyCode);
+#if (!CAMP_RELEASE)
+    #if ASDX_ENABLE_IMGUI
+        asdx::GuiMgr::Instance().OnTyping(keyCode);
+    #endif
 #endif
 }
 
@@ -1186,35 +1243,188 @@ void Renderer::OnTyping(uint32_t keyCode)
 //-----------------------------------------------------------------------------
 void Renderer::Draw2D()
 {
-#if ASDX_ENABLE_IMGUI
-    asdx::GuiMgr::Instance().Update(m_Width, m_Height);
+#if (!CAMP_RELEASE)
+    #if ASDX_ENABLE_IMGUI
+        asdx::GuiMgr::Instance().Update(m_Width, m_Height);
 
-    ImGui::SetNextWindowPos(ImVec2(10, 10));
-    ImGui::SetNextWindowSize(ImVec2(140, 50));
-    if (ImGui::Begin(u8"フレーム情報", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoTitleBar))
-    {
-        ImGui::Text(u8"FPS   : %.3lf", GetFPS());
-        ImGui::Text(u8"Frame : %ld", GetFrameCount());
-    }
-    ImGui::End();
+        ImGui::SetNextWindowPos(ImVec2(10, 10));
+        ImGui::SetNextWindowSize(ImVec2(140, 0));
+        if (ImGui::Begin(u8"フレーム情報", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoTitleBar))
+        {
+            ImGui::Text(u8"FPS   : %.3lf", GetFPS());
+            ImGui::Text(u8"Frame : %ld", GetFrameCount());
+            ImGui::Text(u8"Accum : %ld", m_AccumulatedFrames);
+        }
+        ImGui::End();
 
-    if (ImGui::Begin(u8"デバッグ設定", &m_DebugSetting))
-    {
-        auto albedo   = const_cast<asdx::IShaderResourceView*>(m_AlbedoTarget  .GetSRV());
-        auto normal   = const_cast<asdx::IShaderResourceView*>(m_NormalTarget  .GetSRV());
-        auto velocity = const_cast<asdx::IShaderResourceView*>(m_VelocityTarget.GetSRV());
+        if (ImGui::Begin(u8"デバッグ設定", &m_DebugSetting))
+        {
+            auto albedo   = const_cast<asdx::IShaderResourceView*>(m_AlbedoTarget  .GetSRV());
+            auto normal   = const_cast<asdx::IShaderResourceView*>(m_NormalTarget  .GetSRV());
+            auto velocity = const_cast<asdx::IShaderResourceView*>(m_VelocityTarget.GetSRV());
 
-        ImVec2 texSize(320, 180);
+            ImVec2 texSize(320, 180);
 
-        ImGui::Image(static_cast<ImTextureID>(albedo)   , texSize);
-        ImGui::Image(static_cast<ImTextureID>(normal)   , texSize);
-        ImGui::Image(static_cast<ImTextureID>(velocity) , texSize);
-    }
-    ImGui::End();
+            ImGui::Image(static_cast<ImTextureID>(albedo)   , texSize);
+            ImGui::Image(static_cast<ImTextureID>(normal)   , texSize);
+            ImGui::Image(static_cast<ImTextureID>(velocity) , texSize);
+        }
+        ImGui::End();
 
 
-    asdx::GuiMgr::Instance().Draw(m_GfxCmdList.GetCommandList());
+        asdx::GuiMgr::Instance().Draw(m_GfxCmdList.GetCommandList());
+    #endif
 #endif
 }
+
+#if (!CAMP_RELEASE)
+//-----------------------------------------------------------------------------
+//      シェーダをリロードします.
+//-----------------------------------------------------------------------------
+void Renderer::ReloadShader()
+{
+    auto pDevice = asdx::GetD3D12Device();
+
+    // リロード成功フラグを下す.
+    m_ReloadShader = false;
+
+    // 開発用オブジェクトを破棄.
+    m_DevRayTracingPSO  .Term();
+    m_DevRayGenTable    .Term();
+    m_DevMissTable      .Term();
+    m_DevHitGroupTable  .Term();
+
+    asdx::RefPtr<asdx::IBlob> DevShader;
+
+    // シェーダコンパイル.
+    {
+        std::wstring path;
+
+        if (!asdx::SearchFilePathW(L"../res/shader/RtCamp.hlsl", path))
+        {
+            ELOGA("Error : File Not Found.");
+            return;
+        }
+
+        std::vector<std::wstring> includeDirs;
+        includeDirs.push_back(asdx::ToFullPathW(L"../external/asdx12/res/shaders"));
+        includeDirs.push_back(asdx::ToFullPathW(L"../res/shader"));
+
+        if (!asdx::CompileFromFile(path.c_str(), includeDirs, "", "lib_6_6", DevShader.GetAddress()))
+        {
+            ELOGA("Error : Compile Shader Failed.");
+            m_ReloadShader = false;
+            return;
+        }
+    }
+
+    // レイトレ用パイプラインステート生成.
+    {
+        D3D12_EXPORT_DESC exports[] = {
+            { L"OnGenerateRay"      , nullptr, D3D12_EXPORT_FLAG_NONE },
+            { L"OnClosestHit"       , nullptr, D3D12_EXPORT_FLAG_NONE },
+            { L"OnShadowClosestHit" , nullptr, D3D12_EXPORT_FLAG_NONE },
+            { L"OnMiss"             , nullptr, D3D12_EXPORT_FLAG_NONE },
+            { L"OnShadowMiss"       , nullptr, D3D12_EXPORT_FLAG_NONE },
+        };
+
+        D3D12_HIT_GROUP_DESC groups[2] = {};
+        groups[0].ClosestHitShaderImport    = L"OnClosestHit";
+        groups[0].HitGroupExport            = L"StandardHit";
+        groups[0].Type                      = D3D12_HIT_GROUP_TYPE_TRIANGLES;
+
+        groups[1].ClosestHitShaderImport    = L"OnShadowClosestHit";
+        groups[1].HitGroupExport            = L"ShadowHit";
+        groups[1].Type                      = D3D12_HIT_GROUP_TYPE_TRIANGLES;
+
+        asdx::RayTracingPipelineStateDesc desc = {};
+        desc.pGlobalRootSignature       = m_RayTracingRootSig.GetPtr();
+        desc.DXILLibrary                = { DevShader->GetBufferPointer(), DevShader->GetBufferSize() };
+        desc.ExportCount                = _countof(exports);
+        desc.pExports                   = exports;
+        desc.HitGroupCount              = _countof(groups);
+        desc.pHitGroups                 = groups;
+        desc.MaxPayloadSize             = sizeof(Payload);
+        desc.MaxAttributeSize           = sizeof(asdx::Vector2);
+        desc.MaxTraceRecursionDepth     = 1;
+
+        if (!m_DevRayTracingPSO.Init(pDevice, desc))
+        {
+            ELOGA("Error : RayTracing PSO Failed.");
+            m_ReloadShader = false;
+            return;
+        }
+    }
+
+    // レイ生成テーブル.
+    {
+        asdx::ShaderRecord record = {};
+        record.ShaderIdentifier = m_DevRayTracingPSO.GetShaderIdentifier(L"OnGenerateRay");
+
+        asdx::ShaderTable::Desc desc = {};
+        desc.RecordCount    = 1;
+        desc.pRecords       = &record;
+
+        if (!m_DevRayGenTable.Init(pDevice, &desc))
+        {
+            ELOGA("Error : RayGenTable Init Failed.");
+            m_ReloadShader = false;
+            return;
+        }
+    }
+
+    // ミステーブル.
+    {
+        asdx::ShaderRecord record[2] = {};
+        record[0].ShaderIdentifier = m_DevRayTracingPSO.GetShaderIdentifier(L"OnMiss");
+        record[1].ShaderIdentifier = m_DevRayTracingPSO.GetShaderIdentifier(L"OnShadowMiss");
+
+        asdx::ShaderTable::Desc desc = {};
+        desc.RecordCount = 2;
+        desc.pRecords    = record;
+
+        if (!m_DevMissTable.Init(pDevice, &desc))
+        {
+            ELOGA("Error : MissTable Init Failed.");
+            m_ReloadShader = false;
+            return;
+        }
+    }
+
+    // ヒットグループ.
+    {
+        asdx::ShaderRecord record[2];
+        record[0].ShaderIdentifier = m_DevRayTracingPSO.GetShaderIdentifier(L"StandardHit");
+        record[1].ShaderIdentifier = m_DevRayTracingPSO.GetShaderIdentifier(L"ShadowHit");
+
+        asdx::ShaderTable::Desc desc = {};
+        desc.RecordCount = 2;
+        desc.pRecords    = record;
+
+        if (!m_DevHitGroupTable.Init(pDevice, &desc))
+        {
+            ELOGA("Error : HitGroupTable Init Failed.");
+            m_ReloadShader = false;
+            return;
+        }
+    }
+
+    // リロードフラグを立てる.
+    m_ReloadShader = true;
+
+    // リロード完了時刻を取得.
+    tm local_time = {};
+    auto t   = time(nullptr);
+    auto err = localtime_s( &local_time, &t );
+
+    ILOGA("Info : Shader Reload Successs!! [%04d/%02d/%02d %02d:%02d:%02d]",
+        local_time.tm_year + 1900,
+        local_time.tm_mon + 1,
+        local_time.tm_mday,
+        local_time.tm_hour,
+        local_time.tm_min,
+        local_time.tm_sec);
+}
+#endif//(!CAMP_RELEASE)
 
 } // namespace r3d

@@ -121,6 +121,7 @@ private:
     uint32_t                        m_ReadBackPitch = 0;
     ExportData                      m_ExportData[3];
     uint32_t                        m_CaptureIndex  = 0;
+    uint32_t                        m_AccumulatedFrames = 0;
 
     asdx::Matrix        m_PrevView;
     asdx::Matrix        m_PrevProj;
@@ -133,7 +134,16 @@ private:
     asdx::Texture       m_DefaultORM;
 
 #if (!CAMP_RELEASE)
-    bool    m_DebugSetting = true;
+    //+++++++++++++++++++
+    //      開発用.
+    //+++++++++++++++++++
+    bool                            m_DebugSetting = true;
+    bool                            m_ReloadShader = false;
+    bool                            m_RequestReload = false;
+    asdx::RayTracingPipelineState   m_DevRayTracingPSO;
+    asdx::ShaderTable               m_DevRayGenTable;
+    asdx::ShaderTable               m_DevMissTable;
+    asdx::ShaderTable               m_DevHitGroupTable;
 #endif
 
     //=========================================================================
@@ -149,6 +159,10 @@ private:
     void OnTyping(uint32_t keyCode) override;
 
     void Draw2D();
+
+#if (!CAMP_RELEASE)
+    void ReloadShader();
+#endif
 };
 
 } // namespace r3d

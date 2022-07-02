@@ -81,6 +81,7 @@ struct Material
 #define INDEX_STRIDE        (12)
 #define MATERIAL_STRIDE     (12)
 #define INSTANCE_STRIDE     (12)
+#define TRANSFORM_STRIDE    (48)
 
 #define POSITION_OFFSET     (0)
 #define NORMAL_OFFSET       (12)
@@ -98,7 +99,8 @@ RWTexture2D<float4>             Canvas      : register(u0);
 RayTracingAS                    SceneAS     : register(t0);
 ByteAddressBuffer               Instances   : register(t1);
 ByteAddressBuffer               Materials   : register(t2);
-Texture2D<float4>               BackGround  : register(t3);
+ByteAddressBuffer               Transforms  : register(t3);
+Texture2D<float4>               BackGround  : register(t4);
 SamplerState                    LinearWrap  : register(s0);
 ConstantBuffer<SceneParameter>  SceneParam  : register(b0);
 
@@ -235,6 +237,11 @@ Vertex GetVertex(uint instanceId, uint triangleIndex, float2 barycentrices)
 
     float3 v[3];
 
+    float4 row0 = Transforms.Load4(instanceId * TRANSFORM_STRIDE);
+    float4 row1 = Transforms.Load4(instanceId * TRANSFORM_STRIDE + 16);
+    float4 row2 = Transforms.Load4(instanceId * TRANSFORM_STRIDE + 16);
+    float3x4 world = float3x4(row0, row1, row2);
+
     [unroll]
     for(uint i=0; i<3; ++i)
     {
@@ -243,14 +250,14 @@ Vertex GetVertex(uint instanceId, uint triangleIndex, float2 barycentrices)
         v[i] = asfloat(vertices.Load3(address));
         float4 pos = float4(v[i], 1.0f);
 
-        vertex.Position += mul(ObjectToWorld3x4(), pos).xyz * factor[i];
+        vertex.Position += mul(world, pos).xyz * factor[i];
         vertex.Normal   += asfloat(vertices.Load3(address + NORMAL_OFFSET)) * factor[i];
         vertex.Tangent  += asfloat(vertices.Load3(address + TANGENT_OFFSET)) * factor[i];
         vertex.TexCoord += asfloat(vertices.Load2(address + TEXCOORD_OFFSET)) * factor[i];
     }
 
-    vertex.Normal  = normalize(mul(ObjectToWorld3x4(), float4(vertex.Normal,  0.0f)).xyz);
-    vertex.Tangent = normalize(mul(ObjectToWorld3x4(), float4(vertex.Tangent, 0.0f)).xyz);
+    vertex.Normal  = normalize(mul(world, float4(vertex.Normal,  0.0f)).xyz);
+    vertex.Tangent = normalize(mul(world, float4(vertex.Tangent, 0.0f)).xyz);
 
     float3 e0 = v[2] - v[0];
     float3 e1 = v[1] - v[0];
@@ -310,10 +317,10 @@ bool CastShadowRay(float3 pos, float3 normal, float3 dir, float tmax)
 //-----------------------------------------------------------------------------
 //      IBLをサンプルします.
 //-----------------------------------------------------------------------------
-float4 SampleIBL(float3 dir)
+float3 SampleIBL(float3 dir)
 {
     float2 uv = ToSphereMapCoord(dir);
-    return BackGround.SampleLevel(LinearWrap, uv, 0.0f) * SceneParam.SkyIntensity;
+    return BackGround.SampleLevel(LinearWrap, uv, 0.0f).rgb * SceneParam.SkyIntensity;
 }
 
 //-----------------------------------------------------------------------------
@@ -321,6 +328,19 @@ float4 SampleIBL(float3 dir)
 //-----------------------------------------------------------------------------
 float Luminance(float3 rgb)
 { return dot(rgb, float3(0.2126f, 0.7152f, 0.0722f)); }
+
+float3 EvaluateMaterial(float3 input, float2 u, Material material, out float3 dir)
+{
+    // Lambert.
+    float3 T, B;
+    CalcONB(material.Normal, T, B);
+
+    float3 s = SampleLambert(u);
+    dir = normalize(T * s.x + B * s.y + material.Normal * s.z);
+
+    //return material.BaseColor.rgb;
+    return float3(1.0f, 1.0f, 1.0f);
+}
 
 //-----------------------------------------------------------------------------
 //      レイ生成シェーダです.
@@ -341,7 +361,7 @@ void OnGenerateRay()
     // レイを設定.
     RayDesc ray = GeneratePinholeCameraRay(pixel);
 
-#if 1
+#if 0
     // レイを追跡
     TraceRay(
         SceneAS,
@@ -353,16 +373,29 @@ void OnGenerateRay()
         ray,
         payload);
 
+    float3 color = SampleIBL(ray.Direction);
+
+    if (payload.HasHit())
+    {
+        Vertex vertex = GetVertex(payload.InstanceId, payload.PrimitiveId, payload.Barycentrics);
+        Material material = GetMaterial(payload.InstanceId, vertex.TexCoord, 0.0f);
+        //float3 B = normalize(cross(vertex.Tangent, vertex.Normal));
+        //float3 N = FromTangentSpaceToWorld(material.Normal, vertex.Tangent, B, vertex.Normal);
+
+        //color = N * 0.5f + 0.5f;
+        color = material.BaseColor.rgb;
+    }
+
     // レンダーターゲットに格納.
-    Canvas[DispatchRaysIndex().xy] = payload.HasHit() ? float4(1.0f, 0.0f, 0.0f, 1.0f) : SampleIBL(ray.Direction);
+    Canvas[DispatchRaysIndex().xy] = float4(color, 1.0f);
     //Canvas[DispatchRaysIndex().xy] = SampleIBL(ray.Direction);
 #else
     uint4 seed = SetSeed(DispatchRaysIndex().xy, SceneParam.FrameIndex);
 
-    float3 W = float4(1.0f, 1.0f, 1.0f);  // 重み.
-    float3 L = float4(0.0f, 0.0f, 0.0f);  // 放射輝度.
+    float3 W = float3(1.0f, 1.0f, 1.0f);  // 重み.
+    float3 L = float3(0.0f, 0.0f, 0.0f);  // 放射輝度.
 
-    for(int bounce=0; depth<SceneParam.MaxBounce; ++bounce)
+    for(int bounce=0; bounce<SceneParam.MaxBounce; ++bounce)
     {
         // 交差判定.
         TraceRay(
@@ -398,6 +431,9 @@ void OnGenerateRay()
             T = -T;
         }
 
+        // 法線ベクトルを計算.
+        float3 B = normalize(cross(T, N));
+
         // マテリアル取得.
         Material material = GetMaterial(payload.InstanceId, vertex.TexCoord, 0.0f);
 
@@ -408,36 +444,42 @@ void OnGenerateRay()
         {
         }
 
-        // 法線ベクトルを計算.
-        float3 B = normalize(cross(T, N));
-        float3 normal = FromTangentSpaceToWorld(material.Normal, T, B, N);
+        // 最後のバウンスであれば早期終了(BRDFをサンプルしてもロジック的に反映されないため).
+        if (bounce == SceneParam.MaxBounce - 1)
+        { break; }
 
         // シェーディング処理.
+        float2 u = float2(Random(seed), Random(seed));
         float3 dir;
-
+        float3 brdfWeight = EvaluateMaterial(ray.Direction, u, material, dir);
 
         // ロシアンルーレット.
         if (bounce > SceneParam.MinBounce)
         {
-            float p = min(0.95f, Lumiance(W));
+            float p = min(0.95f, Luminance(brdfWeight));
             if (p < Random(seed))
             { break; }
             else
             { W /= p; }
         }
 
+        W *= brdfWeight;
+
         // 重みがゼロに成ったら以降の更新は無駄なので打ち切りにする.
-        if (all(W < FLT_EPSILON.xxx))
+        if (all(W < (1e-6f).xxx))
         { break; }
 
         // レイを更新.
-        ray.Orig      = OffsetRay(vertex.Position, geometryNormal);
+        ray.Origin    = OffsetRay(vertex.Position, geometryNormal);
         ray.Direction = dir;
     }
 
-    float invSampleCount = 1.0f; // TODO.
-    float3 prevL = Canvas[DispatchRaysIndex().xy].rgb;
-    Canvas[DispatchRaysIndex().xy] = float4(prevL + L * invSampleCount, 1.0f);
+    uint2 launchId = DispatchRaysIndex().xy;
+
+    float3 prevL = Canvas[launchId].rgb;
+    float3 color = (SceneParam.EnableAccumulation) ? (prevL + L) : L;
+
+    Canvas[launchId] = float4(color, 1.0f);
 #endif
 }
 
