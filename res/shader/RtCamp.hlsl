@@ -52,7 +52,7 @@ struct Vertex
     float3  Normal;
     float3  Tangent;
     float2  TexCoord;
-    float3  GeometryNormal;
+    float3  GeometryNormal; // シェーダ上で計算.
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -105,7 +105,7 @@ SamplerState                    LinearWrap  : register(s0);
 ConstantBuffer<SceneParameter>  SceneParam  : register(b0);
 
 //-----------------------------------------------------------------------------
-//      PCG
+//      Permuted Congruential Generator (PCG)
 //-----------------------------------------------------------------------------
 uint4 Pcg(uint4 v)
 {
@@ -129,17 +129,13 @@ uint4 Pcg(uint4 v)
 //      floatに変換します.
 //-----------------------------------------------------------------------------
 float ToFloat(uint x)
-{
-    return asfloat(0x3f800000 | (x >> 9)) - 1.0f;
-}
+{ return asfloat(0x3f800000 | (x >> 9)) - 1.0f; }
 
 //-----------------------------------------------------------------------------
 //      乱数のシード値を設定します..
 //-----------------------------------------------------------------------------
 uint4 SetSeed(uint2 pixelCoords, uint frameIndex)
-{
-    return uint4(pixelCoords.xy, frameIndex, 0);
-}
+{ return uint4(pixelCoords.xy, frameIndex, 0); }
 
 //-----------------------------------------------------------------------------
 //      疑似乱数を取得します.
@@ -171,6 +167,50 @@ float3 OffsetRay(const float3 p, const float3 n)
         abs(p.x) < origin ? p.x + float_scale * n.x : p_i.x,
         abs(p.y) < origin ? p.y + float_scale * n.y : p_i.y,
         abs(p.z) < origin ? p.z + float_scale * n.z : p_i.z);
+}
+
+//-----------------------------------------------------------------------------
+//      ライト強度を取得します.
+//-----------------------------------------------------------------------------
+float3 GetLightIntensity(Light light, float dist)
+{
+    if (light.Type == LIGHT_TYPE_POINT)
+    {
+        const float radiusSq    = light.Radius * light.Radius;
+        const float distSq      = dist * dist;
+        const float attenuation = 2.0f / (distSq + radiusSq + dist * sqrt(distSq + radiusSq));
+        return light.Intensity * attenuation;
+    }
+    else if (light.Type == LIGHT_TYPE_DIRECTIONAL)
+    {
+        return light.Intensity;
+    }
+    else
+    {
+        return float3(1.0f, 1.0f, 1.0f);
+    }
+}
+
+//-----------------------------------------------------------------------------
+//      ライトデータを取得します.
+//-----------------------------------------------------------------------------
+void GetLightData(Light light, float3 hitPos, out float3 lightVector, out float lightDistance)
+{
+    if (light.Type == LIGHT_TYPE_POINT)
+    {
+        lightVector   = light.Position - hitPos;
+        lightDistance = length(lightVector);
+    }
+    else if (light.Type == LIGHT_TYPE_DIRECTIONAL)
+    {
+        lightVector   = light.Position;
+        lightDistance = FLT_MAX;
+    }
+    else
+    {
+        lightVector   = float3(0.0f, 1.0f, 0.0f);
+        lightDistance = FLT_MAX;
+    }
 }
 
 //-----------------------------------------------------------------------------
@@ -209,7 +249,6 @@ Material GetMaterial(uint instanceId, float2 uv, float mip)
     Material param;
     param.BaseColor = bc;
     param.Normal    = n;
-    //param.Occlusion = orm.x;
     param.Roughness = orm.y;
     param.Metalness = orm.z;
     param.Emissive  = e;
@@ -338,8 +377,7 @@ float3 EvaluateMaterial(float3 input, float2 u, Material material, out float3 di
     float3 s = SampleLambert(u);
     dir = normalize(T * s.x + B * s.y + material.Normal * s.z);
 
-    //return material.BaseColor.rgb;
-    return float3(1.0f, 1.0f, 1.0f);
+    return material.BaseColor.rgb;
 }
 
 //-----------------------------------------------------------------------------
@@ -348,8 +386,15 @@ float3 EvaluateMaterial(float3 input, float2 u, Material material, out float3 di
 [shader("raygeneration")]
 void OnGenerateRay()
 {
+    // 乱数初期化.
+    uint4 seed = SetSeed(DispatchRaysIndex().xy, SceneParam.FrameIndex);
+
     float2 pixel = float2(DispatchRaysIndex().xy);
     const float2 resolution = float2(DispatchRaysDimensions().xy);
+
+    // アンリエイリアシング.
+    float2 offset = float2(Random(seed), Random(seed));
+    pixel += lerp(-0.5f.xx, 0.5f.xx, offset);
 
     float2 uv = (pixel + 0.5f) / resolution;
     uv.y = 1.0f - uv.y;
@@ -390,7 +435,6 @@ void OnGenerateRay()
     Canvas[DispatchRaysIndex().xy] = float4(color, 1.0f);
     //Canvas[DispatchRaysIndex().xy] = SampleIBL(ray.Direction);
 #else
-    uint4 seed = SetSeed(DispatchRaysIndex().xy, SceneParam.FrameIndex);
 
     float3 W = float3(1.0f, 1.0f, 1.0f);  // 重み.
     float3 L = float3(0.0f, 0.0f, 0.0f);  // 放射輝度.
@@ -499,25 +543,19 @@ void OnClosestHit(inout Payload payload, in HitArgs args)
 //-----------------------------------------------------------------------------
 [shader("miss")]
 void OnMiss(inout Payload payload)
-{
-    payload.InstanceId = INVALID_ID;
-}
+{ payload.InstanceId = INVALID_ID; }
 
 //-----------------------------------------------------------------------------
 //      シャドウレイヒット時のシェーダ.
 //-----------------------------------------------------------------------------
 [shader("closesthit")]
 void OnShadowClosestHit(inout ShadowPayload payload, in HitArgs args)
-{
-    payload.Visible = true;
-}
+{ payload.Visible = true; }
 
 //-----------------------------------------------------------------------------
 //      シャドウレイのミスシェーダです.
 //-----------------------------------------------------------------------------
 [shader("miss")]
 void OnShadowMiss(inout ShadowPayload payload)
-{
-    payload.Visible = false;
-}
+{ payload.Visible = false; }
 

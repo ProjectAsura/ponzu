@@ -177,7 +177,6 @@ bool Renderer::OnInit()
         return false;
     }
 
-
     // PNGライブラリ初期化.
     fpng::fpng_init();
 
@@ -187,7 +186,6 @@ bool Renderer::OnInit()
         ELOGA("Error : ModelMgr::Init() Failed.");
         return false;
     }
-
 
     // リードバックテクスチャ生成.
     {
@@ -303,12 +301,12 @@ bool Renderer::OnInit()
     {
         asdx::DescriptorSetLayout<7, 1> layout;
         layout.SetTableUAV(0, asdx::SV_ALL, 0);
-        layout.SetSRV(1, asdx::SV_ALL, 0);
-        layout.SetSRV(2, asdx::SV_ALL, 1);
-        layout.SetSRV(3, asdx::SV_ALL, 2);
-        layout.SetSRV(4, asdx::SV_ALL, 3);
+        layout.SetSRV     (1, asdx::SV_ALL, 0);
+        layout.SetSRV     (2, asdx::SV_ALL, 1);
+        layout.SetSRV     (3, asdx::SV_ALL, 2);
+        layout.SetSRV     (4, asdx::SV_ALL, 3);
         layout.SetTableSRV(5, asdx::SV_ALL, 4);
-        layout.SetCBV(6, asdx::SV_ALL, 0);
+        layout.SetCBV     (6, asdx::SV_ALL, 0);
         layout.SetStaticSampler(0, asdx::SV_ALL, asdx::STATIC_SAMPLER_LINEAR_WRAP, 0);
         layout.SetFlags(D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED);
 
@@ -603,11 +601,11 @@ bool Renderer::OnInit()
         flags |= D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED;
 
         asdx::DescriptorSetLayout<5, 1> layout;
-        layout.SetCBV(0, asdx::SV_VS, 0);
+        layout.SetCBV     (0, asdx::SV_VS,  0);
         layout.SetContants(1, asdx::SV_ALL, 1, 1);
-        layout.SetSRV(2, asdx::SV_VS, 0);
-        layout.SetSRV(3, asdx::SV_PS, 1);
-        layout.SetSRV(4, asdx::SV_PS, 2);
+        layout.SetSRV     (2, asdx::SV_VS,  0);
+        layout.SetSRV     (3, asdx::SV_PS,  1);
+        layout.SetSRV     (4, asdx::SV_PS,  2);
         layout.SetStaticSampler(0, asdx::SV_ALL, asdx::STATIC_SAMPLER_LINEAR_WRAP, 0);
         layout.SetFlags(flags);
 
@@ -657,10 +655,10 @@ bool Renderer::OnInit()
         }
 
         Material dummy;
-        dummy.Normal = INVALID_MATERIAL_MAP;
+        dummy.Normal    = INVALID_MATERIAL_MAP;
         dummy.BaseColor = INVALID_MATERIAL_MAP;
-        dummy.ORM = INVALID_MATERIAL_MAP;
-        dummy.Emissive = INVALID_MATERIAL_MAP;
+        dummy.ORM       = INVALID_MATERIAL_MAP;
+        dummy.Emissive  = INVALID_MATERIAL_MAP;
         m_ModelMgr.AddMaterials(&dummy, 1);
 
         auto meshCount = model.Meshes.size();
@@ -674,7 +672,7 @@ bool Renderer::OnInit()
  
         for(size_t i=0; i<meshCount; ++i)
         {
-            r3d::Mesh mesh;
+            r3d::Mesh mesh = {};
             mesh.VertexCount = uint32_t(model.Meshes[i].Vertices.size());
             mesh.Vertices    = reinterpret_cast<Vertex*>(model.Meshes[i].Vertices.data());
             mesh.IndexCount  = uint32_t(model.Meshes[i].Indices.size());
@@ -682,7 +680,7 @@ bool Renderer::OnInit()
 
             auto geometryHandle = m_ModelMgr.AddMesh(mesh);
 
-            r3d::Instance instance;
+            r3d::Instance instance = {};
             instance.VertexBufferId = geometryHandle.IndexVB;
             instance.IndexBufferId  = geometryHandle.IndexIB;
             instance.MaterialId     = 0;
@@ -869,6 +867,7 @@ void Renderer::OnFrameMove(asdx::FrameEventArgs& args)
         return;
     }
 
+
     // CPUで読み取り.
     if (GetFrameCount() > 2)
     {
@@ -933,8 +932,8 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         param.PrevInvProj       = m_PrevInvProj;
         param.PrevInvViewProj   = m_PrevInvViewProj;
 
-        param.MaxBounce     = 10;
-        param.MinBounce     = 2;
+        param.MaxBounce     = 16;
+        param.MinBounce     = 3;
         param.FrameIndex    = GetFrameCount();
         param.SkyIntensity  = 1.0f;
 
@@ -955,13 +954,13 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
 
     // デノイズ用 G-Buffer.
     {
-        asdx::ScopedBarrier barrier0(m_GfxCmdList, m_AlbedoTarget.GetResource(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
-        asdx::ScopedBarrier barrier1(m_GfxCmdList, m_NormalTarget.GetResource(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
+        asdx::ScopedBarrier barrier0(m_GfxCmdList, m_AlbedoTarget  .GetResource(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
+        asdx::ScopedBarrier barrier1(m_GfxCmdList, m_NormalTarget  .GetResource(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
         asdx::ScopedBarrier barrier2(m_GfxCmdList, m_VelocityTarget.GetResource(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-        auto pRTV0 = m_AlbedoTarget.GetRTV();
-        auto pRTV1 = m_NormalTarget.GetRTV();
-        auto pRTV2 = m_VelocityTarget.GetRTV();
+        auto pRTV0 = m_AlbedoTarget    .GetRTV();
+        auto pRTV1 = m_NormalTarget    .GetRTV();
+        auto pRTV2 = m_VelocityTarget  .GetRTV();
         auto pDSV  = m_ModelDepthTarget.GetDSV();
 
         float clearColor [4] = { 0.0f, 0.0f, 0.0f, 1.0f };
@@ -1417,6 +1416,7 @@ void Renderer::ReloadShader()
     auto t   = time(nullptr);
     auto err = localtime_s( &local_time, &t );
 
+    // 成功ログを出力.
     ILOGA("Info : Shader Reload Successs!! [%04d/%02d/%02d %02d:%02d:%02d]",
         local_time.tm_year + 1900,
         local_time.tm_mon + 1,

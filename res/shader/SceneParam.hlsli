@@ -6,6 +6,9 @@
 #ifndef SCENE_PARAM_HLSLI
 #define SCENE_PARAM_HLSLI
 
+#define LIGHT_TYPE_POINT        (1)
+#define LIGHT_TYPE_DIRECTIONAL  (2)
+
 ///////////////////////////////////////////////////////////////////////////////
 // SceneParameter structure
 ///////////////////////////////////////////////////////////////////////////////
@@ -31,7 +34,19 @@ struct SceneParameter
     bool    EnableAccumulation;
     uint    AccumulatedFrames;
     float   ExposureAdjustment;
-    uint    Reserved;
+    uint    LightCount;
 };
+
+///////////////////////////////////////////////////////////////////////////////
+// Light structure
+///////////////////////////////////////////////////////////////////////////////
+struct Light
+{
+    float3  Position;
+    uint    Type;
+    float3  Intensity;
+    float   Radius;
+};
+
 
 #endif//SCENE_PARAM_HLSLI
