@@ -7,9 +7,8 @@
 //-----------------------------------------------------------------------------
 // Includes
 //-----------------------------------------------------------------------------
-#include <Math.hlsli>
-#include <BRDF.hlsli>
 #include <SceneParam.hlsli>
+#include <Material.hlsli>
 
 #define INVALID_ID          (-1)
 #define STANDARD_RAY_INDEX  (0)
@@ -63,18 +62,6 @@ struct Instance
     uint    VertexId;
     uint    IndexId;
     uint    MaterialId;
-};
-
-///////////////////////////////////////////////////////////////////////////////
-// Material structure
-///////////////////////////////////////////////////////////////////////////////
-struct Material
-{
-    float4  BaseColor;
-    float3  Normal;
-    float   Roughness;
-    float   Metalness;
-    float3  Emissive;
 };
 
 #define VERTEX_STRIDE       (44)
@@ -362,23 +349,9 @@ float3 SampleIBL(float3 dir)
     return BackGround.SampleLevel(LinearWrap, uv, 0.0f).rgb * SceneParam.SkyIntensity;
 }
 
-//-----------------------------------------------------------------------------
-//      輝度値を求めます.
-//-----------------------------------------------------------------------------
-float Luminance(float3 rgb)
-{ return dot(rgb, float3(0.2126f, 0.7152f, 0.0722f)); }
 
-float3 EvaluateMaterial(float3 input, float2 u, Material material, out float3 dir)
-{
-    // Lambert.
-    float3 T, B;
-    CalcONB(material.Normal, T, B);
 
-    float3 s = SampleLambert(u);
-    dir = normalize(T * s.x + B * s.y + material.Normal * s.z);
 
-    return material.BaseColor.rgb;
-}
 
 //-----------------------------------------------------------------------------
 //      レイ生成シェーダです.
@@ -495,16 +468,19 @@ void OnGenerateRay()
         // シェーディング処理.
         float2 u = float2(Random(seed), Random(seed));
         float3 dir;
-        float3 brdfWeight = EvaluateMaterial(ray.Direction, u, material, dir);
+        bool dice;
+        float3 brdfWeight = EvaluateMaterial(ray.Direction, u, N, Random(seed), material, dir, dice);
 
         // ロシアンルーレット.
         if (bounce > SceneParam.MinBounce)
         {
-            float p = min(0.95f, Luminance(brdfWeight));
-            if (p < Random(seed))
+            if (dice)
             { break; }
-            else
-            { W /= p; }
+            //float p = min(0.95f, Luminance(brdfWeight));
+            //if (p > Random(seed))
+            //{ break; }
+            //else
+            //{ W /= p; }
         }
 
         W *= brdfWeight;

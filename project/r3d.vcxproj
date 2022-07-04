@@ -74,6 +74,7 @@
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
+    <None Include="..\res\shader\Material.hlsli" />
     <None Include="..\res\shader\SceneParam.hlsli" />
     <None Include="packages.config" />
   </ItemGroup>

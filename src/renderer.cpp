@@ -462,29 +462,6 @@ bool Renderer::OnInit()
         }
     }
 
-    // IBL読み込み.
-    {
-        std::string path;
-        if (!asdx::SearchFilePathA("../res/ibl/studio_garden_2k.dds", path))
-        {
-            ELOGA("Error : IBL File Not Found.");
-            return false;
-        }
-
-        asdx::ResTexture res;
-        if (!res.LoadFromFileA(path.c_str()))
-        {
-            ELOGA("Error : IBL Load Failed.");
-            return false;
-        }
-
-        if (!m_IBL.Init(m_GfxCmdList, res))
-        {
-            ELOGA("Error : IBL Init Failed.");
-            return false;
-        }
-    }
-
     // アルベドバッファ.
     {
         asdx::TargetDesc desc;
@@ -644,15 +621,46 @@ bool Renderer::OnInit()
         }
     }
 
+
+    ILOGA("Built-in Setup done.");
+
+    // IBL読み込み.
+    {
+        std::string path;
+        if (!asdx::SearchFilePathA("../res/ibl/studio_garden_2k.dds", path))
+        {
+            ELOGA("Error : IBL File Not Found.");
+            return false;
+        }
+
+        asdx::ResTexture res;
+        if (!res.LoadFromFileA(path.c_str()))
+        {
+            ELOGA("Error : IBL Load Failed.");
+            return false;
+        }
+
+        if (!m_IBL.Init(m_GfxCmdList, res))
+        {
+            ELOGA("Error : IBL Init Failed.");
+            return false;
+        }
+    }
+
+    ILOGA("IBL Loaded.");
+
+
     // Test
     {
         ModelOBJ model;
         OBJLoader loader;
-        if (!loader.Load("../res/model/dosei_quad.obj", model))
+        if (!loader.Load("../res/model/san-miguel-low-poly.obj", model))
         {
             ELOGA("Error : Model Load Failed.");
             return false;
         }
+
+        ILOGA("Model Loaded.");
 
         Material dummy;
         dummy.Normal    = INVALID_MATERIAL_MAP;
@@ -738,6 +746,8 @@ bool Renderer::OnInit()
             m_MeshDrawCalls[i].IBV        = ibv;
         }
 
+        ILOGA("Blas Setup done.");
+
         auto instanceCount = uint32_t(instanceDescs.size());
         if (!m_TLAS.Init(
             pDevice,
@@ -751,6 +761,8 @@ bool Renderer::OnInit()
 
         // ビルドコマンドを積んでおく.
         m_TLAS.Build(m_GfxCmdList.GetCommandList());
+
+        ILOGA("Tlas Setup done.");
     }
 
     // 高速化機構生成.
@@ -776,6 +788,8 @@ bool Renderer::OnInit()
 
         // 完了を待機.
         pGraphicsQueue->Sync(m_FrameWaitPoint);
+
+        ILOGA("Setup Command done.");
     }
 
     // 初回フレーム計算用に設定しておく.

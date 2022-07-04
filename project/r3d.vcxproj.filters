@@ -91,5 +91,8 @@
     <None Include="..\res\shader\SceneParam.hlsli">
       <Filter>リソース ファイル</Filter>
     </None>
+    <None Include="..\res\shader\Material.hlsli">
+      <Filter>リソース ファイル</Filter>
+    </None>
   </ItemGroup>
 </Project>
