@@ -81,7 +81,38 @@ struct SceneParam
     uint32_t        EnableAccumulation;
     uint32_t        AccumulatedFrames;
     float           ExposureAdjustment;
-    uint32_t        Reserved;
+    uint32_t        LightCount;
+
+    asdx::Vector4   Size;
+};
+
+///////////////////////////////////////////////////////////////////////////////
+// Sample structure
+///////////////////////////////////////////////////////////////////////////////
+struct Sample
+{
+    asdx::Vector3   P_v;        // Visbiel point.
+    asdx::Vector3   N_v;        // Visible surface normal.
+    asdx::Vector3   L_v;        // Outgoing radiance at visible point in RGB.
+    float           Pdf_v;
+
+    asdx::Vector3   P_s;        // Sample point.
+    asdx::Vector3   N_s;        // Sample surface normal.
+    asdx::Vector3   L_s;        // Outgoing radiance at sample point in RGB.
+    float           Pdf_s;      // PDF at sample point.
+
+    asdx::Vector3   Random;     // Random numbers used for path.
+};
+
+///////////////////////////////////////////////////////////////////////////////
+// Reservoir structure
+///////////////////////////////////////////////////////////////////////////////
+struct Reservoir
+{
+    Sample  z;      // The output sample.
+    float   w_sum;  // The sum of weights.
+    float   M;      // The number of samples seen so far.
+    float   W;      // Equation (7).
 };
 
 //-----------------------------------------------------------------------------
@@ -166,6 +197,27 @@ Renderer::~Renderer()
 //-----------------------------------------------------------------------------
 bool Renderer::OnInit()
 {
+    // 固有のセットアップ処理.
+    if (!SystemSetup())
+    { return false; }
+
+    // シーンを構築.
+    if (!BuildScene())
+    { return false; }
+ 
+    // 正常終了.
+    return true;
+}
+
+//-----------------------------------------------------------------------------
+//      固有のセットアップ処理を行います.
+//-----------------------------------------------------------------------------
+bool Renderer::SystemSetup()
+{
+    asdx::StopWatch timer;
+    timer.Start();
+    printf_s("System setup ... ");
+
     auto pDevice = asdx::GetD3D12Device();
 
     m_GfxCmdList.Reset();
@@ -446,7 +498,7 @@ bool Renderer::OnInit()
 
     // カメラ初期化.
     {
-        auto pos = asdx::Vector3(0.0f, 0.0f, 5000.0f);
+        auto pos    = asdx::Vector3(0.0f, 0.0f, 5000.0f);
         auto target = asdx::Vector3(0.0f, 0.0f, 0.0f);
         auto upward = asdx::Vector3(0.0f, 1.0f, 0.0f);
         m_CameraController.Init(pos, target, upward, 1.0f, 10000.0f);
@@ -458,6 +510,40 @@ bool Renderer::OnInit()
         if (!m_SceneParam.Init(size))
         {
             ELOGA("Error : SceneParam Init Failed.");
+            return false;
+        }
+    }
+
+    // ReSTIR 
+    {
+        auto stride = sizeof(Reservoir);
+
+        asdx::TargetDesc desc;
+        desc.Dimension          = D3D12_RESOURCE_DIMENSION_BUFFER;
+        desc.Width              = stride * m_SceneDesc.Width * m_SceneDesc.Height;
+        desc.Height             = 1;
+        desc.DepthOrArraySize   = 1;
+        desc.Format             = DXGI_FORMAT_UNKNOWN;
+        desc.MipLevels          = 1;
+        desc.SampleDesc.Count   = 1;
+        desc.SampleDesc.Quality = 0;
+        desc.InitState          = D3D12_RESOURCE_STATE_COMMON;
+
+        if (!m_InitialSampleBuffer.Init(&desc, uint32_t(stride)))
+        {
+            ELOGA("Error : InitialSamplerBuffer Init Failed.");
+            return false;
+        }
+
+        if (!m_TemporalReservoirBuffer.Init(&desc, uint32_t(stride)))
+        {
+            ELOGA("Error : TemporalReservoirBuffer Init Failed.");
+            return false;
+        }
+
+        if (!m_SpatialReservoirBuffer.Init(&desc, uint32_t(stride)))
+        {
+            ELOGA("Error : SpatialReservoirBuffer Init Failed.");
             return false;
         }
     }
@@ -621,8 +707,41 @@ bool Renderer::OnInit()
         }
     }
 
+    // 初回フレーム計算用に設定しておく.
+    {
+        auto fovY   = asdx::ToRadian(37.5f);
+        auto aspect = float(m_SceneDesc.Width) / float(m_SceneDesc.Height);
 
-    ILOGA("Built-in Setup done.");
+        auto view = m_CameraController.GetView();
+        auto proj = asdx::Matrix::CreatePerspectiveFieldOfView(
+            fovY,
+            aspect,
+            m_CameraController.GetNearClip(),
+            m_CameraController.GetFarClip());
+
+        m_PrevView          = view;
+        m_PrevProj          = proj;
+        m_PrevInvView       = asdx::Matrix::Invert(view);
+        m_PrevInvProj       = asdx::Matrix::Invert(proj);
+        m_PrevInvViewProj   = m_PrevInvProj * m_PrevInvView;
+    }
+
+    timer.End();
+    printf_s("done! --- %lf[msec]\n", timer.GetElapsedMsec());
+    return true;
+}
+
+//-----------------------------------------------------------------------------
+//      シーンを構築します.
+//-----------------------------------------------------------------------------
+bool Renderer::BuildScene()
+{
+    asdx::StopWatch timer;
+    timer.Start();
+    printf_s("Build scene  ... ");
+
+#if 1
+    auto pDevice = asdx::GetD3D12Device();
 
     // IBL読み込み.
     {
@@ -647,20 +766,15 @@ bool Renderer::OnInit()
         }
     }
 
-    ILOGA("IBL Loaded.");
-
-
     // Test
     {
         ModelOBJ model;
         OBJLoader loader;
-        if (!loader.Load("../res/model/san-miguel-low-poly.obj", model))
+        if (!loader.Load("../res/model/dosei_quad.obj", model))
         {
             ELOGA("Error : Model Load Failed.");
             return false;
         }
-
-        ILOGA("Model Loaded.");
 
         Material dummy;
         dummy.Normal    = INVALID_MATERIAL_MAP;
@@ -746,8 +860,6 @@ bool Renderer::OnInit()
             m_MeshDrawCalls[i].IBV        = ibv;
         }
 
-        ILOGA("Blas Setup done.");
-
         auto instanceCount = uint32_t(instanceDescs.size());
         if (!m_TLAS.Init(
             pDevice,
@@ -761,13 +873,17 @@ bool Renderer::OnInit()
 
         // ビルドコマンドを積んでおく.
         m_TLAS.Build(m_GfxCmdList.GetCommandList());
-
-        ILOGA("Tlas Setup done.");
     }
-
-    // 高速化機構生成.
+#else
+    // シーン構築.
     {
+        if (!m_Scene.Init(m_SceneDesc.Path, m_GfxCmdList.GetCommandList()))
+        {
+            ELOGA("Error : Scene::Init() Failed.");
+            return false;
+        }
     }
+#endif
 
     // セットアップコマンド実行.
     {
@@ -788,29 +904,11 @@ bool Renderer::OnInit()
 
         // 完了を待機.
         pGraphicsQueue->Sync(m_FrameWaitPoint);
-
-        ILOGA("Setup Command done.");
     }
 
-    // 初回フレーム計算用に設定しておく.
-    {
-        auto fovY   = asdx::ToRadian(37.5f);
-        auto aspect = float(m_SceneDesc.Width) / float(m_SceneDesc.Height);
+    timer.End();
+    printf_s("done! --- %lf[msec]\n", timer.GetElapsedMsec());
 
-        auto view = m_CameraController.GetView();
-        auto proj = asdx::Matrix::CreatePerspectiveFieldOfView(
-            fovY,
-            aspect,
-            m_CameraController.GetNearClip(),
-            m_CameraController.GetFarClip());
-
-        m_PrevView          = view;
-        m_PrevProj          = proj;
-        m_PrevInvView       = asdx::Matrix::Invert(view);
-        m_PrevInvProj       = asdx::Matrix::Invert(proj);
-        m_PrevInvViewProj   = m_PrevInvProj * m_PrevInvView;
-    }
- 
     return true;
 }
 
@@ -831,6 +929,10 @@ void Renderer::OnTerm()
     m_DevMissTable      .Term();
     m_DevHitGroupTable  .Term();
 #endif
+
+    m_SpatialReservoirBuffer .Term();
+    m_TemporalReservoirBuffer.Term();
+    m_InitialSampleBuffer    .Term();
 
     m_TonemapPSO        .Term();
     m_TonemapRootSig    .Term();
@@ -880,7 +982,6 @@ void Renderer::OnFrameMove(asdx::FrameEventArgs& args)
         PostQuitMessage(0);
         return;
     }
-
 
     // CPUで読み取り.
     if (GetFrameCount() > 2)
@@ -954,6 +1055,12 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         param.EnableAccumulation = !dirtyView;
         param.AccumulatedFrames  = m_AccumulatedFrames;
         param.ExposureAdjustment = 1.0f;
+        param.LightCount         = 0;
+
+        param.Size.x = float(m_SceneDesc.Width);
+        param.Size.y = float(m_SceneDesc.Height);
+        param.Size.z = 1.0f / param.Size.x;
+        param.Size.w = 1.0f / param.Size.y;
 
         m_SceneParam.SwapBuffer();
         m_SceneParam.Update(&param, sizeof(param));
@@ -1027,6 +1134,19 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
                 0);
         }
     }
+
+#if 0
+    {
+        // Initial Sampling
+
+
+        // Temporal reuse
+
+
+        // Spatial reuse
+
+    }
+#endif
 
     // レイトレ実行.
     {

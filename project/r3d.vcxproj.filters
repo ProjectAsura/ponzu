@@ -85,13 +85,25 @@
     <FxCompile Include="..\res\shader\ModelPS.hlsl">
       <Filter>リソース ファイル</Filter>
     </FxCompile>
+    <FxCompile Include="..\res\shader\InitialSampling.hlsl">
+      <Filter>リソース ファイル</Filter>
+    </FxCompile>
+    <FxCompile Include="..\res\shader\SpatialResampling.hlsl">
+      <Filter>リソース ファイル</Filter>
+    </FxCompile>
+    <FxCompile Include="..\res\shader\TemporalResampling.hlsl">
+      <Filter>リソース ファイル</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
     <None Include="..\res\shader\SceneParam.hlsli">
       <Filter>リソース ファイル</Filter>
     </None>
-    <None Include="..\res\shader\Material.hlsli">
+    <None Include="..\res\shader\Common.hlsli">
+      <Filter>リソース ファイル</Filter>
+    </None>
+    <None Include="..\res\shader\Reservoir.hlsli">
       <Filter>リソース ファイル</Filter>
     </None>
   </ItemGroup>

@@ -25,6 +25,7 @@
 #include <gfx/asdxQuad.h>
 #include <edit/asdxGuiMgr.h>
 #include <model_mgr.h>
+#include <scene.h>
 
 
 namespace r3d {
@@ -37,6 +38,7 @@ struct SceneDesc
     double      TimeSec;
     uint32_t    Width;
     uint32_t    Height;
+    const char* Path;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -114,6 +116,11 @@ private:
     asdx::RootSignature             m_ModelRootSig;
     asdx::PipelineState             m_ModelPSO;
     std::vector<MeshDrawCall>       m_MeshDrawCalls;
+    Scene                           m_Scene;
+
+    asdx::ComputeTarget             m_InitialSampleBuffer;
+    asdx::ComputeTarget             m_TemporalReservoirBuffer;
+    asdx::ComputeTarget             m_SpatialReservoirBuffer;
 
     uint8_t                         m_ReadBackIndex = 0;
     uint8_t                         m_MapIndex      = 0;
@@ -159,6 +166,9 @@ private:
     void OnTyping(uint32_t keyCode) override;
 
     void Draw2D();
+
+    bool SystemSetup();
+    bool BuildScene();
 
 #if (!CAMP_RELEASE)
     void ReloadShader();
