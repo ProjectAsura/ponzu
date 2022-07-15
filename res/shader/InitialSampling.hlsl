@@ -14,8 +14,8 @@
 //-----------------------------------------------------------------------------
 // Resources
 //-----------------------------------------------------------------------------
-RWStructuredBuffer<Reservoir>   InitialSampleBuffer : register(u0);
-Texture2D<uint4>                VBuffer             : register(t4);
+RWStructuredBuffer<Sample>  InitialSampleBuffer : register(u0);
+Texture2D<uint4>            VBuffer             : register(t4);
 
 
 //-----------------------------------------------------------------------------
@@ -36,6 +36,8 @@ void OnGenerateRay()
     uint   triangleId    = visibleData.y;
     float2 barycentrices = asfloat(visibleData.zw);
 
+    float3 throughput = float3(1.0f, 1.0f, 1.0f);
+
     // 可視点の頂点データ取得.
     Vertex visiblePoint = GetVertex(instanceId, triangleId, barycentrices);
 
@@ -53,7 +55,13 @@ void OnGenerateRay()
 
     float3 dir;
     float  pdf_v;
-    float3 Lv = EvaluateMaterial(V, visiblePoint.Normal, u, material, dir, pdf_v);
+    float3 Lv = throughput * material.Emissive;
+
+    // NEE
+    {
+    }
+
+    throughput *= EvaluateMaterial(V, visiblePoint.Normal, u, material, dir, pdf_v);
 
     // レイを設定.
     RayDesc ray;
@@ -88,28 +96,31 @@ void OnGenerateRay()
         // マテリアル取得.
         Material material = GetMaterial(payload.InstanceId, samplePoint.TexCoord, 0.0f);
 
+        Ls = throughput * material.Emissive;
+
+        // NEE
+        {
+        }
+
         u = float3(Random(seed), Random(seed), Random(seed));
 
         // 交差位置での出射放射輝度を推定.
-        Ls = EvaluateMaterial(-ray.Direction, samplePoint.Normal, u, material, dir, pdf_s);
+        throughput *= EvaluateMaterial(-ray.Direction, samplePoint.Normal, u, material, dir, pdf_s);
     }
 
     // 初期サンプルを設定.
-    Reservoir r;
-    r.z.P_v     = visiblePoint.Position;
-    r.z.N_v     = visiblePoint.Normal;
-    r.z.L_v     = Lv;
-    r.z.Pdf_v   = pdf_v;
-    r.z.P_s     = samplePoint.Position;
-    r.z.N_s     = samplePoint.Normal;
-    r.z.L_s     = Ls;
-    r.z.Pdf_s   = pdf_s;
-    r.z.Random  = u;
-    r.w_sum     = 0.0f;
-    r.M         = 0.0f;
-    r.W         = 0.0f;
+    Sample z;
+    z.P_v     = visiblePoint.Position;
+    z.N_v     = visiblePoint.Normal;
+    z.L_v     = Lv;
+    z.Pdf_v   = pdf_v;
+    z.P_s     = samplePoint.Position;
+    z.N_s     = samplePoint.Normal;
+    z.L_s     = Ls;
+    z.Pdf_s   = pdf_s;
+    z.Random  = u;
 
-    InitialSampleBuffer[index] = r;
+    InitialSampleBuffer[index] = z;
 }
 
 //-----------------------------------------------------------------------------

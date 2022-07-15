@@ -14,14 +14,7 @@
 // Resources
 //-----------------------------------------------------------------------------
 RWStructuredBuffer<Reservoir>   TemporalReservoirBuffer : register(u0);
-StructuredBuffer<Reservoir>     InitialSampleBuffer     : register(t4);
-
-
-float CalcSourcePDF(Sample value)
-{ return value.Pdf_v; }
-
-float CalcTargetPDF(Sample value)
-{ return Luminance(value.L_s); }     // Equation (10).
+StructuredBuffer<Sample>        InitialSampleBuffer     : register(t4);
 
 [numthreads(8, 8, 1)]
 void main( uint3 dispatchId : SV_DispatchThreadID )
@@ -36,12 +29,12 @@ void main( uint3 dispatchId : SV_DispatchThreadID )
     // バッファ番号計算.
     uint index = dispatchId.x + dispatchId.y * uint(SceneParam.Size.x);
 
-    Reservoir S = InitialSampleBuffer[index];
+    Sample    S = InitialSampleBuffer[index];
     Reservoir R = TemporalReservoirBuffer[index];
 
-    float w = CalcTargetPDF(S.z) / CalcSourcePDF(S.z);  // Equation (5)
-    R.Update(S.z, w, Random(seed));
-    R.W = R.w_sum / (R.M * CalcTargetPDF(R.z));         // Equation (7)
+    float w = TargetPDF(S) / SourcePDF(S);      // Equation (5)
+    R.Update(S, w, Random(seed));
+    R.W = R.w_sum / (R.M * TargetPDF(R.z));     // Equation (7)
 
     TemporalReservoirBuffer[index] = R;
 }

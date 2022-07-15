@@ -514,9 +514,9 @@ bool Renderer::SystemSetup()
         }
     }
 
-    // ReSTIR 
+    // イニシャルサンプルバッファの初期化.
     {
-        auto stride = sizeof(Reservoir);
+        auto stride = sizeof(Sample);
 
         asdx::TargetDesc desc;
         desc.Dimension          = D3D12_RESOURCE_DIMENSION_BUFFER;
@@ -534,6 +534,22 @@ bool Renderer::SystemSetup()
             ELOGA("Error : InitialSamplerBuffer Init Failed.");
             return false;
         }
+    }
+
+    // テンポラルリザーバーバッファとスパシャルリザーバーバッファの初期化.
+    {
+        auto stride = sizeof(Reservoir);
+
+        asdx::TargetDesc desc;
+        desc.Dimension          = D3D12_RESOURCE_DIMENSION_BUFFER;
+        desc.Width              = stride * m_SceneDesc.Width * m_SceneDesc.Height;
+        desc.Height             = 1;
+        desc.DepthOrArraySize   = 1;
+        desc.Format             = DXGI_FORMAT_UNKNOWN;
+        desc.MipLevels          = 1;
+        desc.SampleDesc.Count   = 1;
+        desc.SampleDesc.Quality = 0;
+        desc.InitState          = D3D12_RESOURCE_STATE_COMMON;
 
         if (!m_TemporalReservoirBuffer.Init(&desc, uint32_t(stride)))
         {

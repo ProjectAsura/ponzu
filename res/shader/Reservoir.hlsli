@@ -60,4 +60,10 @@ struct Reservoir
     }
 };
 
+float SourcePDF(Sample value)
+{ return value.Pdf_v; }
+
+float TargetPDF(Sample value)
+{ return dot(value.L_s, float3(0.2126f, 0.7152f, 0.0722f)); }
+
 #endif//RESERVOIR_HLLSI

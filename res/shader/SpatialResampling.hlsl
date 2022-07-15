@@ -15,13 +15,10 @@
 //-----------------------------------------------------------------------------
 StructuredBuffer<Reservoir>     TemporalReservoirBuffer;
 RWStructuredBuffer<Reservoir>   SpatioReservoirBuffer;
+Texture2D<float2>               VelocityBuffer;
 
-
-float CalcSourcePDF(Sample value)
-{ return value.Pdf_v; }
-
-float CalcTargetPDF(Sample value)
-{ return Luminance(value.L_s); }     // Equation (10).
+static const float kCosThreshold   = cos(radians(0.25));
+static const float kDepthThreshold = 0.05f;
 
 //-----------------------------------------------------------------------------
 //      ヤコビアンの行列式を計算します
@@ -49,7 +46,14 @@ float CalcJacobian
 //-----------------------------------------------------------------------------
 uint2 ChooseNeighborPixel()
 {
+    // TODO
     return uint2(0, 0);
+}
+
+float3 Reprojection(float3 value)
+{
+    // TODO
+    return value;
 }
 
 [numthreads(8, 8, 1)]
@@ -59,9 +63,7 @@ void main( uint3 dispatchId : SV_DispatchThreadID )
     // 乱数初期化.
     uint4 seed = SetSeed(dispatchId.xy, SceneParam.FrameIndex);
 
-    const int MaxIterations = 4;
-    int mergedCount = 0;
-    uint Q[MaxIterations + 1];
+    const int MaxIterations = 9;
 
     // for each pixel q do
     uint index = dispatchId.x + dispatchId.y * uint(SceneParam.Size.x);
@@ -69,17 +71,26 @@ void main( uint3 dispatchId : SV_DispatchThreadID )
     // R_s ← SpatioReservoirBuffer[q]
     Reservoir Rs = SpatioReservoirBuffer[index];
 
-    // Q ← q.
+    float3 N0 = Rs.z.N_v;
+    float depth0 = dot(Rs.z.P_v, ScemeParam.CameraDir);
+
+    float Z = 0.0f;
 
     // for s=1 to maxIterations do
     for(int s=1; s<MaxIterations; ++s)
     {
         // Randomly choose a neighbor pixel q_n
-        uint2 q_n = ChooseNeighborPixel();
+        uint2 qn = ChooseNeighborPixel();
         uint index_n = qn.x + qn.y * uint(SceneParam.Size.x); // qn ---> index_n.
 
+        // R_n ← TemporalReservoirBuffer[q_n]
+        Reservoir Rn = TemporalReservoirBuffer[index_n];
+
+        float3 N1 = Rn.z.N_v;
+        float depth1 = dot(Rn.z.P_v, SceneParam.CameraDir);
+
         // Calculate geometric similarity between q and q_n
-        bool similarity = (dot(N0, N1) < cos(radians(0.25)) || abs(depth0 - depth1) < 0.05f
+        bool similarity = (dot(N0, N1) < kCosThreshold) || (abs(depth0 - depth1) < kDepthThreshold);
 
         // if similarity is lower than the given threshold then
         if (similarity)
@@ -87,46 +98,33 @@ void main( uint3 dispatchId : SV_DispatchThreadID )
             continue;
         }
 
-        // R_n ← TemporalReservoirBuffer[q_n]
-        Reservoir Rn = TemporalReservoirBuffer[index_n];
-
         // Calculate |J_{q_n → q}| using Equation (11).
-        float J = CalcJacobian();
+        float J = CalcJacobian(Rn.P_s, Rs.P_s, Rn.P_v, Rs.N_s);
 
         // hat_p'_q ← hat_p_q(Rn.z) / |J_{q_n → q}|.
-        float hatPq = CalcTargetPDF(Rn.z) / J;
+        float hatPq = TargetPDF(Rn.z);
+        float hatP_dash_q = hatPq / J;
 
         // if R_n's sample point is not visible to x_v at q then
-        //if (1)
+        bool visible = false;
+        if (!visible)
         {
             // hat_p'_q ← 0
             hatPq = 0.0f;
         }
 
         // R_s.MERGE(R_n, hat_p'_q)
-        Rs.Merge(Rn, hatPq, Random(seed));
+        Rs.Merge(Rn, hatP_dash_q, Random(seed));
 
-        // Q ← Q ∩ q_n
-        Q[mergedCount] = index_n;
-        mergedCount++;
-    }
-
-    // Z ← 0.
-    float Z = 0.0f;
-
-    // for each q_n in Q do
-    for(int i=0; i<mergedCount; ++i)
-    {
-        // if hat_p_q_n(R_s.z) > 0 then
-        // if ()
+        if (TargetPDF(Rs.z) > 0.0f)
         {
-            // Z ←　Z + R_n.M    // Bias correction.
-            Z += Rn.M;
+            Z += Rn.M; // Bias correction.
         }
     }
 
+
     // R_s.W ← R_s.w / (Z * hat_p_q(R_s.z)) // Equation 7.
-    Rs.W = Rs.w / (Z * );
+    Rs.W = Rs.w / (Z * TargetPDF(Rs.z));
 
     // SpatialReservoirBuffer[q] ← R_s
     SpatioReservoirBuffer[index] = Rs;
