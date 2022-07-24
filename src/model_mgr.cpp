@@ -66,11 +66,19 @@ bool ModelMgr::Init
             for(auto x=0u; x<res.Width; x++)
             {
                 auto idx = y * 4 * res.Width + x * 4;
+        #if 0
                 // 18%グレー.
                 subRes.pPixels[idx + 0] = 119;
                 subRes.pPixels[idx + 1] = 119;
                 subRes.pPixels[idx + 2] = 119;
                 subRes.pPixels[idx + 3] = 255;
+        #else
+                // White
+                subRes.pPixels[idx + 0] = 255;
+                subRes.pPixels[idx + 1] = 255;
+                subRes.pPixels[idx + 2] = 255;
+                subRes.pPixels[idx + 3] = 255;
+    #endif
             }
         }
 

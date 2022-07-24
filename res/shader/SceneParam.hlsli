@@ -34,6 +34,8 @@ struct SceneParameter
     uint    LightCount;
 
     float4  Size;   // x:Width, y:Height, z:1.0f/Width, w:1.0f/Height.
+    float3  CameraDir;
+    uint    MaxIteration;
 };
 
 #endif//SCENE_PARAM_HLSLI

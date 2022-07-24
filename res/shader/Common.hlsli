@@ -17,6 +17,7 @@
 #define INVALID_ID          (-1)
 #define STANDARD_RAY_INDEX  (0)
 #define SHADOW_RAY_INDEX    (1)
+#define USE_GGX             (0)
 
 //-----------------------------------------------------------------------------
 // Type Definitions
@@ -43,6 +44,7 @@ struct Payload
 ///////////////////////////////////////////////////////////////////////////////
 struct ShadowPayload
 {
+    float2 Barycentrics;
     bool   Visible;
 };
 
@@ -104,11 +106,12 @@ struct Light
 struct Material
 {
     float4  BaseColor;      // ベースカラー.
-    //float3  Normal;
+    float3  Normal;
     float   Roughness;      // ラフネス.
     float   Metalness;      // メタルネス.
     float3  Emissive;       // エミッシブ.
 };
+
 
 //=============================================================================
 // Constants
@@ -259,9 +262,9 @@ Material GetMaterial(uint instanceId, float2 uv, float mip)
     Texture2D<float4> baseColorMap = ResourceDescriptorHeap[data.x];
     float4 bc = baseColorMap.SampleLevel(LinearWrap, uv, mip);
 
-    //Texture2D<float4> normalMap = ResourceDescriptorHeap[data.y];
-    //float3 n = normalMap.SampleLevel(LinearWrap, uv, mip).xyz * 2.0f - 1.0f;
-    //n = normalize(n);
+    Texture2D<float4> normalMap = ResourceDescriptorHeap[data.y];
+    float3 n = normalMap.SampleLevel(LinearWrap, uv, mip).xyz * 2.0f - 1.0f;
+    n = normalize(n);
 
     Texture2D<float4> ormMap = ResourceDescriptorHeap[data.z];
     float3 orm = ormMap.SampleLevel(LinearWrap, uv, mip).rgb;
@@ -271,13 +274,25 @@ Material GetMaterial(uint instanceId, float2 uv, float mip)
 
     Material param;
     param.BaseColor = bc;
-    //param.Normal    = n;
+    param.Normal    = n;
     param.Roughness = orm.y;
     param.Metalness = orm.z;
     param.Emissive  = e;
 
     return param;
 }
+
+//-----------------------------------------------------------------------------
+//      完全鏡面反射かどうかチェック.
+//-----------------------------------------------------------------------------
+bool IsPerfectSpecular(Material material)
+{ return (material.Metalness == 1.0f && material.Roughness == 0.0f); }
+
+//-----------------------------------------------------------------------------
+//      完全拡散反射かどうかチェック.
+//-----------------------------------------------------------------------------
+bool IsPerfectDiffuse(Material material)
+{ return (material.Metalness == 0.0f && material.Roughness == 1.0f); }
 
 //-----------------------------------------------------------------------------
 //      ライト強度を取得します.
@@ -400,6 +415,69 @@ bool CastShadowRay(float3 pos, float3 normal, float3 dir, float tmax)
 float Luminance(float3 rgb)
 { return dot(rgb, float3(0.2126f, 0.7152f, 0.0722f)); }
 
+float ShadowedF90(float3 F0)
+{
+    const float MIN_DIELECTRICS_F0 = 0.04f;
+    const float t = 1.0f / MIN_DIELECTRICS_F0;
+    return min(1.0f, t * Luminance(F0));
+}
+
+float Smith_G1_GGX(float alpha, float NdotS)
+{
+    float alpha2 = alpha * alpha;
+    float NdotS2 = NdotS * NdotS;
+    return 2.0f / (sqrt(((alpha2 * (1.0f - NdotS2)) + NdotS2) / NdotS2) + 1.0f);
+}
+
+float Smith_G2(float alpha, float NdotL, float NdotV)
+{
+    float G1V = Smith_G1_GGX(alpha, NdotV);
+    float G1L = Smith_G1_GGX(alpha, NdotL);
+    return G1L / (G1V + G1L - G1V * G1L);
+}
+
+float D_ggx(float3 N, float alpha_x, float alpha_y)
+{
+    float term = Pow2(N.x / alpha_x) + Pow2(N.y / alpha_y) + Pow2(N.z);
+    return 1.0f / (F_PI * alpha_x * alpha_y * Pow2(term));
+}
+
+float Lambda(float3 V, float alpha_x, float alpha_y)
+{
+    return (-1.0f + sqrt(1.0f + (Pow2(alpha_x * V.x) + Pow2(alpha_y * V.y)) / Pow2(V.z))) * 0.5f;
+}
+
+float G1(float3 V, float alpha_x, float alpha_y)
+{
+    return 1.0f / (1.0f + Lambda(V, alpha_x, alpha_y));
+}
+
+float Dv(float3 N, float3 V, float alpha_x, float alpha_y)
+{
+    return G1(V, alpha_x, alpha_y) * max(0.0f, dot(V, N)) * D_ggx(N, alpha_x, alpha_y) / V.z;
+}
+
+float G2(float3 L, float3 V, float alpha_x, float alpha_y)
+{
+    return G1(L, alpha_x, alpha_y) * G1(V, alpha_x, alpha_y);
+}
+
+float ggxNormalDistribution(float NdotH, float roughness)
+{
+    float a2 = roughness * roughness;
+    float d = (NdotH * a2 - NdotH) * NdotH + 1.0f;
+    return a2 / (d * d * F_PI);
+}
+
+float schlickMaskingTerm(float NdotL, float NdotV, float roughness)
+{
+    float k = roughness * roughness / 2.0f;
+
+    float g_v = NdotV / (NdotV * (1.0f - k) + k);
+    float g_l = NdotL / (NdotL * (1.0f - k) + k);
+    return g_v * g_l;
+}
+
 //-----------------------------------------------------------------------------
 //      Diffuseをサンプルするかどうかの確率を求めます.
 //-----------------------------------------------------------------------------
@@ -412,13 +490,47 @@ float ProbabilityToSampleDiffuse(float3 diffuseColor, float3 specularColor)
     return lumDiffuse / (lumDiffuse + lumSpecular);
 }
 
+// [Heitz 2018] Eric Heitz, "Sampling the GGX Distribution of Visible Normals", JCGT, vol.7, no.4, 1-13, 2018.
+float3 SampleGGXVNDF(float3 Ve, float alpha_x, float alpha_y, float2 u)
+{
+    // Input Ve: view direction
+    // Input alpha_x, alpha_y: roughness parameters
+    // Input u: uniform random numbers
+    // Output Ne: normal sampled with PDF D_Ve(Ne) = G1(Ve) * max(0, dot(Ve, Ne)) * D(Ne) / Ve.z
+
+    // Section 3.2: transforming the view direction to the hemisphere configuration
+    float3 Vh = normalize(float3(alpha_x * Ve.x, alpha_y * Ve.y, Ve.z));
+
+    // Section 4.1: orthonormal basis (with special case if cross product is zero)
+    float lensq = Vh.x * Vh.x + Vh.y * Vh.y;
+    float3 T1 = (lensq > 0.0f) ? float3(-Vh.y, Vh.x, 0.0f) * rsqrt(lensq) : float3(1.0f, 0.0f, 0.0f);
+    float3 T2 = cross(Vh, T1);
+
+    // Section 4.2: parameterization of the projected area
+    float r = sqrt(u.x);
+    float phi = 2.0f * F_PI * u.y;
+    float t1 = r * cos(phi);
+    float t2 = r * sin(phi);
+    float s = 0.5f * (1.0f + Vh.z);
+    t2 = (1.0f - s) * sqrt(1.0f - t1*t1) + s*t2;
+
+    // Section 4.3: reprojection onto hemisphere
+    float3 Nh = t1*T1 + t2*T2 + sqrt(max(0.0f, 1.0f - t1*t1 - t2*t2))*Vh;
+
+    // Section 3.4: transforming the normal back to the ellipsoid configuration
+    float3 Ne = normalize(float3(alpha_x * Nh.x, alpha_y * Nh.y, max(0.0f, Nh.z)));
+
+    return Ne;
+}
+
+
 //-----------------------------------------------------------------------------
 //      出射方向をサンプリングします.
 //-----------------------------------------------------------------------------
 float3 SampleDir(float3 V, float3 N, float3 u, Material material)
 {
     // 完全拡散反射.
-    if (material.Metalness == 0.0f && material.Roughness == 1.0f)
+    if (IsPerfectDiffuse(material))
     {
         float3 T, B;
         CalcONB(N, T, B);
@@ -427,9 +539,9 @@ float3 SampleDir(float3 V, float3 N, float3 u, Material material)
         return normalize(T * s.x + B * s.y + N * s.z);
     }
     // 完全鏡面反射.
-    else if (material.Metalness == 1.0f && material.Roughness == 0.0f)
+    else if (IsPerfectSpecular(material))
     {
-        return normalize(reflect(V, N));
+        return normalize(-reflect(V, N));
     }
     else
     {
@@ -448,9 +560,26 @@ float3 SampleDir(float3 V, float3 N, float3 u, Material material)
             return normalize(T * s.x + B * s.y + N * s.z);
         }
 
-        // Specular.
-        float3 H = SampleGGX(u.xy, material.Roughness);
-        return normalize(reflect(V, H));
+        float a = max(Pow2(material.Roughness), 0.01f);
+
+#if USE_GGX
+        float3 T, B;
+        CalcONB(N, T, B);
+
+        float3 s = SampleGGX(u.xy, a);
+        float3 H = normalize(T * s.x + B * s.y + N * s.z);
+        return normalize(reflect(-V, H));
+#else
+        // Phong. 
+        float3 R = normalize(reflect(-V, N));
+    
+        float3 T, B;
+        CalcONB(R, T, B);
+
+        float shininess = ToSpecularPower(a);
+        float3 s = SamplePhong(u.xy, shininess);
+        return normalize(T * s.x + B * s.y + R * s.z);
+#endif
     }
 }
 
@@ -464,11 +593,11 @@ float3 EvaluateMaterial
     float3      u,          // 乱数.
     Material    material,   // マテリアル.
     out float3  dir,        // 出射方向.
-    out float   pdf         // 確率密度関数.
+    out float   pdf         // 確率密度.
 )
 {
     // 完全拡散反射.
-    if (material.Metalness == 0.0f && material.Roughness == 1.0f)
+    if (IsPerfectDiffuse(material))
     {
         float3 T, B;
         CalcONB(N, T, B);
@@ -482,11 +611,12 @@ float3 EvaluateMaterial
         pdf = NoL / F_PI;
 
         return (material.BaseColor.rgb / F_PI) * NoL;
+
     }
     // 完全鏡面反射.
-    else if (material.Metalness == 1.0f && material.Roughness == 0.0f)
+    else if (IsPerfectSpecular(material))
     {
-        float3 L = normalize(reflect(V, N));
+        float3 L = normalize(reflect(-V, N));
         dir = L;
         pdf = 1.0f;
 
@@ -500,7 +630,7 @@ float3 EvaluateMaterial
         float p = ProbabilityToSampleDiffuse(diffuseColor, specularColor);
 
         // Diffuse
-        if (u.z < p)
+        if (u.z <= p)
         {
             float3 T, B;
             CalcONB(N, T, B);
@@ -511,30 +641,59 @@ float3 EvaluateMaterial
             float NoL = abs(dot(N, L));
 
             dir = L;
-            pdf = (NoL / F_PI) / p;
+            pdf = (NoL / F_PI);
+            pdf *= p;
 
             return (diffuseColor / F_PI) * NoL;
         }
 
-        // Specular.
-        float3 H = SampleGGX(u.xy, material.Roughness);
-        float3 L = normalize(reflect(V, H));
+        float a = max(Pow2(material.Roughness), 0.01f);
 
-        float NoH = abs(dot(N, H));
-        float NoV = abs(dot(N, V));
-        float NoL = abs(dot(N, L));
-        float LoH = abs(dot(L, H));
+#if USE_GGX
+        float3 T, B;
+        CalcONB(N, T, B);
 
-        float  a   = max(Pow2(material.Roughness), 0.01f);
-        float  f90 = saturate(50.0f * dot(specularColor, 0.33f));
-        float  D   = D_GGX(NoH, a);
-        float  G   = G_SmithGGX(NoL, NoV, a);
-        float3 F   = F_Schlick(specularColor, f90, LoH);
+        float3 s = SampleGGX(u.xy, a);
+        float3 H = normalize(T * s.x + B * s.y + N * s.z);
+        float3 L = normalize(reflect(-V, H));
+
+        float NdotL = abs(dot(N, L));
+        float NdotH = abs(dot(N, H));
+        float LdotH = abs(dot(L, H));
+        float NdotV = abs(dot(N, V));
+
+        float D = ggxNormalDistribution(NdotH, a);
+        float G = schlickMaskingTerm(NdotL, NdotV, a);
+        float3 F = F_Schlick(specularColor, LdotH);
+        float3 ggxTerm = D * G * F / (4 * NdotL * NdotV);
+        float  ggxProb = D * NdotH / (4 * LdotH);
 
         dir = L;
-        pdf = (D * NoH / (4.0f * LoH)) / (1.0f - p);
+        pdf = ggxProb;
+        pdf *= (1.0f - p);
 
-        return ((D * F * G) / F_PI) * NoL;
+        return ggxTerm * NdotL;
+#else
+        // Phong. 
+        float3 R = normalize(reflect(-V, N));
+    
+        float3 T, B;
+        CalcONB(R, T, B);
+
+        float shininess = ToSpecularPower(a);
+        float3 s = SamplePhong(u.xy, shininess);
+        float3 L = normalize(T * s.x + B * s.y + R * s.z);
+
+        float LoR = abs(dot(L, R));
+        float normalizeTerm = (shininess + 1.0f) / (2.0f * F_PI);
+        float phongTerm = pow(LoR, shininess) * normalizeTerm;
+
+        dir = L;
+        pdf = phongTerm;
+        pdf *= (1.0f - p);
+
+        return specularColor * phongTerm;
+#endif
     }
 }
 

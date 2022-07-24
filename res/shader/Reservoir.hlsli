@@ -6,22 +6,32 @@
 #ifndef RESERVOIR_HLSLI
 #define RESERVOIR_HLSLI
 
+// Reservoir flags.
+#define RESERVOIR_FLAG_HIT  (0x1 << 0)
+
+
+///////////////////////////////////////////////////////////////////////////////
+// HitInfo structure
+///////////////////////////////////////////////////////////////////////////////
+struct HitInfo
+{
+    float3  P;          // 位置座標.
+    float   BsdfPdf;    // BSDFの確率密度関数.
+    float3  N;          // 法線ベクトル.
+    float   LightPdf;   // ライトの確率密度関数.
+};
+
 ///////////////////////////////////////////////////////////////////////////////
 // Sample structure
 ///////////////////////////////////////////////////////////////////////////////
 struct Sample
 {
-    float3  P_v;    // Visible point.
-    float3  N_v;    // Visible surface normal.
-    float3  L_v;    // Outgoing radiance at visible point in RGB.
-    float   Pdf_v;
-
-    float3  P_s;    // Sample point.
-    float3  N_s;    // Sample surface normal.
-    float3  L_s;    // Outgoing radiance at sample point in RGB.
-    float   Pdf_s;
-
-    float3  Random; // Random numbers used for path.
+    HitInfo PointV;     // 可視点.
+    HitInfo PointS;     // サンプル点.
+    float3  Lo;         // サンプル点において出射される放射輝度.
+    uint    Flags;      // フラグ.
+    float3  Wi;         // サンプル点からの次の方向.
+    uint    FrameIndex; // 乱数生成の為のフレーム番号.
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -58,12 +68,18 @@ struct Reservoir
         Update(r.z, hat_p * r.W * r.M, u);
         M = M0 + r.M;
     }
+
+    //-------------------------------------------------------------------------
+    //      ヒットしたかどうかチェックします.
+    //-------------------------------------------------------------------------
+    bool IsHit()
+    { return (z.Flags & RESERVOIR_FLAG_HIT); }
 };
 
 float SourcePDF(Sample value)
-{ return value.Pdf_v; }
+{ return value.PointV.BsdfPdf; }
 
 float TargetPDF(Sample value)
-{ return dot(value.L_s, float3(0.2126f, 0.7152f, 0.0722f)); }
+{ return dot(value.Lo, float3(0.2126f, 0.7152f, 0.0722f)); }
 
 #endif//RESERVOIR_HLLSI

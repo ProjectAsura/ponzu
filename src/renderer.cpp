@@ -11,7 +11,6 @@
 #include <fnd/asdxLogger.h>
 #include <fnd/asdxStopWatch.h>
 #include <fnd/asdxMisc.h>
-#include <gfx/asdxShaderCompiler.h>
 #include <process.h>
 #include <fpng.h>
 #include <OBJLoader.h>
@@ -33,6 +32,9 @@ namespace {
 #include "../res/shader/Compile/RtCamp.inc"
 #include "../res/shader/Compile/ModelVS.inc"
 #include "../res/shader/Compile/ModelPS.inc"
+#include "../res/shader/Compile/InitialSampling.inc"
+#include "../res/shader/Compile/SpatialResampling.inc"
+#include "../res/shader/Compile/ShadePixel.inc"
 
 static const D3D12_INPUT_ELEMENT_DESC kModelElements[] = {
     { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
@@ -43,6 +45,28 @@ static const D3D12_INPUT_ELEMENT_DESC kModelElements[] = {
 
 static_assert(sizeof(r3d::Vertex) == sizeof(VertexOBJ), "Vertex size not matched!");
 
+#if !(CAMP_RELEASE)
+#include "../res/shader/Compile/DebugPS.inc"
+
+enum BUFFER_KIND
+{
+    BUFFER_KIND_CANVAS  = 0,
+    BUFFER_KIND_SPATIAL,
+    BUFFER_KIND_TEMPORAL,
+    BUFFER_KIND_ALBEDO,
+    BUFFER_KIND_NORMAL,
+    BUFFER_KIND_VELOCITY,
+};
+
+static const char* kBufferKindItems[] = {
+    u8"Canvas",
+    u8"Spatial",
+    u8"Temporal",
+    u8"Albedo",
+    u8"Normal",
+    u8"Velocity",
+};
+#endif
 
 ///////////////////////////////////////////////////////////////////////////////
 // Payload structure
@@ -84,6 +108,19 @@ struct SceneParam
     uint32_t        LightCount;
 
     asdx::Vector4   Size;
+    asdx::Vector3   CameraDir;
+    uint32_t        MaxIteration;
+};
+
+///////////////////////////////////////////////////////////////////////////////
+// HitInfo structure
+///////////////////////////////////////////////////////////////////////////////
+struct HitInfo
+{
+    asdx::Vector3   P;
+    float           BsdfPdf;
+    asdx::Vector3   N;
+    float           LightPdf;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -91,17 +128,12 @@ struct SceneParam
 ///////////////////////////////////////////////////////////////////////////////
 struct Sample
 {
-    asdx::Vector3   P_v;        // Visbiel point.
-    asdx::Vector3   N_v;        // Visible surface normal.
-    asdx::Vector3   L_v;        // Outgoing radiance at visible point in RGB.
-    float           Pdf_v;
-
-    asdx::Vector3   P_s;        // Sample point.
-    asdx::Vector3   N_s;        // Sample surface normal.
-    asdx::Vector3   L_s;        // Outgoing radiance at sample point in RGB.
-    float           Pdf_s;      // PDF at sample point.
-
-    asdx::Vector3   Random;     // Random numbers used for path.
+    HitInfo         PointV;
+    HitInfo         PointS;
+    asdx::Vector3   Lo;
+    uint32_t        Flags;
+    asdx::Vector3   Wi;
+    uint32_t        FrameIndex;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -113,6 +145,17 @@ struct Reservoir
     float   w_sum;  // The sum of weights.
     float   M;      // The number of samples seen so far.
     float   W;      // Equation (7).
+};
+
+///////////////////////////////////////////////////////////////////////////////
+// ShadeParam structure
+///////////////////////////////////////////////////////////////////////////////
+struct ShadeParam
+{
+    uint32_t    Width;
+    uint32_t    Height;
+    uint32_t    EnableAccumulation;
+    uint32_t    AccumulationFrame;
 };
 
 //-----------------------------------------------------------------------------
@@ -229,6 +272,17 @@ bool Renderer::SystemSetup()
         return false;
     }
 
+    // ShaderModel 6.6以降対応かどうかチェック.
+    {
+        D3D12_FEATURE_DATA_SHADER_MODEL shaderModel = { D3D_SHADER_MODEL_6_6 };
+        auto hr = pDevice->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &shaderModel, sizeof(shaderModel));
+        if (FAILED(hr) || (shaderModel.HighestShaderModel < D3D_SHADER_MODEL_6_6))
+        {
+            ELOG("Error : Shader Model 6.6 is not supported.");
+            return false;
+        }
+    }
+
     // PNGライブラリ初期化.
     fpng::fpng_init();
 
@@ -336,7 +390,7 @@ bool Renderer::SystemSetup()
         desc.Width              = m_SceneDesc.Width;
         desc.Height             = m_SceneDesc.Height;
         desc.DepthOrArraySize   = 1;
-        desc.Format             = DXGI_FORMAT_R16G16B16A16_FLOAT;
+        desc.Format             = DXGI_FORMAT_R32G32B32A32_FLOAT;
         desc.MipLevels          = 1;
         desc.SampleDesc.Count   = 1;
         desc.SampleDesc.Quality = 0;
@@ -474,7 +528,7 @@ bool Renderer::SystemSetup()
     // トーンマップ用パイプラインステート生成.
     {
         D3D12_GRAPHICS_PIPELINE_STATE_DESC desc = {};
-        desc.pRootSignature = m_TonemapRootSig.GetPtr();
+        desc.pRootSignature         = m_TonemapRootSig.GetPtr();
         desc.VS                     = { TonemapVS, sizeof(TonemapVS) };
         desc.PS                     = { TonemapPS, sizeof(TonemapPS) };
         desc.BlendState             = asdx::BLEND_DESC(asdx::BLEND_STATE_OPAQUE);
@@ -498,10 +552,10 @@ bool Renderer::SystemSetup()
 
     // カメラ初期化.
     {
-        auto pos    = asdx::Vector3(0.0f, 0.0f, 5000.0f);
+        auto pos    = asdx::Vector3(0.0f, 0.0f, 5.0f);
         auto target = asdx::Vector3(0.0f, 0.0f, 0.0f);
         auto upward = asdx::Vector3(0.0f, 1.0f, 0.0f);
-        m_CameraController.Init(pos, target, upward, 1.0f, 10000.0f);
+        m_CameraController.Init(pos, target, upward, 0.01f, 10000.0f);
     }
 
     // 定数バッファ初期化.
@@ -510,28 +564,6 @@ bool Renderer::SystemSetup()
         if (!m_SceneParam.Init(size))
         {
             ELOGA("Error : SceneParam Init Failed.");
-            return false;
-        }
-    }
-
-    // イニシャルサンプルバッファの初期化.
-    {
-        auto stride = sizeof(Sample);
-
-        asdx::TargetDesc desc;
-        desc.Dimension          = D3D12_RESOURCE_DIMENSION_BUFFER;
-        desc.Width              = stride * m_SceneDesc.Width * m_SceneDesc.Height;
-        desc.Height             = 1;
-        desc.DepthOrArraySize   = 1;
-        desc.Format             = DXGI_FORMAT_UNKNOWN;
-        desc.MipLevels          = 1;
-        desc.SampleDesc.Count   = 1;
-        desc.SampleDesc.Quality = 0;
-        desc.InitState          = D3D12_RESOURCE_STATE_COMMON;
-
-        if (!m_InitialSampleBuffer.Init(&desc, uint32_t(stride)))
-        {
-            ELOGA("Error : InitialSamplerBuffer Init Failed.");
             return false;
         }
     }
@@ -560,6 +592,55 @@ bool Renderer::SystemSetup()
         if (!m_SpatialReservoirBuffer.Init(&desc, uint32_t(stride)))
         {
             ELOGA("Error : SpatialReservoirBuffer Init Failed.");
+            return false;
+        }
+    }
+
+    // 初期サンプル & テンポラルリユース用パイプライン.
+    {
+        D3D12_SHADER_BYTECODE shader = { InitialSampling, sizeof(InitialSampling) };
+
+        if (!InitInitialSamplingPipeline(m_InitialSampling, shader))
+        {
+            ELOGA("Error : Init InitialSampling Pipeline Failed.");
+            return false;
+        }   
+    }
+
+    // スパシャルリサンプリング用パイプライン.
+    {
+        D3D12_SHADER_BYTECODE shader = { SpatialResampling, sizeof(SpatialResampling) };
+
+        if (!InitSpatialSamplingPipeline(m_SpatialSampling, shader))
+        {
+            ELOGA("Error : Init SpatialSampling Pipeline Failed.");
+            return false;
+        }
+    }
+
+    // ピクセルシェード用ルートシグニチャ.
+    {
+        asdx::DescriptorSetLayout<3, 0> layout;
+        layout.SetContants(0, asdx::SV_ALL, 4, 0);
+        layout.SetSRV(1, asdx::SV_ALL, 0);
+        layout.SetTableUAV(2, asdx::SV_ALL, 0);
+
+        if (!m_ShadePixelRootSig.Init(pDevice, layout.GetDesc()))
+        {
+            ELOGA("Error : ShadePixel RootSignature Failed.");
+            return false;
+        }
+    }
+
+    // ピクセルシェード用パイプライン.
+    {
+        D3D12_COMPUTE_PIPELINE_STATE_DESC desc = {};
+        desc.pRootSignature = m_ShadePixelRootSig.GetPtr();
+        desc.CS             = { ShadePixel, sizeof(ShadePixel) };
+
+        if (!m_ShadePixelPSO.Init(pDevice, &desc))
+        {
+            ELOGA("Error : ShadePixel PipelineState Failed.");
             return false;
         }
     }
@@ -723,6 +804,47 @@ bool Renderer::SystemSetup()
         }
     }
 
+#if !(CAMP_RELEASE)
+    // デバッグ用ルートシグニチャ生成.
+    {
+        asdx::DescriptorSetLayout<1, 1> layout;
+        layout.SetTableSRV(0, asdx::SV_PS, 0);
+        layout.SetStaticSampler(0, asdx::SV_PS, asdx::STATIC_SAMPLER_LINEAR_CLAMP, 0);
+        layout.SetFlags(D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+
+        if (!m_DebugRootSig.Init(pDevice, layout.GetDesc()))
+        {
+            ELOGA("Error : Debug RootSignature Failed.");
+            return false;
+        }
+    }
+
+    // デバッグ用パイプラインステート生成.
+    {
+        D3D12_GRAPHICS_PIPELINE_STATE_DESC desc = {};
+        desc.pRootSignature         = m_DebugRootSig.GetPtr();
+        desc.VS                     = { TonemapVS, sizeof(TonemapVS) };
+        desc.PS                     = { DebugPS, sizeof(DebugPS) };
+        desc.BlendState             = asdx::BLEND_DESC(asdx::BLEND_STATE_OPAQUE);
+        desc.DepthStencilState      = asdx::DEPTH_STENCIL_DESC(asdx::DEPTH_STATE_NONE);
+        desc.RasterizerState        = asdx::RASTERIZER_DESC(asdx::RASTERIZER_STATE_CULL_NONE);
+        desc.SampleMask             = D3D12_DEFAULT_SAMPLE_MASK;
+        desc.PrimitiveTopologyType  = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+        desc.NumRenderTargets       = 1;
+        desc.RTVFormats[0]          = m_SwapChainFormat;
+        desc.DSVFormat              = DXGI_FORMAT_UNKNOWN;
+        desc.InputLayout            = asdx::Quad::kInputLayout;
+        desc.SampleDesc.Count       = 1;
+        desc.SampleDesc.Quality     = 0;
+
+        if (!m_DebugPSO.Init(pDevice, &desc))
+        {
+            ELOGA("Error : Debug PipelineState Failed.");
+            return false;
+        }
+    }
+#endif
+
     // 初回フレーム計算用に設定しておく.
     {
         auto fovY   = asdx::ToRadian(37.5f);
@@ -744,6 +866,239 @@ bool Renderer::SystemSetup()
 
     timer.End();
     printf_s("done! --- %lf[msec]\n", timer.GetElapsedMsec());
+    return true;
+}
+
+//-----------------------------------------------------------------------------
+//      Initial Sampling / Temporal reuse 用パイプライン初期化.
+//-----------------------------------------------------------------------------
+bool Renderer::InitInitialSamplingPipeline(RtPipeline& value, D3D12_SHADER_BYTECODE shader)
+{
+    auto pDevice = asdx::GetD3D12Device();
+
+    // レイトレ用ルートシグニチャ生成.
+    {
+        asdx::DescriptorSetLayout<7, 1> layout;
+        // 共通.
+        layout.SetCBV(0, asdx::SV_ALL, 0);
+        layout.SetSRV(1, asdx::SV_ALL, 0);
+        layout.SetSRV(2, asdx::SV_ALL, 1);
+        layout.SetSRV(3, asdx::SV_ALL, 2);
+        layout.SetSRV(4, asdx::SV_ALL, 3);
+        layout.SetStaticSampler(0, asdx::SV_ALL, asdx::STATIC_SAMPLER_LINEAR_WRAP, 0);
+        layout.SetFlags(D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED);
+
+        // 個別.
+        layout.SetUAV     (5, asdx::SV_ALL, 0);  // TemporalReservoirBuffer.
+        layout.SetTableSRV(6, asdx::SV_ALL, 4);  // BackGround
+
+        if (!value.RootSig.Init(pDevice, layout.GetDesc()))
+        {
+            ELOGA("Error : RayTracing RootSignature Failed.");
+            return false;
+        }
+    }
+
+    // レイトレ用パイプラインステート生成.
+    {
+        D3D12_EXPORT_DESC exports[] = {
+            { L"OnGenerateRay"      , nullptr, D3D12_EXPORT_FLAG_NONE },
+            { L"OnClosestHit"       , nullptr, D3D12_EXPORT_FLAG_NONE },
+            { L"OnShadowClosestHit" , nullptr, D3D12_EXPORT_FLAG_NONE },
+            { L"OnMiss"             , nullptr, D3D12_EXPORT_FLAG_NONE },
+            { L"OnShadowMiss"       , nullptr, D3D12_EXPORT_FLAG_NONE },
+        };
+
+        D3D12_HIT_GROUP_DESC groups[2] = {};
+        groups[0].ClosestHitShaderImport    = L"OnClosestHit";
+        groups[0].HitGroupExport            = L"StandardHit";
+        groups[0].Type                      = D3D12_HIT_GROUP_TYPE_TRIANGLES;
+
+        groups[1].ClosestHitShaderImport    = L"OnShadowClosestHit";
+        groups[1].HitGroupExport            = L"ShadowHit";
+        groups[1].Type                      = D3D12_HIT_GROUP_TYPE_TRIANGLES;
+
+        asdx::RayTracingPipelineStateDesc desc = {};
+        desc.pGlobalRootSignature       = value.RootSig.GetPtr();
+        desc.DXILLibrary                = shader;
+        desc.ExportCount                = _countof(exports);
+        desc.pExports                   = exports;
+        desc.HitGroupCount              = _countof(groups);
+        desc.pHitGroups                 = groups;
+        desc.MaxPayloadSize             = sizeof(Payload);
+        desc.MaxAttributeSize           = sizeof(asdx::Vector2);
+        desc.MaxTraceRecursionDepth     = 1;
+
+        if (!value.PSO.Init(pDevice, desc))
+        {
+            ELOGA("Error : RayTracing PSO Failed.");
+            return false;
+        }
+    }
+
+    // レイ生成テーブル.
+    {
+        asdx::ShaderRecord record = {};
+        record.ShaderIdentifier = value.PSO.GetShaderIdentifier(L"OnGenerateRay");
+
+        asdx::ShaderTable::Desc desc = {};
+        desc.RecordCount    = 1;
+        desc.pRecords       = &record;
+
+        if (!value.RayGenTable.Init(pDevice, &desc))
+        {
+            ELOGA("Error : RayGenTable Init Failed.");
+            return false;
+        }
+    }
+
+    // ミステーブル.
+    {
+        asdx::ShaderRecord record[2] = {};
+        record[0].ShaderIdentifier = value.PSO.GetShaderIdentifier(L"OnMiss");
+        record[1].ShaderIdentifier = value.PSO.GetShaderIdentifier(L"OnShadowMiss");
+
+        asdx::ShaderTable::Desc desc = {};
+        desc.RecordCount = 2;
+        desc.pRecords    = record;
+
+        if (!value.MissTable.Init(pDevice, &desc))
+        {
+            ELOGA("Error : MissTable Init Failed.");
+            return false;
+        }
+    }
+
+    // ヒットグループ.
+    {
+        asdx::ShaderRecord record[2];
+        record[0].ShaderIdentifier = value.PSO.GetShaderIdentifier(L"StandardHit");
+        record[1].ShaderIdentifier = value.PSO.GetShaderIdentifier(L"ShadowHit");
+
+        asdx::ShaderTable::Desc desc = {};
+        desc.RecordCount = 2;
+        desc.pRecords    = record;
+
+        if (!value.HitGroupTable.Init(pDevice, &desc))
+        {
+            ELOGA("Error : HitGroupTable Init Failed.");
+            return false;
+        }
+    }
+
+    return true;
+}
+
+//-----------------------------------------------------------------------------
+//      Spatial Sampling 用パイプライン初期化.
+//-----------------------------------------------------------------------------
+bool Renderer::InitSpatialSamplingPipeline(RtPipeline& value, D3D12_SHADER_BYTECODE shader)
+{
+    auto pDevice = asdx::GetD3D12Device();
+
+    // レイトレ用ルートシグニチャ生成.
+    {
+        asdx::DescriptorSetLayout<7, 1> layout;
+
+        // 共通.
+        layout.SetCBV(0, asdx::SV_ALL, 0);
+        layout.SetSRV(1, asdx::SV_ALL, 0);
+        layout.SetSRV(2, asdx::SV_ALL, 1);
+        layout.SetSRV(3, asdx::SV_ALL, 2);
+        layout.SetSRV(4, asdx::SV_ALL, 3);
+        layout.SetStaticSampler(0, asdx::SV_ALL, asdx::STATIC_SAMPLER_LINEAR_WRAP, 0);
+        layout.SetFlags(D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED);
+
+        // 個別.
+        layout.SetUAV(5, asdx::SV_ALL, 0);  // SpatialReservoirSample.
+        layout.SetSRV(6, asdx::SV_ALL, 4);  // TemporalReservoirBuffer
+
+        if (!value.RootSig.Init(pDevice, layout.GetDesc()))
+        {
+            ELOGA("Error : RayTracing RootSignature Failed.");
+            return false;
+        }
+    }
+
+    // レイトレ用パイプラインステート生成.
+    {
+        D3D12_EXPORT_DESC exports[] = {
+            { L"OnGenerateRay"      , nullptr, D3D12_EXPORT_FLAG_NONE },
+            { L"OnShadowClosestHit" , nullptr, D3D12_EXPORT_FLAG_NONE },
+            { L"OnShadowMiss"       , nullptr, D3D12_EXPORT_FLAG_NONE },
+        };
+
+        D3D12_HIT_GROUP_DESC groups = {};
+        groups.ClosestHitShaderImport    = L"OnShadowClosestHit";
+        groups.HitGroupExport            = L"ShadowHit";
+        groups.Type                      = D3D12_HIT_GROUP_TYPE_TRIANGLES;
+
+        asdx::RayTracingPipelineStateDesc desc = {};
+        desc.pGlobalRootSignature       = value.RootSig.GetPtr();
+        desc.DXILLibrary                = shader;
+        desc.ExportCount                = _countof(exports);
+        desc.pExports                   = exports;
+        desc.HitGroupCount              = 1;
+        desc.pHitGroups                 = &groups;
+        desc.MaxPayloadSize             = sizeof(Payload);
+        desc.MaxAttributeSize           = sizeof(asdx::Vector2);
+        desc.MaxTraceRecursionDepth     = 1;
+
+        if (!value.PSO.Init(pDevice, desc))
+        {
+            ELOGA("Error : RayTracing PSO Failed.");
+            return false;
+        }
+    }
+
+    // レイ生成テーブル.
+    {
+        asdx::ShaderRecord record = {};
+        record.ShaderIdentifier = value.PSO.GetShaderIdentifier(L"OnGenerateRay");
+
+        asdx::ShaderTable::Desc desc = {};
+        desc.RecordCount    = 1;
+        desc.pRecords       = &record;
+
+        if (!value.RayGenTable.Init(pDevice, &desc))
+        {
+            ELOGA("Error : RayGenTable Init Failed.");
+            return false;
+        }
+    }
+
+    // ミステーブル.
+    {
+        asdx::ShaderRecord record = {};
+        record.ShaderIdentifier = value.PSO.GetShaderIdentifier(L"OnShadowMiss");
+
+        asdx::ShaderTable::Desc desc = {};
+        desc.RecordCount = 1;
+        desc.pRecords    = &record;
+
+        if (!value.MissTable.Init(pDevice, &desc))
+        {
+            ELOGA("Error : MissTable Init Failed.");
+            return false;
+        }
+    }
+
+    // ヒットグループ.
+    {
+        asdx::ShaderRecord record;
+        record.ShaderIdentifier = value.PSO.GetShaderIdentifier(L"ShadowHit");
+
+        asdx::ShaderTable::Desc desc = {};
+        desc.RecordCount = 1;
+        desc.pRecords    = &record;
+
+        if (!value.HitGroupTable.Init(pDevice, &desc))
+        {
+            ELOGA("Error : HitGroupTable Init Failed.");
+            return false;
+        }
+    }
+
     return true;
 }
 
@@ -786,7 +1141,7 @@ bool Renderer::BuildScene()
     {
         ModelOBJ model;
         OBJLoader loader;
-        if (!loader.Load("../res/model/dosei_quad.obj", model))
+        if (!loader.Load("../res/model/dragon.obj", model))
         {
             ELOGA("Error : Model Load Failed.");
             return false;
@@ -944,12 +1299,15 @@ void Renderer::OnTerm()
     m_DevRayGenTable    .Term();
     m_DevMissTable      .Term();
     m_DevHitGroupTable  .Term();
+    m_DebugRootSig      .Term();
+    m_DebugPSO          .Term();
 #endif
 
     m_SpatialReservoirBuffer .Term();
     m_TemporalReservoirBuffer.Term();
-    m_InitialSampleBuffer    .Term();
 
+    m_ShadePixelRootSig .Term();
+    m_ShadePixelPSO     .Term();
     m_TonemapPSO        .Term();
     m_TonemapRootSig    .Term();
     m_RayTracingPSO     .Term();
@@ -1029,54 +1387,60 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
     // コマンド記録開始.
     m_GfxCmdList.Reset();
 
+    bool enableAccumulation = true;
+
     // 定数バッファ更新.
     {
         auto fovY   = asdx::ToRadian(37.5f);
         auto aspect = float(m_SceneDesc.Width) / float(m_SceneDesc.Height);
 
-        auto dirtyView = false;
         auto view = m_CameraController.GetView();
+        auto proj = asdx::Matrix::CreatePerspectiveFieldOfView(
+            fovY,
+            aspect,
+            m_CameraController.GetNearClip(),
+            m_CameraController.GetFarClip());
+
+        auto changed = memcmp(&view, &m_PrevView, sizeof(asdx::Matrix)) != 0;
+    #if !(CAMP_RELEASE)
+        if (m_RequestReload)
+        { changed = true; }
+    #endif
 
         // カメラ変更があったかどうか?
-        if (memcmp(&view, &m_PrevView, sizeof(asdx::Matrix)) != 0)
+        if (changed)
         {
-            dirtyView = true;
+            enableAccumulation  = false;
             m_AccumulatedFrames = 0;
         }
 
         m_AccumulatedFrames++;
 
         SceneParam param = {};
-        param.View = view;
-        param.Proj = asdx::Matrix::CreatePerspectiveFieldOfView(
-            fovY,
-            aspect,
-            m_CameraController.GetNearClip(),
-            m_CameraController.GetFarClip());
-        param.InvView       = asdx::Matrix::Invert(param.View);
-        param.InvProj       = asdx::Matrix::Invert(param.Proj);
-        param.InvViewProj   = param.InvProj * param.InvView;
-
-        param.PrevView          = m_PrevView;
-        param.PrevProj          = m_PrevProj;
-        param.PrevInvView       = m_PrevInvView;
-        param.PrevInvProj       = m_PrevInvProj;
-        param.PrevInvViewProj   = m_PrevInvViewProj;
-
-        param.MaxBounce     = 16;
-        param.MinBounce     = 3;
-        param.FrameIndex    = GetFrameCount();
-        param.SkyIntensity  = 1.0f;
-
-        param.EnableAccumulation = !dirtyView;
-        param.AccumulatedFrames  = m_AccumulatedFrames;
-        param.ExposureAdjustment = 1.0f;
-        param.LightCount         = 0;
-
-        param.Size.x = float(m_SceneDesc.Width);
-        param.Size.y = float(m_SceneDesc.Height);
-        param.Size.z = 1.0f / param.Size.x;
-        param.Size.w = 1.0f / param.Size.y;
+        param.View                  = view;
+        param.Proj                  = proj;
+        param.InvView               = asdx::Matrix::Invert(param.View);
+        param.InvProj               = asdx::Matrix::Invert(param.Proj);
+        param.InvViewProj           = param.InvProj * param.InvView;
+        param.PrevView              = m_PrevView;
+        param.PrevProj              = m_PrevProj;
+        param.PrevInvView           = m_PrevInvView;
+        param.PrevInvProj           = m_PrevInvProj;
+        param.PrevInvViewProj       = m_PrevInvViewProj;
+        param.MaxBounce             = 32;
+        param.MinBounce             = 3;
+        param.FrameIndex            = GetFrameCount();
+        param.SkyIntensity          = 1.0f;
+        param.EnableAccumulation    = enableAccumulation;
+        param.AccumulatedFrames     = m_AccumulatedFrames;
+        param.ExposureAdjustment    = 1.0f;
+        param.LightCount            = 0;
+        param.Size.x                = float(m_SceneDesc.Width);
+        param.Size.y                = float(m_SceneDesc.Height);
+        param.Size.z                = 1.0f / param.Size.x;
+        param.Size.w                = 1.0f / param.Size.y;
+        param.CameraDir             = m_CameraController.GetAxisZ();
+        param.MaxIteration          = 9;
 
         m_SceneParam.SwapBuffer();
         m_SceneParam.Update(&param, sizeof(param));
@@ -1152,17 +1516,124 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
     }
 
 #if 0
+    // Initial Sampling & Temporal reuse
     {
-        // Initial Sampling
+        auto stateObject    = m_InitialSampling.PSO          .GetStateObject();
+        auto rayGenTable    = m_InitialSampling.RayGenTable  .GetRecordView();
+        auto missTable      = m_InitialSampling.MissTable    .GetTableView();
+        auto hitGroupTable  = m_InitialSampling.HitGroupTable.GetTableView();
+        auto rootSignature  = m_InitialSampling.RootSig      .GetPtr();
 
+    #if (!CAMP_RELEASE)
+        if (m_ReloadShader)
+        {
+            stateObject     = m_DevInitialSampling.PSO          .GetStateObject();
+            rayGenTable     = m_DevInitialSampling.RayGenTable  .GetRecordView();
+            missTable       = m_DevInitialSampling.MissTable    .GetTableView();
+            hitGroupTable   = m_DevInitialSampling.HitGroupTable.GetTableView();
+            rootSignature   = m_DevInitialSampling.RootSig      .GetPtr();
+        }
+    #endif
 
-        // Temporal reuse
+        m_GfxCmdList.SetStateObject(stateObject);
+        m_GfxCmdList.SetRootSignature(rootSignature, true);
 
+        // 共通.
+        m_GfxCmdList.SetCBV(0, m_SceneParam.GetResource(), true);
+        m_GfxCmdList.SetSRV(1, m_TLAS.GetResource(), true);
+        m_GfxCmdList.SetSRV(2, m_ModelMgr.GetIB(), true);
+        m_GfxCmdList.SetSRV(3, m_ModelMgr.GetMB(), true);
+        m_GfxCmdList.SetSRV(4, m_ModelMgr.GetTB(), true);
 
-        // Spatial reuse
+        // 個別.
+        m_GfxCmdList.SetUAV(5, m_TemporalReservoirBuffer.GetUAV(), true);
+        //m_GfxCmdList.SetSRV(6, m_Scene.GetIBL(), true);
+        m_GfxCmdList.SetTable(6, m_IBL.GetView(), true);
 
+        D3D12_DISPATCH_RAYS_DESC desc = {};
+        desc.RayGenerationShaderRecord  = rayGenTable;
+        desc.MissShaderTable            = missTable;
+        desc.HitGroupTable              = hitGroupTable;
+        desc.Width                      = m_SceneDesc.Width;
+        desc.Height                     = m_SceneDesc.Height;
+        desc.Depth                      = 1;
+
+        m_GfxCmdList.DispatchRays(&desc);
+
+        // バリアを張っておく.
+        m_GfxCmdList.BarrierUAV(m_TemporalReservoirBuffer.GetResource());
     }
-#endif
+
+    // Spatial reuse
+    {
+        auto stateObject    = m_SpatialSampling.PSO          .GetStateObject();
+        auto rayGenTable    = m_SpatialSampling.RayGenTable  .GetRecordView();
+        auto missTable      = m_SpatialSampling.MissTable    .GetTableView();
+        auto hitGroupTable  = m_SpatialSampling.HitGroupTable.GetTableView();
+        auto rootSignature  = m_SpatialSampling.RootSig      .GetPtr();
+
+    #if (!CAMP_RELEASE)
+        if (m_ReloadShader)
+        {
+            stateObject     = m_DevSpatialSampling.PSO          .GetStateObject();
+            rayGenTable     = m_DevSpatialSampling.RayGenTable  .GetRecordView();
+            missTable       = m_DevSpatialSampling.MissTable    .GetTableView();
+            hitGroupTable   = m_DevSpatialSampling.HitGroupTable.GetTableView();
+            rootSignature   = m_DevSpatialSampling.RootSig      .GetPtr();
+        }
+    #endif
+
+        m_GfxCmdList.SetStateObject(stateObject);
+        m_GfxCmdList.SetRootSignature(rootSignature, true);
+
+        // 共通.
+        m_GfxCmdList.SetCBV(0, m_SceneParam.GetResource(), true);
+        m_GfxCmdList.SetSRV(1, m_TLAS.GetResource(), true);
+        m_GfxCmdList.SetSRV(2, m_ModelMgr.GetIB(), true);
+        m_GfxCmdList.SetSRV(3, m_ModelMgr.GetMB(), true);
+        m_GfxCmdList.SetSRV(4, m_ModelMgr.GetTB(), true);
+
+        // 個別.
+        m_GfxCmdList.SetUAV(5, m_SpatialReservoirBuffer.GetUAV(), true);
+        m_GfxCmdList.SetSRV(6, m_TemporalReservoirBuffer.GetSRV(), true);
+
+        D3D12_DISPATCH_RAYS_DESC desc = {};
+        desc.RayGenerationShaderRecord  = rayGenTable;
+        desc.MissShaderTable            = missTable;
+        desc.HitGroupTable              = hitGroupTable;
+        desc.Width                      = m_SceneDesc.Width;
+        desc.Height                     = m_SceneDesc.Height;
+        desc.Depth                      = 1;
+
+        m_GfxCmdList.DispatchRays(&desc);
+
+        // バリアを張っておく.
+        m_GfxCmdList.BarrierUAV(m_SpatialReservoirBuffer.GetResource());
+    }
+
+    // Shade Pixel.
+    {
+        auto pReservoirBuffer = m_SpatialReservoirBuffer.GetSRV();
+
+        ShadeParam param = {};
+        param.Width                 = m_SceneDesc.Width;
+        param.Height                = m_SceneDesc.Height;
+        param.EnableAccumulation    = enableAccumulation;
+        param.AccumulationFrame     = m_AccumulatedFrames;
+
+        uint32_t threadX = (m_SceneDesc.Width  + 7) / 8;
+        uint32_t threadY = (m_SceneDesc.Height + 7) / 8;
+
+        m_GfxCmdList.SetRootSignature(m_ShadePixelRootSig.GetPtr(), true);
+        m_GfxCmdList.SetPipelineState(m_ShadePixelPSO.GetPtr());
+        m_GfxCmdList.SetConstants(0, 4, &param, 0, true);
+        m_GfxCmdList.SetSRV(1, pReservoirBuffer, true);
+        m_GfxCmdList.SetTable(2, m_Canvas.GetUAV(), true);
+        m_GfxCmdList.Dispatch(threadX, threadY, 1);
+
+        m_GfxCmdList.BarrierUAV(m_Canvas.GetResource());
+    }
+#else
 
     // レイトレ実行.
     {
@@ -1205,6 +1676,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         // バリアを張っておく.
         m_GfxCmdList.BarrierUAV(m_Canvas.GetResource());
     }
+#endif
 
     // スワップチェインに描画.
     {
@@ -1219,6 +1691,54 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
             D3D12_RESOURCE_STATE_PRESENT,
             D3D12_RESOURCE_STATE_RENDER_TARGET);
 
+    #if !(CAMP_RELEASE)
+        if (m_BufferKind == BUFFER_KIND_CANVAS)
+        {
+            // トーンマップ実行.
+            m_GfxCmdList.SetTarget(m_ColorTarget[idx].GetRTV(), nullptr);
+            m_GfxCmdList.SetViewport(m_ColorTarget[idx].GetResource());
+            m_GfxCmdList.SetRootSignature(m_TonemapRootSig.GetPtr(), false);
+            m_GfxCmdList.SetPipelineState(m_TonemapPSO.GetPtr());
+            m_GfxCmdList.SetTable(0, m_Canvas.GetSRV());
+            m_GfxCmdList.SetCBV(1, m_SceneParam.GetResource());
+            asdx::Quad::Instance().Draw(m_GfxCmdList.GetCommandList());
+        }
+        else
+        {
+            const asdx::IShaderResourceView* pSRV = nullptr;
+            switch(m_BufferKind)
+            {
+            case BUFFER_KIND_SPATIAL:
+                pSRV = m_SpatialReservoirBuffer.GetSRV();
+                break;
+
+            case BUFFER_KIND_TEMPORAL:
+                pSRV = m_TemporalReservoirBuffer.GetSRV();
+                break;
+
+            case BUFFER_KIND_ALBEDO:
+                pSRV = m_AlbedoTarget.GetSRV();
+                break;
+
+            case BUFFER_KIND_NORMAL:
+                pSRV = m_NormalTarget.GetSRV();
+                break;
+
+            case BUFFER_KIND_VELOCITY:
+                pSRV = m_VelocityTarget.GetSRV();
+                break;
+            }
+
+            // デバッグ表示.
+            m_GfxCmdList.SetTarget(m_ColorTarget[idx].GetRTV(), nullptr);
+            m_GfxCmdList.SetViewport(m_ColorTarget[idx].GetResource());
+            m_GfxCmdList.SetRootSignature(m_DebugRootSig.GetPtr(), false);
+            m_GfxCmdList.SetPipelineState(m_DebugPSO.GetPtr());
+            m_GfxCmdList.SetTable(0, pSRV);
+            asdx::Quad::Instance().Draw(m_GfxCmdList.GetCommandList());
+        }
+
+    #else
         // トーンマップ実行.
         m_GfxCmdList.SetTarget(m_ColorTarget[idx].GetRTV(), nullptr);
         m_GfxCmdList.SetViewport(m_ColorTarget[idx].GetResource());
@@ -1227,6 +1747,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         m_GfxCmdList.SetTable(0, m_Canvas.GetSRV());
         m_GfxCmdList.SetCBV(1, m_SceneParam.GetResource());
         asdx::Quad::Instance().Draw(m_GfxCmdList.GetCommandList());
+    #endif
 
         // 2D描画.
         Draw2D();
@@ -1408,15 +1929,8 @@ void Renderer::Draw2D()
 
         if (ImGui::Begin(u8"デバッグ設定", &m_DebugSetting))
         {
-            auto albedo   = const_cast<asdx::IShaderResourceView*>(m_AlbedoTarget  .GetSRV());
-            auto normal   = const_cast<asdx::IShaderResourceView*>(m_NormalTarget  .GetSRV());
-            auto velocity = const_cast<asdx::IShaderResourceView*>(m_VelocityTarget.GetSRV());
-
-            ImVec2 texSize(320, 180);
-
-            ImGui::Image(static_cast<ImTextureID>(albedo)   , texSize);
-            ImGui::Image(static_cast<ImTextureID>(normal)   , texSize);
-            ImGui::Image(static_cast<ImTextureID>(velocity) , texSize);
+            int count = _countof(kBufferKindItems);
+            ImGui::Combo(u8"表示バッファ", &m_BufferKind, kBufferKindItems, count);
         }
         ImGui::End();
 
@@ -1427,6 +1941,33 @@ void Renderer::Draw2D()
 }
 
 #if (!CAMP_RELEASE)
+//-----------------------------------------------------------------------------
+//      シェーダをコンパイルします.
+//-----------------------------------------------------------------------------
+bool Renderer::CompileShader(const wchar_t* path, asdx::IBlob** ppBlob)
+{
+    std::wstring resolvePath;
+
+    if (!asdx::SearchFilePathW(path, resolvePath))
+    {
+        ELOGA("Error : File Not Found. path = %ls", path);
+        return false;
+    }
+
+    std::vector<std::wstring> includeDirs;
+    includeDirs.push_back(asdx::ToFullPathW(L"../external/asdx12/res/shaders"));
+    includeDirs.push_back(asdx::ToFullPathW(L"../res/shader"));
+
+    if (!asdx::CompileFromFile(resolvePath.c_str(), includeDirs, "", "lib_6_6", ppBlob))
+    {
+        ELOGA("Error : Compile Shader Failed. path = %ls", resolvePath.c_str());
+        m_ReloadShader = false;
+        return false;
+    }
+
+    return true;
+}
+
 //-----------------------------------------------------------------------------
 //      シェーダをリロードします.
 //-----------------------------------------------------------------------------
@@ -1443,28 +1984,15 @@ void Renderer::ReloadShader()
     m_DevMissTable      .Term();
     m_DevHitGroupTable  .Term();
 
+    m_DevInitialSampling.Reset();
+    m_DevSpatialSampling.Reset();
+
     asdx::RefPtr<asdx::IBlob> DevShader;
 
     // シェーダコンパイル.
+    if (!CompileShader(L"../res/shader/RtCamp.hlsl", DevShader.GetAddress()))
     {
-        std::wstring path;
-
-        if (!asdx::SearchFilePathW(L"../res/shader/RtCamp.hlsl", path))
-        {
-            ELOGA("Error : File Not Found.");
-            return;
-        }
-
-        std::vector<std::wstring> includeDirs;
-        includeDirs.push_back(asdx::ToFullPathW(L"../external/asdx12/res/shaders"));
-        includeDirs.push_back(asdx::ToFullPathW(L"../res/shader"));
-
-        if (!asdx::CompileFromFile(path.c_str(), includeDirs, "", "lib_6_6", DevShader.GetAddress()))
-        {
-            ELOGA("Error : Compile Shader Failed.");
-            m_ReloadShader = false;
-            return;
-        }
+        return;
     }
 
     // レイトレ用パイプラインステート生成.
@@ -1553,6 +2081,48 @@ void Renderer::ReloadShader()
         if (!m_DevHitGroupTable.Init(pDevice, &desc))
         {
             ELOGA("Error : HitGroupTable Init Failed.");
+            m_ReloadShader = false;
+            return;
+        }
+    }
+
+    // 初期サンプル & テンポラルリユース.
+    {
+        asdx::RefPtr<asdx::IBlob> binary;
+        if (!CompileShader(L"../res/shader/InitialSampling.hlsl", binary.GetAddress()))
+        {
+            m_ReloadShader = false;
+            return;
+        }
+
+        D3D12_SHADER_BYTECODE shader = {};
+        shader.BytecodeLength  = binary->GetBufferSize();
+        shader.pShaderBytecode = binary->GetBufferPointer();
+
+        if (!InitInitialSamplingPipeline(m_DevInitialSampling, shader))
+        {
+            ELOGA("Error : Init InitialSampling Pipeline Failed.");
+            m_ReloadShader = false;
+            return;
+        }
+    }
+
+    // スパシャルリユース.
+    {
+        asdx::RefPtr<asdx::IBlob> binary;
+        if (!CompileShader(L"../res/shader/SpatialResampling.hlsl", binary.GetAddress()))
+        {
+            m_ReloadShader = false;
+            return;
+        }
+
+        D3D12_SHADER_BYTECODE shader = {};
+        shader.BytecodeLength  = binary->GetBufferSize();
+        shader.pShaderBytecode = binary->GetBufferPointer();
+
+        if (!InitSpatialSamplingPipeline(m_DevSpatialSampling, shader))
+        {
+            ELOGA("Error : Init SpatialSampling Pipeline Failed.");
             m_ReloadShader = false;
             return;
         }

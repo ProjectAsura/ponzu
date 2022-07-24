@@ -14,9 +14,18 @@
 //-----------------------------------------------------------------------------
 // Resources
 //-----------------------------------------------------------------------------
-RWStructuredBuffer<Sample>  InitialSampleBuffer : register(u0);
-Texture2D<uint4>            VBuffer             : register(t4);
+RWStructuredBuffer<Reservoir>   TemporalReservoirBuffer : register(u0);
+Texture2D<float4>               BackGround              : register(t4);
 
+
+//-----------------------------------------------------------------------------
+//      IBLをサンプルします.
+//-----------------------------------------------------------------------------
+float3 SampleIBL(float3 dir)
+{
+    float2 uv = ToSphereMapCoord(dir);
+    return BackGround.SampleLevel(LinearWrap, uv, 0.0f).rgb * SceneParam.SkyIntensity;
+}
 
 //-----------------------------------------------------------------------------
 //      レイ生成シェーダです.
@@ -24,56 +33,41 @@ Texture2D<uint4>            VBuffer             : register(t4);
 [shader("raygeneration")]
 void OnGenerateRay()
 {
-    // バッファ番号を計算.
-    uint2 dispatchId = DispatchRaysIndex().xy;
-    uint  index = dispatchId.x + dispatchId.y * DispatchRaysDimensions().x;
+    // [Ouyang 2021] Y.Ouyang, Si.Liu, M.Kettunen, M.Pharr, J.Pataleoni,
+    // "ReSTIR GI: Path Resampling for Real-Time Path Tracing", HPG 2021.
+    // Algorithm 2 と Algorithm 3 を実行.
 
     // 乱数初期化.
     uint4 seed = SetSeed(DispatchRaysIndex().xy, SceneParam.FrameIndex);
 
-    uint4  visibleData   = VBuffer.Load(int3(dispatchId, 0));
-    uint   instanceId    = visibleData.x;
-    uint   triangleId    = visibleData.y;
-    float2 barycentrices = asfloat(visibleData.zw);
+    // バッファ番号を計算.
+    uint2 dispatchId = DispatchRaysIndex().xy;
+    uint  index = dispatchId.x + dispatchId.y * DispatchRaysDimensions().x;
 
-    float3 throughput = float3(1.0f, 1.0f, 1.0f);
+    float2 pixel = float2(DispatchRaysIndex().xy);
+    const float2 resolution = float2(DispatchRaysDimensions().xy);
 
-    // 可視点の頂点データ取得.
-    Vertex visiblePoint = GetVertex(instanceId, triangleId, barycentrices);
+    // アンリエイリアシング.
+    float2 offset = float2(Random(seed), Random(seed));
+    pixel += lerp(-0.5f.xx, 0.5f.xx, offset);
 
-    // マテリアル取得.
-    Material material = GetMaterial(instanceId, visiblePoint.TexCoord, 0.0f);
+    // テクスチャ座標算出.
+    float2 uv = (pixel + 0.5f) / resolution;
+    uv.y = 1.0f - uv.y;
 
-    float4 cameraPos = float4(0.0f,  0.0f, 0.0f, 1.0f);
-    cameraPos = mul(SceneParam.InvView, cameraPos);
-
-    // 視線ベクトル.
-    float3 V = normalize(visiblePoint.Position - cameraPos.xyz);
-
-    // 出射方向をBSDFに基づきランダムにサンプリング.
-    float3 u = float3(Random(seed), Random(seed), Random(seed));
-
-    float3 dir;
-    float  pdf_v;
-    float3 Lv = throughput * material.Emissive;
-
-    // NEE
-    {
-    }
-
-    throughput *= EvaluateMaterial(V, visiblePoint.Normal, u, material, dir, pdf_v);
-
-    // レイを設定.
-    RayDesc ray;
-    ray.Origin      = visiblePoint.Position.xyz;
-    ray.Direction   = dir;
-    ray.TMin        = 0.0f;
-    ray.TMax        = FLT_MAX;
+    // [-1, 1]のピクセル座標.
+    pixel = uv * 2.0f - 1.0f;
 
     // ペイロード初期化.
     Payload payload = (Payload)0;
 
-    // レイを追跡
+    // レイを設定.
+    RayDesc ray = GeneratePinholeCameraRay(pixel);
+
+    float3 Lo         = float3(0.0f, 0.0f, 0.0f);
+    float3 throughput = float3(1.0f, 1.0f, 1.0f);
+
+    // カメラからレイをトレース.
     TraceRay(
         SceneAS,
         RAY_FLAG_NONE,
@@ -84,43 +78,125 @@ void OnGenerateRay()
         ray,
         payload);
 
-    float3 Ls          = float3(0.0f, 0.0f, 0.0f);
-    float  pdf_s       = 1.0f;
-    Vertex samplePoint = (Vertex)0;
-
-    if (payload.HasHit())
+    if (!payload.HasHit())
     {
-        // 頂点データ取得.
-        samplePoint = GetVertex(payload.InstanceId, payload.PrimitiveId, payload.Barycentrics);
-
-        // マテリアル取得.
-        Material material = GetMaterial(payload.InstanceId, samplePoint.TexCoord, 0.0f);
-
-        Ls = throughput * material.Emissive;
-
-        // NEE
-        {
-        }
-
-        u = float3(Random(seed), Random(seed), Random(seed));
-
-        // 交差位置での出射放射輝度を推定.
-        throughput *= EvaluateMaterial(-ray.Direction, samplePoint.Normal, u, material, dir, pdf_s);
+        return;
     }
 
-    // 初期サンプルを設定.
-    Sample z;
-    z.P_v     = visiblePoint.Position;
-    z.N_v     = visiblePoint.Normal;
-    z.L_v     = Lv;
-    z.Pdf_v   = pdf_v;
-    z.P_s     = samplePoint.Position;
-    z.N_s     = samplePoint.Normal;
-    z.L_s     = Ls;
-    z.Pdf_s   = pdf_s;
-    z.Random  = u;
+    //-------------------------------
+    // 可視点を記録.
+    //-------------------------------
 
-    InitialSampleBuffer[index] = z;
+    // 頂点データ取得.
+    Vertex visibleVertex = GetVertex(payload.InstanceId, payload.PrimitiveId, payload.Barycentrics);
+
+    // マテリアル取得.
+    Material material = GetMaterial(payload.InstanceId, visibleVertex.TexCoord, 0.0f);
+
+    // 自己発光による放射輝度.
+    Lo += throughput * material.Emissive;
+
+    // Next Event Estimation.
+    {
+    }
+
+    float3 V = -ray.Direction;
+    float3 N = visibleVertex.GeometryNormal;
+    N = (dot(N, V) < 0.0f) ? N : -N;
+
+    float3 u = float3(Random(seed), Random(seed), Random(seed));
+    float3 dir;
+    float  pdf_v;
+
+    // マテリアルを評価.
+    float3 brdfWeight = EvaluateMaterial(V, N, u, material, dir, pdf_v);
+    brdfWeight /= pdf_v;
+
+    throughput *= brdfWeight;
+
+    // レイを更新.
+    ray.Origin    = OffsetRay(visibleVertex.Position, N);
+    ray.Direction = dir;
+
+    // 可視点からレイをトレース.
+    TraceRay(
+        SceneAS,
+        RAY_FLAG_NONE,
+        0xFF,
+        STANDARD_RAY_INDEX,
+        0,
+        STANDARD_RAY_INDEX,
+        ray,
+        payload);
+
+    if (!payload.HasHit())
+    {
+        return;
+    }
+
+    //-------------------------------
+    // サンプル点を記録.
+    //-------------------------------
+
+    // 頂点データ取得.
+    Vertex sampleVertex = GetVertex(payload.InstanceId, payload.PrimitiveId, payload.Barycentrics);
+
+    // マテリアル取得.
+    material = GetMaterial(payload.InstanceId, sampleVertex.TexCoord, 0.0f);
+
+    // 自己発光による放射輝度.
+    Lo += throughput * material.Emissive;
+
+    // Next Event Estimation.
+    {
+    }
+
+    V = -ray.Direction;
+    N = sampleVertex.GeometryNormal;
+    N = (dot(N, V) < 0.0f) ? N : -N;
+
+    u = float3(Random(seed), Random(seed), Random(seed));
+    float pdf_s;
+
+    // マテリアルを評価.
+    brdfWeight = EvaluateMaterial(V, N, u, material, dir, pdf_s);
+    brdfWeight /= pdf_s;
+
+    throughput *= brdfWeight;
+
+    //-------------------------------
+    // 初期サンプルを記録.
+    //-------------------------------
+    Sample S;
+
+    // Visible Point.
+    S.PointV.P          = visibleVertex.Position;
+    S.PointV.N          = visibleVertex.Normal;
+    S.PointV.BsdfPdf    = pdf_v;
+    S.PointV.LightPdf   = 1.0f;
+
+    // Sampling Point.
+    S.PointS.P          = sampleVertex.Position;
+    S.PointS.N          = sampleVertex.Normal;
+    S.PointS.BsdfPdf    = pdf_s;
+    S.PointS.LightPdf   = 1.0f;
+
+    // Other.
+    S.Lo         = Lo;
+    S.Wi         = dir;
+    S.FrameIndex = SceneParam.FrameIndex;
+    S.Flags      = RESERVOIR_FLAG_HIT;
+
+    //-------------------------------
+    // テンポラルリザーバー更新.
+    //-------------------------------
+    Reservoir R = TemporalReservoirBuffer[index];
+
+    float w = TargetPDF(S) / SourcePDF(S);  // Equation (5)
+    R.Update(S, w, Random(seed));
+    R.W = R.w_sum / (R.M * TargetPDF(R.z)); // Equation (7)
+
+    TemporalReservoirBuffer[index] = R;
 }
 
 //-----------------------------------------------------------------------------
@@ -140,3 +216,17 @@ void OnClosestHit(inout Payload payload, in HitArgs args)
 [shader("miss")]
 void OnMiss(inout Payload payload)
 { payload.InstanceId = INVALID_ID; }
+
+//-----------------------------------------------------------------------------
+//      シャドウレイヒット時のシェーダ.
+//-----------------------------------------------------------------------------
+[shader("closesthit")]
+void OnShadowClosestHit(inout ShadowPayload payload, in HitArgs args)
+{ payload.Visible = true; }
+
+//-----------------------------------------------------------------------------
+//      シャドウレイのミスシェーダです.
+//-----------------------------------------------------------------------------
+[shader("miss")]
+void OnShadowMiss(inout ShadowPayload payload)
+{ payload.Visible = false; }

@@ -9,6 +9,7 @@
 //-----------------------------------------------------------------------------
 #include <Common.hlsli>
 
+#define FURNANCE_TEST       (0)
 
 //-----------------------------------------------------------------------------
 // Resources
@@ -52,40 +53,10 @@ void OnGenerateRay()
     // レイを設定.
     RayDesc ray = GeneratePinholeCameraRay(pixel);
 
-#if 0
-    // レイを追跡
-    TraceRay(
-        SceneAS,
-        RAY_FLAG_NONE,
-        0xFF,
-        STANDARD_RAY_INDEX,
-        0,
-        STANDARD_RAY_INDEX,
-        ray,
-        payload);
-
-    float3 color = SampleIBL(ray.Direction);
-
-    if (payload.HasHit())
-    {
-        Vertex vertex = GetVertex(payload.InstanceId, payload.PrimitiveId, payload.Barycentrics);
-        Material material = GetMaterial(payload.InstanceId, vertex.TexCoord, 0.0f);
-        //float3 B = normalize(cross(vertex.Tangent, vertex.Normal));
-        //float3 N = FromTangentSpaceToWorld(material.Normal, vertex.Tangent, B, vertex.Normal);
-
-        //color = N * 0.5f + 0.5f;
-        color = material.BaseColor.rgb;
-    }
-
-    // レンダーターゲットに格納.
-    Canvas[DispatchRaysIndex().xy] = float4(color, 1.0f);
-    //Canvas[DispatchRaysIndex().xy] = SampleIBL(ray.Direction);
-#else
-
     float3 W = float3(1.0f, 1.0f, 1.0f);  // 重み.
     float3 L = float3(0.0f, 0.0f, 0.0f);  // 放射輝度.
 
-    for(int bounce=0; bounce<SceneParam.MaxBounce; ++bounce)
+    for(int bounce=0; /*bounce<SceneParam.MaxBounce*/; ++bounce)
     {
         // 交差判定.
         TraceRay(
@@ -100,39 +71,70 @@ void OnGenerateRay()
 
         if (!payload.HasHit())
         {
+        #if FURNANCE_TEST
+            L += W * float3(0.5f, 0.5f, 0.5f); // Furnance Test.
+        #else
             L += W * SampleIBL(ray.Direction);
+        #endif
             break;
         }
 
         // 頂点データ取得.
         Vertex vertex = GetVertex(payload.InstanceId, payload.PrimitiveId, payload.Barycentrics);
 
-        float3 geometryNormal = vertex.GeometryNormal;
-        float3 N = vertex.Normal;
-        float3 T = vertex.Tangent;
-        float3 V = -ray.Direction;
-        if (dot(geometryNormal, V) < 0.0f)
-        {
-            geometryNormal = -geometryNormal;
-        }
-        if (dot(geometryNormal, N) < 0.0f)
-        {
-            N = -N;
-            T = -T;
-        }
-
-        // 法線ベクトルを計算.
-        float3 B = normalize(cross(T, N));
-
         // マテリアル取得.
         Material material = GetMaterial(payload.InstanceId, vertex.TexCoord, 0.0f);
+
+        float3 B = normalize(cross(vertex.Tangent, vertex.Normal));
+        float3 N = FromTangentSpaceToWorld(material.Normal, vertex.Tangent, B, vertex.Normal);
+
+        float3 geometryNormal = vertex.GeometryNormal;
+        float3 V = -ray.Direction;
+        if (dot(geometryNormal, V) < 0.0f)
+        { geometryNormal = -geometryNormal; }
+
+        // 面の下に潜っている場合は反転.
+        if (dot(geometryNormal, N) < 0.0f)
+        { N = -N; }
 
         // 自己発光による放射輝度.
         L += W * material.Emissive;
 
-        // RIS
+#if 0
+        // Next Event Estimation.
         {
+            // BSDFがPerfect Specular以外の成分を持っている場合.
+            if (!IsPerfectSpecular(material))
+            {
+                //// 光源上の1点をランダムにサンプリング.
+                //float3 lightPos;    // 光源上の位置.
+                //float  lightPdf;    // 光源の確率密度関数.
+                ////SampleLight();
+
+                ////float3 L      = lightPos - vertex.Position;
+                ////float  distSq = dot(dir, dir);
+                ////float  dist   = sqrt(distSq);
+                ////L /= dist;
+
+                //// 光源上のサンプリング点に向かってシャドウレイを飛ばす.
+                //if (CastShadowRay(lightPos, geometryNormal, dir, len))
+                //{
+                //    // シャドウレイを飛ばして，光源上のサンプリングとレイ原点の間に遮蔽が無い場合
+
+                //    float cosShadow = abs(dot(N, L));
+                //    float cosLight  = abs(dot(lightN, -L));
+                //    float fs = material.BaseColor.rgb / F_PI;
+                //    float G  = (cosShadow * cosLight) / distSq;
+
+                //    float brdfPdf = abs(dir.z / F_PI) * cosLight / distSq;
+                //    float misWeight = lightPdf / (brdfPdf + lightPdf);
+                //  
+                //    // L += W * Light * BRDF * G / lightPDF.
+                //    L += (W * light.Intensity * fs * G / lightPdf) * misWeight;
+                //}
+            }
         }
+#endif
 
         // 最後のバウンスであれば早期終了(BRDFをサンプルしてもロジック的に反映されないため).
         if (bounce == SceneParam.MaxBounce - 1)
@@ -142,22 +144,20 @@ void OnGenerateRay()
         float3 u = float3(Random(seed), Random(seed), Random(seed));
         float3 dir;
         float  pdf;
-        float3 brdfWeight = EvaluateMaterial(V, N, u, material, dir, pdf);
+        float3 brdf = EvaluateMaterial(V, N, u, material, dir, pdf);
 
         // ロシアンルーレット.
         if (bounce > SceneParam.MinBounce)
         {
-            float p = min(0.95f, Luminance(brdfWeight));
+            float p = min(0.95f, Luminance(brdf));
             if (p > Random(seed))
             { break; }
-            else
-            { brdfWeight /= pdf; }
         }
 
-        W *= brdfWeight;
+        W *= brdf / pdf;
 
         // 重みがゼロに成ったら以降の更新は無駄なので打ち切りにする.
-        if (all(W < (1e-6f).xxx))
+        if (all(W <= (0.0f).xxx))
         { break; }
 
         // レイを更新.
@@ -171,7 +171,6 @@ void OnGenerateRay()
     float3 color = (SceneParam.EnableAccumulation) ? (prevL + L) : L;
 
     Canvas[launchId] = float4(color, 1.0f);
-#endif
 }
 
 //-----------------------------------------------------------------------------
@@ -197,7 +196,10 @@ void OnMiss(inout Payload payload)
 //-----------------------------------------------------------------------------
 [shader("closesthit")]
 void OnShadowClosestHit(inout ShadowPayload payload, in HitArgs args)
-{ payload.Visible = true; }
+{
+    payload.Visible      = true;
+    payload.Barycentrics = args.barycentrics;
+}
 
 //-----------------------------------------------------------------------------
 //      シャドウレイのミスシェーダです.

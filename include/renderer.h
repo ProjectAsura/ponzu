@@ -27,6 +27,10 @@
 #include <model_mgr.h>
 #include <scene.h>
 
+#if (!CAMP_RELEASE)
+#include <gfx/asdxShaderCompiler.h>
+#endif
+
 
 namespace r3d {
 
@@ -78,6 +82,27 @@ public:
         uint32_t                Height;
     };
 
+    ///////////////////////////////////////////////////////////////////////////
+    // RtPipeline structure
+    ///////////////////////////////////////////////////////////////////////////
+    struct RtPipeline
+    {
+        asdx::RootSignature             RootSig;
+        asdx::RayTracingPipelineState   PSO;
+        asdx::ShaderTable               RayGenTable;
+        asdx::ShaderTable               MissTable;
+        asdx::ShaderTable               HitGroupTable;
+
+        void Reset()
+        {
+            RootSig      .Term();
+            PSO          .Term();
+            RayGenTable  .Term();
+            MissTable    .Term();
+            HitGroupTable.Term();
+        }
+    };
+
     //=========================================================================
     // public variables.
     //=========================================================================
@@ -118,9 +143,11 @@ private:
     std::vector<MeshDrawCall>       m_MeshDrawCalls;
     Scene                           m_Scene;
 
-    asdx::ComputeTarget             m_InitialSampleBuffer;
     asdx::ComputeTarget             m_TemporalReservoirBuffer;
     asdx::ComputeTarget             m_SpatialReservoirBuffer;
+
+    RtPipeline                      m_InitialSampling;
+    RtPipeline                      m_SpatialSampling;
 
     uint8_t                         m_ReadBackIndex = 0;
     uint8_t                         m_MapIndex      = 0;
@@ -129,6 +156,9 @@ private:
     ExportData                      m_ExportData[3];
     uint32_t                        m_CaptureIndex  = 0;
     uint32_t                        m_AccumulatedFrames = 0;
+
+    asdx::RootSignature             m_ShadePixelRootSig;
+    asdx::PipelineState             m_ShadePixelPSO;
 
     asdx::Matrix        m_PrevView;
     asdx::Matrix        m_PrevProj;
@@ -151,6 +181,14 @@ private:
     asdx::ShaderTable               m_DevRayGenTable;
     asdx::ShaderTable               m_DevMissTable;
     asdx::ShaderTable               m_DevHitGroupTable;
+
+    RtPipeline                      m_DevInitialSampling;
+    RtPipeline                      m_DevSpatialSampling;
+
+    int                             m_BufferKind;
+
+    asdx::RootSignature             m_DebugRootSig;
+    asdx::PipelineState             m_DebugPSO;
 #endif
 
     //=========================================================================
@@ -169,9 +207,12 @@ private:
 
     bool SystemSetup();
     bool BuildScene();
+    bool InitInitialSamplingPipeline(RtPipeline& value, D3D12_SHADER_BYTECODE shader);
+    bool InitSpatialSamplingPipeline(RtPipeline& value, D3D12_SHADER_BYTECODE shader);
 
 #if (!CAMP_RELEASE)
     void ReloadShader();
+    bool CompileShader(const wchar_t* path, asdx::IBlob** ppBlob);
 #endif
 };
 
