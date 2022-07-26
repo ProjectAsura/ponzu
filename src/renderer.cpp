@@ -210,7 +210,7 @@ namespace r3d {
 //      コンストラクタです.
 //-----------------------------------------------------------------------------
 Renderer::Renderer(const SceneDesc& desc)
-: asdx::Application(L"r3d alpha 0.0", desc.Width, desc.Height, nullptr, nullptr, nullptr)
+: asdx::Application(L"r3d alpha 0.0", 1920, 1080, nullptr, nullptr, nullptr)
 , m_SceneDesc(desc)
 {
     m_SwapChainFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -220,7 +220,7 @@ Renderer::Renderer(const SceneDesc& desc)
     m_DeviceDesc.EnableBreakOnWarning = false;
     m_DeviceDesc.EnableDRED           = false;
     m_DeviceDesc.EnableDebug          = false;
-    m_DeivceDesc.EnableCapture        = false;
+    m_DeviceDesc.EnableCapture        = false;
 #else
     m_DeviceDesc.EnableCapture        = true;
     m_DeviceDesc.EnableBreakOnWarning = false;
@@ -399,6 +399,26 @@ bool Renderer::SystemSetup()
         if (!m_Canvas.Init(&desc))
         {
             ELOGA("Error : Canvas Init Failed.");
+            return false;
+        }
+    }
+
+    // 最終ターゲット.
+    {
+        asdx::TargetDesc desc;
+        desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        desc.Width              = m_SceneDesc.Width;
+        desc.Height             = m_SceneDesc.Height;
+        desc.DepthOrArraySize   = 1;
+        desc.Format             = DXGI_FORMAT_R8G8B8A8_UNORM;
+        desc.MipLevels          = 1;
+        desc.SampleDesc.Count   = 1;
+        desc.SampleDesc.Quality = 0;
+        desc.InitState          = D3D12_RESOURCE_STATE_RENDER_TARGET;
+
+        if (!m_FinalBuffer.Init(&desc, false))
+        {
+            ELOGA("Error : FinalBuffer Init Failed.");
             return false;
         }
     }
@@ -604,7 +624,7 @@ bool Renderer::SystemSetup()
         {
             ELOGA("Error : Init InitialSampling Pipeline Failed.");
             return false;
-        }   
+        }
     }
 
     // スパシャルリサンプリング用パイプライン.
@@ -1305,6 +1325,7 @@ void Renderer::OnTerm()
 
     m_SpatialReservoirBuffer .Term();
     m_TemporalReservoirBuffer.Term();
+    m_FinalBuffer            .Term();
 
     m_ShadePixelRootSig .Term();
     m_ShadePixelPSO     .Term();
@@ -1349,7 +1370,7 @@ void Renderer::OnTerm()
 //-----------------------------------------------------------------------------
 void Renderer::OnFrameMove(asdx::FrameEventArgs& args)
 {
-#if (CAMP_RELEASE)
+//#if (CAMP_RELEASE)
     // 制限時間を超えた
     if (args.Time >= m_SceneDesc.TimeSec)
     {
@@ -1373,8 +1394,11 @@ void Renderer::OnFrameMove(asdx::FrameEventArgs& args)
 
         // 画像に出力.
         _beginthreadex(nullptr, 0, Export, &m_ExportData[idx], 0, nullptr);
+
+        // トリプルバッファリング.
+        m_MapIndex = (m_MapIndex + 1) % 3;
     }
-#endif
+//#endif
 }
 
 //-----------------------------------------------------------------------------
@@ -1678,7 +1702,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
     }
 #endif
 
-    // スワップチェインに描画.
+    // トーンマップ実行.
     {
         asdx::ScopedBarrier barrier0(
             m_GfxCmdList,
@@ -1686,77 +1710,19 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
             D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
             D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
-        m_GfxCmdList.BarrierTransition(
-            m_ColorTarget[idx].GetResource(), 0,
-            D3D12_RESOURCE_STATE_PRESENT,
-            D3D12_RESOURCE_STATE_RENDER_TARGET);
-
-    #if !(CAMP_RELEASE)
-        if (m_BufferKind == BUFFER_KIND_CANVAS)
-        {
-            // トーンマップ実行.
-            m_GfxCmdList.SetTarget(m_ColorTarget[idx].GetRTV(), nullptr);
-            m_GfxCmdList.SetViewport(m_ColorTarget[idx].GetResource());
-            m_GfxCmdList.SetRootSignature(m_TonemapRootSig.GetPtr(), false);
-            m_GfxCmdList.SetPipelineState(m_TonemapPSO.GetPtr());
-            m_GfxCmdList.SetTable(0, m_Canvas.GetSRV());
-            m_GfxCmdList.SetCBV(1, m_SceneParam.GetResource());
-            asdx::Quad::Instance().Draw(m_GfxCmdList.GetCommandList());
-        }
-        else
-        {
-            const asdx::IShaderResourceView* pSRV = nullptr;
-            switch(m_BufferKind)
-            {
-            case BUFFER_KIND_SPATIAL:
-                pSRV = m_SpatialReservoirBuffer.GetSRV();
-                break;
-
-            case BUFFER_KIND_TEMPORAL:
-                pSRV = m_TemporalReservoirBuffer.GetSRV();
-                break;
-
-            case BUFFER_KIND_ALBEDO:
-                pSRV = m_AlbedoTarget.GetSRV();
-                break;
-
-            case BUFFER_KIND_NORMAL:
-                pSRV = m_NormalTarget.GetSRV();
-                break;
-
-            case BUFFER_KIND_VELOCITY:
-                pSRV = m_VelocityTarget.GetSRV();
-                break;
-            }
-
-            // デバッグ表示.
-            m_GfxCmdList.SetTarget(m_ColorTarget[idx].GetRTV(), nullptr);
-            m_GfxCmdList.SetViewport(m_ColorTarget[idx].GetResource());
-            m_GfxCmdList.SetRootSignature(m_DebugRootSig.GetPtr(), false);
-            m_GfxCmdList.SetPipelineState(m_DebugPSO.GetPtr());
-            m_GfxCmdList.SetTable(0, pSRV);
-            asdx::Quad::Instance().Draw(m_GfxCmdList.GetCommandList());
-        }
-
-    #else
-        // トーンマップ実行.
-        m_GfxCmdList.SetTarget(m_ColorTarget[idx].GetRTV(), nullptr);
-        m_GfxCmdList.SetViewport(m_ColorTarget[idx].GetResource());
+        m_GfxCmdList.SetTarget(m_FinalBuffer.GetRTV(), nullptr);
+        m_GfxCmdList.SetViewport(m_FinalBuffer.GetResource());
         m_GfxCmdList.SetRootSignature(m_TonemapRootSig.GetPtr(), false);
         m_GfxCmdList.SetPipelineState(m_TonemapPSO.GetPtr());
         m_GfxCmdList.SetTable(0, m_Canvas.GetSRV());
         m_GfxCmdList.SetCBV(1, m_SceneParam.GetResource());
         asdx::Quad::Instance().Draw(m_GfxCmdList.GetCommandList());
-    #endif
-
-        // 2D描画.
-        Draw2D();
     }
 
     // リードバック実行.
     {
         m_GfxCmdList.BarrierTransition(
-            m_ColorTarget[idx].GetResource(), 0,
+            m_FinalBuffer.GetResource(), 0,
             D3D12_RESOURCE_STATE_RENDER_TARGET,
             D3D12_RESOURCE_STATE_COPY_SOURCE);
 
@@ -1771,7 +1737,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
 
         D3D12_TEXTURE_COPY_LOCATION src = {};
         src.Type                = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-        src.pResource           = m_ColorTarget[idx].GetResource();
+        src.pResource           = m_FinalBuffer.GetResource();
         src.SubresourceIndex    = 0;
 
         D3D12_BOX box = {};
@@ -1782,13 +1748,74 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         box.front   = 0;
         box.back    = 1;
 
+        // 読み戻し用ターゲットにコピー.
         m_GfxCmdList.CopyTextureRegion(&dst, 0, 0, 0, &src, &box);
 
+        // トリプルバッファリング.
         m_ReadBackIndex = (m_ReadBackIndex + 1) % 3;
 
         m_GfxCmdList.BarrierTransition(
-            m_ColorTarget[idx].GetResource(), 0,
+            m_FinalBuffer.GetResource(), 0,
             D3D12_RESOURCE_STATE_COPY_SOURCE,
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    }
+
+    // スワップチェインに描画.
+    {
+        m_GfxCmdList.BarrierTransition(
+            m_ColorTarget[idx].GetResource(), 0,
+            D3D12_RESOURCE_STATE_PRESENT,
+            D3D12_RESOURCE_STATE_RENDER_TARGET);
+
+    #if !(CAMP_RELEASE)
+        const asdx::IShaderResourceView* pSRV = nullptr;
+        switch(m_BufferKind)
+        {
+        case BUFFER_KIND_CANVAS:
+            pSRV = m_FinalBuffer.GetSRV();
+            break;
+
+        case BUFFER_KIND_SPATIAL:
+            pSRV = m_SpatialReservoirBuffer.GetSRV();
+            break;
+
+        case BUFFER_KIND_TEMPORAL:
+            pSRV = m_TemporalReservoirBuffer.GetSRV();
+            break;
+
+        case BUFFER_KIND_ALBEDO:
+            pSRV = m_AlbedoTarget.GetSRV();
+            break;
+
+        case BUFFER_KIND_NORMAL:
+            pSRV = m_NormalTarget.GetSRV();
+            break;
+
+        case BUFFER_KIND_VELOCITY:
+            pSRV = m_VelocityTarget.GetSRV();
+            break;
+        }
+
+        // デバッグ表示.
+        m_GfxCmdList.SetTarget(m_ColorTarget[idx].GetRTV(), nullptr);
+        m_GfxCmdList.SetViewport(m_ColorTarget[idx].GetResource());
+        m_GfxCmdList.SetRootSignature(m_DebugRootSig.GetPtr(), false);
+        m_GfxCmdList.SetPipelineState(m_DebugPSO.GetPtr());
+        m_GfxCmdList.SetTable(0, pSRV);
+        asdx::Quad::Instance().Draw(m_GfxCmdList.GetCommandList());
+    #endif
+
+        // 2D描画.
+        Draw2D();
+
+        m_GfxCmdList.BarrierTransition(
+            m_FinalBuffer.GetResource(), 0,
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+            D3D12_RESOURCE_STATE_RENDER_TARGET);
+
+        m_GfxCmdList.BarrierTransition(
+            m_ColorTarget[idx].GetResource(), 0,
+            D3D12_RESOURCE_STATE_RENDER_TARGET,
             D3D12_RESOURCE_STATE_PRESENT);
     }
 

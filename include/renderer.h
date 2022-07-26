@@ -145,6 +145,7 @@ private:
 
     asdx::ComputeTarget             m_TemporalReservoirBuffer;
     asdx::ComputeTarget             m_SpatialReservoirBuffer;
+    asdx::ColorTarget               m_FinalBuffer;
 
     RtPipeline                      m_InitialSampling;
     RtPipeline                      m_SpatialSampling;
