@@ -1370,7 +1370,7 @@ void Renderer::OnTerm()
 //-----------------------------------------------------------------------------
 void Renderer::OnFrameMove(asdx::FrameEventArgs& args)
 {
-//#if (CAMP_RELEASE)
+#if (CAMP_RELEASE)
     // 制限時間を超えた
     if (args.Time >= m_SceneDesc.TimeSec)
     {
@@ -1398,7 +1398,7 @@ void Renderer::OnFrameMove(asdx::FrameEventArgs& args)
         // トリプルバッファリング.
         m_MapIndex = (m_MapIndex + 1) % 3;
     }
-//#endif
+#endif
 }
 
 //-----------------------------------------------------------------------------
@@ -1416,12 +1416,11 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
     // 定数バッファ更新.
     {
         auto fovY   = asdx::ToRadian(37.5f);
-        auto aspect = float(m_SceneDesc.Width) / float(m_SceneDesc.Height);
 
         auto view = m_CameraController.GetView();
         auto proj = asdx::Matrix::CreatePerspectiveFieldOfView(
             fovY,
-            aspect,
+            m_AspectRatio,
             m_CameraController.GetNearClip(),
             m_CameraController.GetFarClip());
 
