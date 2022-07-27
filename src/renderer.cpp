@@ -416,7 +416,7 @@ bool Renderer::SystemSetup()
         desc.SampleDesc.Quality = 0;
         desc.InitState          = D3D12_RESOURCE_STATE_RENDER_TARGET;
 
-        if (!m_FinalBuffer.Init(&desc, false))
+        if (!m_FinalBuffer.Init(&desc))
         {
             ELOGA("Error : FinalBuffer Init Failed.");
             return false;
@@ -673,7 +673,7 @@ bool Renderer::SystemSetup()
         desc.Height             = m_SceneDesc.Height;
         desc.DepthOrArraySize   = 1;
         desc.MipLevels          = 1;
-        desc.Format             = DXGI_FORMAT_R8G8B8A8_UNORM;
+        desc.Format             = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
         desc.SampleDesc.Count   = 1;
         desc.SampleDesc.Quality = 0;
         desc.InitState          = D3D12_RESOURCE_STATE_COMMON;
@@ -682,7 +682,7 @@ bool Renderer::SystemSetup()
         desc.ClearColor[2]      = 0.0f;
         desc.ClearColor[3]      = 1.0f;
 
-        if (!m_AlbedoTarget.Init(&desc, true))
+        if (!m_AlbedoTarget.Init(&desc))
         {
             ELOGA("Error : DebugColorTarget Init Failed.");
             return false;
@@ -711,7 +711,7 @@ bool Renderer::SystemSetup()
         desc.ClearColor[2]      = 1.0f;
         desc.ClearColor[3]      = 1.0f;
 
-        if (!m_NormalTarget.Init(&desc, false))
+        if (!m_NormalTarget.Init(&desc))
         {
             ELOGA("Error : NormalTarget Init Failed.");
             return false;
@@ -762,7 +762,7 @@ bool Renderer::SystemSetup()
         desc.ClearColor[2]      = 0.0f;
         desc.ClearColor[3]      = 0.0f;
 
-        if (!m_VelocityTarget.Init(&desc, false))
+        if (!m_VelocityTarget.Init(&desc))
         {
             ELOGA("Error : NormalTarget Init Failed.");
             return false;
