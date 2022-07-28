@@ -30,6 +30,7 @@
     <ClCompile Include="..\src\model_mgr.cpp" />
     <ClCompile Include="..\src\OBJLoader.cpp" />
     <ClCompile Include="..\src\renderer.cpp" />
+    <ClCompile Include="..\src\sampling.cpp" />
     <ClCompile Include="..\src\scene.cpp" />
     <ClCompile Include="..\src\SMDLoader.cpp" />
   </ItemGroup>
@@ -38,6 +39,7 @@
     <ClInclude Include="..\include\model_mgr.h" />
     <ClInclude Include="..\include\OBJLoader.h" />
     <ClInclude Include="..\include\renderer.h" />
+    <ClInclude Include="..\include\sampling.h" />
     <ClInclude Include="..\include\scene.h" />
     <ClInclude Include="..\include\SMDLoader.h" />
   </ItemGroup>
