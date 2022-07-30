@@ -1453,6 +1453,9 @@ void Renderer::OnFrameMove(asdx::FrameEventArgs& args)
 #endif
 }
 
+//-----------------------------------------------------------------------------
+//      アニメーション用の変更処理です.
+//-----------------------------------------------------------------------------
 void Renderer::ChangeFrame(uint32_t index)
 {
 #if (CAMP_RELEASE)

@@ -28,11 +28,6 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\external\asdx12\project\asdx12.vcxproj">
-      <Project>{ecd906d6-5deb-4b5b-b919-05c147194c1d}</Project>
-    </ProjectReference>
-  </ItemGroup>
-  <ItemGroup>
     <ClCompile Include="..\external\fpng\fpng.cpp" />
     <ClCompile Include="..\src\main.cpp" />
     <ClCompile Include="..\src\model_mgr.cpp" />
@@ -142,6 +137,11 @@
     <None Include="..\res\shader\Reservoir.hlsli" />
     <None Include="..\res\shader\SceneParam.hlsli" />
     <None Include="packages.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\external\asdx12\project\asdx12.vcxproj">
+      <Project>{ecd906d6-5deb-4b5b-b919-05c147194c1d}</Project>
+    </ProjectReference>
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
