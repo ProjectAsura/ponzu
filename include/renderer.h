@@ -6,7 +6,9 @@
 #pragma once
 
 // レイトレ合宿提出モード 
+#ifndef CAMP_RELEASE
 #define CAMP_RELEASE        (0)     // 1なら提出モード.
+#endif
 
 #if (CAMP_RELEASE == 0)
 #define ASDX_ENABLE_IMGUI   (1)
@@ -130,7 +132,6 @@ private:
     ModelMgr                        m_ModelMgr;
     asdx::Texture                   m_IBL;
     asdx::ConstantBuffer            m_SceneParam;
-    asdx::CameraController          m_CameraController;
     asdx::ShaderTable               m_RayGenTable;
     asdx::ShaderTable               m_MissTable;
     asdx::ShaderTable               m_HitGroupTable;
@@ -142,6 +143,7 @@ private:
     asdx::PipelineState             m_ModelPSO;
     std::vector<MeshDrawCall>       m_MeshDrawCalls;
     Scene                           m_Scene;
+    asdx::Camera                    m_Camera;
 
     asdx::ComputeTarget             m_TemporalReservoirBuffer;
     asdx::ComputeTarget             m_SpatialReservoirBuffer;
@@ -158,8 +160,17 @@ private:
     uint32_t                        m_CaptureIndex  = 0;
     uint32_t                        m_AccumulatedFrames = 0;
 
+    double                          m_AnimationOneFrameTime = 0;
+    double                          m_AnimationElapsedTime = 0;
+
     asdx::RootSignature             m_ShadePixelRootSig;
     asdx::PipelineState             m_ShadePixelPSO;
+
+    asdx::Matrix        m_CurrView;
+    asdx::Matrix        m_CurrProj;
+    asdx::Matrix        m_CurrInvView;
+    asdx::Matrix        m_CurrInvProj;
+    asdx::Vector3       m_CameraZAxis;
 
     asdx::Matrix        m_PrevView;
     asdx::Matrix        m_PrevProj;
@@ -170,6 +181,9 @@ private:
     asdx::Texture       m_DefaultBaseColor;
     asdx::Texture       m_DefaultNormal;
     asdx::Texture       m_DefaultORM;
+
+    asdx::RootSignature             m_CopyRootSig;
+    asdx::PipelineState             m_CopyPSO;
 
 #if (!CAMP_RELEASE)
     //+++++++++++++++++++
@@ -187,9 +201,7 @@ private:
     RtPipeline                      m_DevSpatialSampling;
 
     int                             m_BufferKind;
-
-    asdx::RootSignature             m_DebugRootSig;
-    asdx::PipelineState             m_DebugPSO;
+    asdx::CameraController          m_CameraController;
 #endif
 
     //=========================================================================
@@ -210,6 +222,8 @@ private:
     bool BuildScene();
     bool InitInitialSamplingPipeline(RtPipeline& value, D3D12_SHADER_BYTECODE shader);
     bool InitSpatialSamplingPipeline(RtPipeline& value, D3D12_SHADER_BYTECODE shader);
+
+    void ChangeFrame(uint32_t index);
 
 #if (!CAMP_RELEASE)
     void ReloadShader();

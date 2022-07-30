@@ -17,7 +17,7 @@
 #define INVALID_ID          (-1)
 #define STANDARD_RAY_INDEX  (0)
 #define SHADOW_RAY_INDEX    (1)
-#define USE_GGX             (0)
+#define USE_GGX             (1)
 
 //-----------------------------------------------------------------------------
 // Type Definitions
@@ -659,20 +659,20 @@ float3 EvaluateMaterial
 
         float NdotL = abs(dot(N, L));
         float NdotH = abs(dot(N, H));
-        float LdotH = abs(dot(L, H));
+        float VdotH = abs(dot(V, H));
         float NdotV = abs(dot(N, V));
 
-        float D = ggxNormalDistribution(NdotH, a);
-        float G = schlickMaskingTerm(NdotL, NdotV, a);
-        float3 F = F_Schlick(specularColor, LdotH);
-        float3 ggxTerm = D * G * F / (4 * NdotL * NdotV);
-        float  ggxProb = D * NdotH / (4 * LdotH);
+        float  D = D_GGX(NdotH, a);
+        float  G = G_SmithGGX(NdotL, NdotV, a);
+        float3 F = F_Schlick(specularColor, VdotH);
+        float3 ggxTerm = D * F * G / (4 * NdotV); // (D * G * F / (4 * NdotL * NdotV)) * NdotL ---> Cancel out NdotL.
+        float  ggxProb = D * NdotH / (4 * VdotH);
 
         dir = L;
         pdf = ggxProb;
         pdf *= (1.0f - p);
 
-        return ggxTerm * NdotL;
+        return ggxTerm;
 #else
         // Phong. 
         float3 R = normalize(reflect(-V, N));
@@ -695,6 +695,69 @@ float3 EvaluateMaterial
         return specularColor * phongTerm;
 #endif
     }
+}
+
+float Load(Texture2D T, int x, int y, int mip)
+{
+    float3 color = T.Load(int3(x, y, mip)).rgb;
+    return Luminance(color);
+}
+
+float2 SampleMipMap(Texture2D T, float2 u, out float pdf)
+{
+    uint width, height, mipLevels;
+    T.GetDimensions(0, width, height, mipLevels);
+
+    // [Shirley 2019], Peter Shirley, Samuli Laine, Dvaid Hart, Matt Pharr,
+    // Petrik Clarberg, Eric Haines, Matthias Raab, David Cline,
+    // "Sampling Transformations Zoo", Ray Tracing Gems Ⅰ, pp.223-246, 2019.
+
+    // Iterate over mipmaps of size 2x2 ... NxN.
+    // Load(x, y, mip) loads a texel (mip 0 is the largest power of two).
+    int x = 0;
+    int y = 0;
+    for (int mip=(int)mipLevels - 1; mip >=0; --mip)
+    {
+        x <<= 1;
+        y <<= 1;
+        float lhs = Load(T, x+0, y+0, mip) + Load(T, x+0, y+1, mip);
+        float rhs = Load(T, x+1, y+0, mip) + Load(T, x+1, y+1, mip);
+        float probLhs = lhs / (lhs + rhs);
+        if (u.x < probLhs)
+        {
+            u.x /= probLhs;
+            float probLower = Load(T, x, y, mip) / lhs;
+            if (u.y < probLower)
+            {
+                u.y /= probLower;
+            }
+            else
+            {
+                y++;
+                u.y = (u.y - probLower) / (1.0f - probLower);
+            }
+        }
+        else
+        {
+            x++;
+            u.x = (u.x - probLhs) / (1.0f - probLhs);
+            float probLower = Load(T, x, y, mip) / rhs;
+            if (u.y < probLower)
+            {
+                u.y /= probLower;
+            }
+            else
+            {
+                y++;
+                u.y = (u.y - probLower) / (1.0f - probLower);
+            }
+        }
+    }
+
+    // We have found a texel (x, y) with probability  proportional to 
+    // its normalized value. Compute the PDF and return the coordinates.
+    pdf = Load(T, x, y, 0) / Load(T, 0, 0, mipLevels);
+    return float2((float)x / (float)width, (float)y / (float)height);
 }
 
 #endif//COMMON_HLSLI

@@ -11,6 +11,8 @@
 #include <fnd/asdxMisc.h>
 #include <fnd/asdxLogger.h>
 #include <fstream>
+#include <algorithm>
+#include <tuple>
 
 //-----------------------------------------------------------------------------
 // Constant Values.
@@ -416,42 +418,88 @@ bool OBJLoader::LoadOBJ(const char* path, ModelOBJ& model)
 
     stream.close();
 
-    model.Meshes.resize(subsets.size());
+    //model.Meshes.resize(subsets.size());
+    std::sort(subsets.begin(), subsets.end(),
+        [](const SubsetOBJ& lhs, const SubsetOBJ& rhs)
+        {
+            return std::tie(lhs.MaterialName, lhs.IndexStart) < std::tie(rhs.MaterialName, rhs.IndexStart);
+        });
+
+    std::string matName;
+    uint32_t vertIndex  = 0;
+    uint32_t meshId = 0;
+
+    MeshOBJ dstMesh;
 
     for(size_t i=0; i<subsets.size(); ++i)
     {
         auto& subset = subsets[i];
-        auto& mesh = model.Meshes[i];
 
-        mesh.Name         = subset.MeshName;
-        mesh.MaterialName = subset.MaterialName;
+        if (matName != subset.MaterialName)
+        {
+            if (!matName.empty())
+            {
+                if (!normals.empty())
+                { CalcNormals(dstMesh); }
 
-        mesh.Vertices.resize(subset.IndexCount);
-        mesh.Indices .resize(subset.IndexCount);
+                if (!texcoords.empty())
+                { CalcTangents(dstMesh); }
+                else
+                { CalcTangentRoughly(dstMesh); }
+
+                dstMesh.Vertices.shrink_to_fit();
+                dstMesh.Indices .shrink_to_fit();
+
+                model.Meshes.emplace_back(dstMesh);
+            }
+
+            dstMesh.Name         = "mesh";
+            dstMesh.Name         += std::to_string(meshId);
+            dstMesh.MaterialName = subset.MaterialName;
+
+            vertIndex = 0;
+            meshId++;
+            matName = subset.MaterialName;
+        }
 
         for(size_t j=0; j<subset.IndexCount; ++j)
         {
             auto id = subset.IndexStart + j;
             auto& index = indices[id];
 
-            mesh.Vertices[j].Position = positions[index.P];
-            mesh.Indices[j] = uint32_t(j);
+            VertexOBJ vertex = {};
+            vertex.Position = positions[index.P];
 
             if (!normals.empty())
-            { mesh.Vertices[j].Normal = normals[index.N]; }
+            { vertex.Normal = normals[index.N]; }
 
             if (!texcoords.empty())
-            { mesh.Vertices[j].TexCoord = texcoords[index.T]; }
-        }
+            { vertex.TexCoord = texcoords[index.T]; }
 
+            dstMesh.Vertices.push_back(vertex);
+            dstMesh.Indices.push_back(vertIndex);
+
+            vertIndex++;
+        }
+    }
+
+    if (!matName.empty())
+    {
         if (!normals.empty())
-        { CalcNormals(mesh); }
+        { CalcNormals(dstMesh); }
 
         if (!texcoords.empty())
-        { CalcTangents(mesh); }
+        { CalcTangents(dstMesh); }
         else
-        { CalcTangentRoughly(mesh); }
+        { CalcTangentRoughly(dstMesh); }
+
+        dstMesh.Vertices.shrink_to_fit();
+        dstMesh.Indices .shrink_to_fit();
+
+        model.Meshes.emplace_back(dstMesh);
     }
+
+    model.Meshes.shrink_to_fit();
 
     positions.clear();
     normals  .clear();

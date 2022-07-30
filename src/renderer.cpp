@@ -35,6 +35,7 @@ namespace {
 #include "../res/shader/Compile/InitialSampling.inc"
 #include "../res/shader/Compile/SpatialResampling.inc"
 #include "../res/shader/Compile/ShadePixel.inc"
+#include "../res/shader/Compile/CopyPS.inc"
 
 static const D3D12_INPUT_ELEMENT_DESC kModelElements[] = {
     { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
@@ -46,8 +47,6 @@ static const D3D12_INPUT_ELEMENT_DESC kModelElements[] = {
 static_assert(sizeof(r3d::Vertex) == sizeof(VertexOBJ), "Vertex size not matched!");
 
 #if !(CAMP_RELEASE)
-#include "../res/shader/Compile/DebugPS.inc"
-
 enum BUFFER_KIND
 {
     BUFFER_KIND_CANVAS  = 0,
@@ -247,6 +246,20 @@ bool Renderer::OnInit()
     // シーンを構築.
     if (!BuildScene())
     { return false; }
+
+    // 1フレームあたりの時間を算出.
+    {
+        auto setupTime  = m_Timer.GetRelativeSec();
+        auto renderTime = m_SceneDesc.TimeSec - setupTime;
+        m_AnimationOneFrameTime = renderTime / (60.0 * 10); // 60FPS * 10秒.
+        printf_s("One Frame Time : %lf[sec]\n", m_AnimationOneFrameTime);
+
+        m_AnimationElapsedTime = 0.0f;
+        m_ReadBackIndex = 2;
+        m_MapIndex      = 0;
+
+        ChangeFrame(0);
+    }
  
     // 正常終了.
     return true;
@@ -570,14 +583,6 @@ bool Renderer::SystemSetup()
         }
     }
 
-    // カメラ初期化.
-    {
-        auto pos    = asdx::Vector3(0.0f, 0.0f, 5.0f);
-        auto target = asdx::Vector3(0.0f, 0.0f, 0.0f);
-        auto upward = asdx::Vector3(0.0f, 1.0f, 0.0f);
-        m_CameraController.Init(pos, target, upward, 0.01f, 10000.0f);
-    }
-
     // 定数バッファ初期化.
     {
         auto size = asdx::RoundUp(sizeof(SceneParam), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
@@ -824,7 +829,6 @@ bool Renderer::SystemSetup()
         }
     }
 
-#if !(CAMP_RELEASE)
     // デバッグ用ルートシグニチャ生成.
     {
         asdx::DescriptorSetLayout<1, 1> layout;
@@ -832,7 +836,7 @@ bool Renderer::SystemSetup()
         layout.SetStaticSampler(0, asdx::SV_PS, asdx::STATIC_SAMPLER_LINEAR_CLAMP, 0);
         layout.SetFlags(D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
-        if (!m_DebugRootSig.Init(pDevice, layout.GetDesc()))
+        if (!m_CopyRootSig.Init(pDevice, layout.GetDesc()))
         {
             ELOGA("Error : Debug RootSignature Failed.");
             return false;
@@ -842,9 +846,9 @@ bool Renderer::SystemSetup()
     // デバッグ用パイプラインステート生成.
     {
         D3D12_GRAPHICS_PIPELINE_STATE_DESC desc = {};
-        desc.pRootSignature         = m_DebugRootSig.GetPtr();
+        desc.pRootSignature         = m_CopyRootSig.GetPtr();
         desc.VS                     = { TonemapVS, sizeof(TonemapVS) };
-        desc.PS                     = { DebugPS, sizeof(DebugPS) };
+        desc.PS                     = { CopyPS, sizeof(CopyPS) };
         desc.BlendState             = asdx::BLEND_DESC(asdx::BLEND_STATE_OPAQUE);
         desc.DepthStencilState      = asdx::DEPTH_STENCIL_DESC(asdx::DEPTH_STATE_NONE);
         desc.RasterizerState        = asdx::RASTERIZER_DESC(asdx::RASTERIZER_STATE_CULL_NONE);
@@ -857,13 +861,21 @@ bool Renderer::SystemSetup()
         desc.SampleDesc.Count       = 1;
         desc.SampleDesc.Quality     = 0;
 
-        if (!m_DebugPSO.Init(pDevice, &desc))
+        if (!m_CopyPSO.Init(pDevice, &desc))
         {
             ELOGA("Error : Debug PipelineState Failed.");
             return false;
         }
     }
-#endif
+
+#if !(CAMP_RELEASE)
+    // カメラ初期化.
+    {
+        auto pos    = asdx::Vector3(0.0f, 0.0f, 2.5f);
+        auto target = asdx::Vector3(0.0f, 0.0f, 0.0f);
+        auto upward = asdx::Vector3(0.0f, 1.0f, 0.0f);
+        m_CameraController.Init(pos, target, upward, 0.01f, 10000.0f);
+    }
 
     // 初回フレーム計算用に設定しておく.
     {
@@ -883,9 +895,38 @@ bool Renderer::SystemSetup()
         m_PrevInvProj       = asdx::Matrix::Invert(proj);
         m_PrevInvViewProj   = m_PrevInvProj * m_PrevInvView;
     }
+#else
+    // カメラ初期化.
+    {
+        m_Camera.SetPosition(asdx::Vector3(0.0f, 0.0f, 2.5f));
+        m_Camera.SetTarget(asdx::Vector3(0.0f, 0.0f, 0.0f));
+        m_Camera.SetUpward(asdx::Vector3(0.0f, 1.0f, 0.0f));
+        m_Camera.Update();
+    }
+
+    // 初回フレーム計算用に設定しておく.
+    {
+        auto fovY   = asdx::ToRadian(37.5f);
+        auto aspect = float(m_SceneDesc.Width) / float(m_SceneDesc.Height);
+
+        auto view = m_Camera.GetView();
+        auto proj = asdx::Matrix::CreatePerspectiveFieldOfView(
+            fovY,
+            aspect,
+            0.01f,
+            1000.0f);
+
+        m_PrevView          = view;
+        m_PrevProj          = proj;
+        m_PrevInvView       = asdx::Matrix::Invert(view);
+        m_PrevInvProj       = asdx::Matrix::Invert(proj);
+        m_PrevInvViewProj   = m_PrevInvProj * m_PrevInvView;
+    }
+#endif
 
     timer.End();
     printf_s("done! --- %lf[msec]\n", timer.GetElapsedMsec());
+
     return true;
 }
 
@@ -1161,7 +1202,14 @@ bool Renderer::BuildScene()
     {
         ModelOBJ model;
         OBJLoader loader;
-        if (!loader.Load("../res/model/dragon.obj", model))
+        std::string path;
+        if (!asdx::SearchFilePathA("../res/model/dragon.obj", path))
+        {
+            ELOGA("Error : File Path Not Found. path = ../res/model/dragon.obj");
+            return false;
+        }
+
+        if (!loader.Load(path.c_str(), model))
         {
             ELOGA("Error : Model Load Failed.");
             return false;
@@ -1319,8 +1367,6 @@ void Renderer::OnTerm()
     m_DevRayGenTable    .Term();
     m_DevMissTable      .Term();
     m_DevHitGroupTable  .Term();
-    m_DebugRootSig      .Term();
-    m_DebugPSO          .Term();
 #endif
 
     m_SpatialReservoirBuffer .Term();
@@ -1333,6 +1379,8 @@ void Renderer::OnTerm()
     m_TonemapRootSig    .Term();
     m_RayTracingPSO     .Term();
     m_RayTracingRootSig .Term();
+    m_CopyRootSig       .Term();
+    m_CopyPSO           .Term();
 
     for(size_t i=0; i<m_BLAS.size(); ++i)
     { m_BLAS[i].Term(); }
@@ -1379,7 +1427,8 @@ void Renderer::OnFrameMove(asdx::FrameEventArgs& args)
     }
 
     // CPUで読み取り.
-    if (GetFrameCount() > 2)
+    m_AnimationElapsedTime += args.ElapsedTime;
+    if (m_AnimationElapsedTime >= m_AnimationOneFrameTime)
     {
         uint8_t* ptr = nullptr;
         auto idx = m_MapIndex;
@@ -1390,15 +1439,48 @@ void Renderer::OnFrameMove(asdx::FrameEventArgs& args)
             m_ExportData[idx].FrameIndex = m_CaptureIndex;
         }
         m_ReadBackTexture[idx]->Unmap(0, nullptr);
-        m_CaptureIndex++;
 
         // 画像に出力.
         _beginthreadex(nullptr, 0, Export, &m_ExportData[idx], 0, nullptr);
 
-        // トリプルバッファリング.
-        m_MapIndex = (m_MapIndex + 1) % 3;
+        m_CaptureIndex++;
+        m_AnimationElapsedTime = 0.0;
+
+        ChangeFrame(m_CaptureIndex);
     }
+#else
+    ChangeFrame(GetFrameCount());
 #endif
+}
+
+void Renderer::ChangeFrame(uint32_t index)
+{
+#if (CAMP_RELEASE)
+    asdx::CameraEvent camEvent = {};
+    camEvent.Flags |= asdx::CameraEvent::EVENT_ROTATE;
+    camEvent.Rotate.x += 2.0f * asdx::F_PI / 600.0f; 
+
+    m_Camera.UpdateByEvent(camEvent);
+
+    m_CurrView = m_Camera.GetView();
+    m_CurrProj = asdx::Matrix::CreatePerspectiveFieldOfView(
+        asdx::ToRadian(37.5f),
+        float(m_SceneDesc.Width) / float(m_SceneDesc.Height),
+        0.01f,
+        1000.0f);
+    m_CameraZAxis = m_Camera.GetAxisZ();
+#else
+    m_CurrView = m_CameraController.GetView();
+    m_CurrProj = asdx::Matrix::CreatePerspectiveFiledOfView(
+        asdx::ToRadian(37.5f),
+        float(m_SceneDesc.Width) / float(m_SceneDesc.Height),
+        m_CameraController.GetNearClip(),
+        m_CameraController.GetFarClip());
+    m_CameraZAxis = m_CameraController.GetAxisZ();
+#endif
+
+    m_CurrInvView = asdx::Matrix::Invert(m_CurrView);
+    m_CurrInvProj = asdx::Matrix::Invert(m_CurrProj);
 }
 
 //-----------------------------------------------------------------------------
@@ -1415,16 +1497,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
 
     // 定数バッファ更新.
     {
-        auto fovY   = asdx::ToRadian(37.5f);
-
-        auto view = m_CameraController.GetView();
-        auto proj = asdx::Matrix::CreatePerspectiveFieldOfView(
-            fovY,
-            m_AspectRatio,
-            m_CameraController.GetNearClip(),
-            m_CameraController.GetFarClip());
-
-        auto changed = memcmp(&view, &m_PrevView, sizeof(asdx::Matrix)) != 0;
+        auto changed = memcmp(&m_CurrView, &m_PrevView, sizeof(asdx::Matrix)) != 0;
     #if !(CAMP_RELEASE)
         if (m_RequestReload)
         { changed = true; }
@@ -1440,17 +1513,17 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         m_AccumulatedFrames++;
 
         SceneParam param = {};
-        param.View                  = view;
-        param.Proj                  = proj;
-        param.InvView               = asdx::Matrix::Invert(param.View);
-        param.InvProj               = asdx::Matrix::Invert(param.Proj);
-        param.InvViewProj           = param.InvProj * param.InvView;
+        param.View                  = m_CurrView;
+        param.Proj                  = m_CurrProj;
+        param.InvView               = m_CurrInvView;
+        param.InvProj               = m_CurrInvProj;
+        param.InvViewProj           = m_CurrInvProj * m_CurrInvView;
         param.PrevView              = m_PrevView;
         param.PrevProj              = m_PrevProj;
         param.PrevInvView           = m_PrevInvView;
         param.PrevInvProj           = m_PrevInvProj;
         param.PrevInvViewProj       = m_PrevInvViewProj;
-        param.MaxBounce             = 32;
+        param.MaxBounce             = 16;
         param.MinBounce             = 3;
         param.FrameIndex            = GetFrameCount();
         param.SkyIntensity          = 1.0f;
@@ -1462,7 +1535,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         param.Size.y                = float(m_SceneDesc.Height);
         param.Size.z                = 1.0f / param.Size.x;
         param.Size.w                = 1.0f / param.Size.y;
-        param.CameraDir             = m_CameraController.GetAxisZ();
+        param.CameraDir             = m_CameraZAxis;
         param.MaxIteration          = 9;
 
         m_SceneParam.SwapBuffer();
@@ -1750,13 +1823,13 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         // 読み戻し用ターゲットにコピー.
         m_GfxCmdList.CopyTextureRegion(&dst, 0, 0, 0, &src, &box);
 
-        // トリプルバッファリング.
-        m_ReadBackIndex = (m_ReadBackIndex + 1) % 3;
-
         m_GfxCmdList.BarrierTransition(
             m_FinalBuffer.GetResource(), 0,
             D3D12_RESOURCE_STATE_COPY_SOURCE,
             D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+        m_ReadBackIndex = (m_ReadBackIndex + 1) % 3;
+        m_MapIndex      = (m_MapIndex + 1) % 3;
     }
 
     // スワップチェインに描画.
@@ -1798,9 +1871,16 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         // デバッグ表示.
         m_GfxCmdList.SetTarget(m_ColorTarget[idx].GetRTV(), nullptr);
         m_GfxCmdList.SetViewport(m_ColorTarget[idx].GetResource());
-        m_GfxCmdList.SetRootSignature(m_DebugRootSig.GetPtr(), false);
-        m_GfxCmdList.SetPipelineState(m_DebugPSO.GetPtr());
+        m_GfxCmdList.SetRootSignature(m_CopyRootSig.GetPtr(), false);
+        m_GfxCmdList.SetPipelineState(m_CopyPSO.GetPtr());
         m_GfxCmdList.SetTable(0, pSRV);
+        asdx::Quad::Instance().Draw(m_GfxCmdList.GetCommandList());
+    #else
+        m_GfxCmdList.SetTarget(m_ColorTarget[idx].GetRTV(), nullptr);
+        m_GfxCmdList.SetViewport(m_ColorTarget[idx].GetResource());
+        m_GfxCmdList.SetRootSignature(m_CopyRootSig.GetPtr(), false);
+        m_GfxCmdList.SetPipelineState(m_CopyPSO.GetPtr());
+        m_GfxCmdList.SetTable(0, m_FinalBuffer.GetSRV());
         asdx::Quad::Instance().Draw(m_GfxCmdList.GetCommandList());
     #endif
 

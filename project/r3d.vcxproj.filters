@@ -103,7 +103,7 @@
     <FxCompile Include="..\res\shader\ShadePixel.hlsl">
       <Filter>リソース ファイル</Filter>
     </FxCompile>
-    <FxCompile Include="..\res\shader\DebugPS.hlsl">
+    <FxCompile Include="..\res\shader\CopyPS.hlsl">
       <Filter>リソース ファイル</Filter>
     </FxCompile>
   </ItemGroup>

@@ -106,6 +106,32 @@ void OnGenerateRay()
             // BSDFがPerfect Specular以外の成分を持っている場合.
             if (!IsPerfectSpecular(material))
             {
+                // 光源をサンプリング.
+                float lightPdf;
+                float2 st = SampleMipMap(BackGround, float2(Random(seed), Random(seed)), lightPdf);
+
+                // 方向ベクトルに変換.
+                float3 dir = FromSphereMapCoord(st);
+
+                if (!CastShadowRay(vertex.Position, geometryNormal, dir, FLT_MAX))
+                {
+                    // シャドウレイを飛ばして，光源上のサンプリングとレイ原点の間に遮断が無い場合.
+                    float cosShadow = abs(dot(N, dir));
+                    float cosLight  = 1.0f;
+                    float3 fs = material.BaseColor.rgb / F_PI;
+
+                    float G = (cosShadow * cosLight);
+
+                    float brdfPdf = abs(dir.z / F_PI) * cosLight;
+                    float misWeight = lightPdf / (brdfPdf + lightPdf);
+
+                    float3 lightIntensity = BackGround.SampleLevel(LinearWrap, st, 0.0f).rgb;
+
+                    L += (W * lightIntensity * fs * G /*/ lightPdf*/)/* * misWeight*/;
+                    //L += W * lightIntensity * fs * G * brdfPdf;
+
+                }
+
                 //// 光源上の1点をランダムにサンプリング.
                 //float3 lightPos;    // 光源上の位置.
                 //float  lightPdf;    // 光源の確率密度関数.
