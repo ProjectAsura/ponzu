@@ -586,6 +586,67 @@ float3 SampleDir(float3 V, float3 N, float3 u, Material material)
 //-----------------------------------------------------------------------------
 //      マテリアルを評価します.
 //-----------------------------------------------------------------------------
+float3 SampleMaterial
+(
+    float3      V,          // 入射方向.
+    float3      N,          // 法線ベクトル.
+    float3      L,          // ライトベクトル.
+    float       u,          // 乱数.
+    Material    material    // マテリアル.
+)
+{
+    // 完全拡散反射.
+    if (IsPerfectDiffuse(material))
+    {
+        return (material.BaseColor.rgb / F_PI);
+    }
+    // 完全鏡面反射.
+    else if (IsPerfectSpecular(material))
+    {
+        return material.BaseColor.rgb;
+    }
+    else
+    {
+        float3 diffuseColor  = ToKd(material.BaseColor.rgb, material.Metalness);
+        float3 specularColor = ToKs(material.BaseColor.rgb, material.Metalness);
+
+        float p = ProbabilityToSampleDiffuse(diffuseColor, specularColor);
+
+        // Diffuse
+        if (u > p)
+        {
+            return (diffuseColor / F_PI) / p;
+        }
+
+        float a = max(Pow2(material.Roughness), 0.01f);
+
+#if USE_GGX
+        float3 H = normalize(V + L);
+
+        float NdotL = abs(dot(N, L));
+        float NdotH = abs(dot(N, H));
+        float VdotH = abs(dot(V, H));
+        float NdotV = abs(dot(N, V));
+
+        float  G = G_SmithGGX(NdotL, NdotV, a);
+        float3 F = F_Schlick(specularColor, VdotH);
+
+        return F * G * VdotH / (NdotH * NdotV) / (1.0f - p);
+#else
+        // Phong. 
+        float3 R = normalize(reflect(-V, N));
+    
+        float shininess = ToSpecularPower(a);
+        float LoR = abs(dot(L, R));
+
+        return specularColor * pow(LoR, shininess) / (1.0f - p);
+#endif
+    }
+}
+
+//-----------------------------------------------------------------------------
+//      マテリアルを評価します.
+//-----------------------------------------------------------------------------
 float3 EvaluateMaterial
 (
     float3      V,          // 入射方向.

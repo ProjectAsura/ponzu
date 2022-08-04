@@ -11,6 +11,10 @@
 
 #define FURNANCE_TEST       (0)
 
+#if FURNANCE_TEST
+static const float3 kFurnaceColor = float3(0.5f, 0.5f, 0.5f);
+#endif
+
 //-----------------------------------------------------------------------------
 // Resources
 //-----------------------------------------------------------------------------
@@ -72,7 +76,7 @@ void OnGenerateRay()
         if (!payload.HasHit())
         {
         #if FURNANCE_TEST
-            L += W * float3(0.5f, 0.5f, 0.5f); // Furnance Test.
+            L += W * kFurnaceColor;
         #else
             L += W * SampleIBL(ray.Direction);
         #endif
@@ -119,13 +123,17 @@ void OnGenerateRay()
                     float cosLight  = 1.0f;
 
                     // BSDF.
-                    float3 fs = material.BaseColor.rgb / F_PI;
+                    float3 fs = SampleMaterial(V, N, dir, Random(seed), material);
 
                     // 幾何項.
                     float G = (cosShadow * cosLight);
 
                     // ライト.
+                #if FURNANCE_TEST
+                    float3 Le = kFurnaceColor;
+                #else
                     float3 Le = SampleIBL(dir);
+                #endif
 
                     L += W * (fs * Le * G) / lightPdf;
                 }
