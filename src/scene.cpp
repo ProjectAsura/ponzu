@@ -396,7 +396,7 @@ asdx::IShaderResourceView* SceneTexture::GetView() const
 //-----------------------------------------------------------------------------
 //      バイナリからからロードします.
 //-----------------------------------------------------------------------------
-bool Scene::Init(const char* path, ID3D12GraphicsCommandList6* pCmdList)
+bool Scene::Init(const char* path, asdx::CommandList& cmdList)
 {
     // ファイル読み込み.
     {
@@ -433,7 +433,7 @@ bool Scene::Init(const char* path, ID3D12GraphicsCommandList6* pCmdList)
 
     // IBLテクスチャのセットアップ.
     {
-        if (!m_IBL.Init(pCmdList, resScene->IblTexture()))
+        if (!m_IBL.Init(cmdList.GetCommandList(), resScene->IblTexture()))
         {
             ELOGA("Error : IBL Initialize Failed.");
             return false;
@@ -449,7 +449,7 @@ bool Scene::Init(const char* path, ID3D12GraphicsCommandList6* pCmdList)
 
         for(auto i=0u; i<count; ++i)
         {
-            if (!m_Textures[i].Init(pCmdList, resTextures->Get(i)))
+            if (!m_Textures[i].Init(cmdList.GetCommandList(), resTextures->Get(i)))
             {
                 ELOGA("Error : SceneTexture::Init() Failed. index = %u", i);
                 return false;
@@ -518,7 +518,7 @@ bool Scene::Init(const char* path, ID3D12GraphicsCommandList6* pCmdList)
                 return false;
             }
 
-            m_BLAS[i].Build(pCmdList);
+            m_BLAS[i].Build(cmdList.GetCommandList());
 
             D3D12_VERTEX_BUFFER_VIEW vbv = {};
             vbv.BufferLocation  = geometryHandle.AddressVB;
@@ -601,7 +601,19 @@ bool Scene::Init(const char* path, ID3D12GraphicsCommandList6* pCmdList)
             return false;
         }
 
-        m_TLAS.Build(pCmdList);
+        m_TLAS.Build(cmdList.GetCommandList());
+    }
+
+    // ライトバッファ構築.
+    {
+        auto count  = resScene->LightCount();
+        auto stride = sizeof(r3d::ResLight);
+
+        if (!m_LB.Init(cmdList, count, stride, resScene->Lights()->data()))
+        {
+            ELOGA("Error : LB::Init() Failed.");
+            return false;
+        }
     }
 
     return true;
@@ -624,6 +636,7 @@ void Scene::Term()
     m_Param   .Term();
     m_ModelMgr.Term();
     m_IBL     .Term();
+    m_LB      .Term();
 
     m_DrawCalls.clear();
     m_Instances.clear();
@@ -697,6 +710,21 @@ uint32_t Scene::GetTextureHandle(uint32_t index)
     return (index != INVALID_MATERIAL_MAP)
         ? m_Textures[index].GetView()->GetDescriptorIndex()
         : INVALID_MATERIAL_MAP;
+}
+
+//-----------------------------------------------------------------------------
+//      ライト数を取得します.
+//-----------------------------------------------------------------------------
+uint32_t Scene::GetLightCount() const
+{
+    if (m_pBinary == nullptr)
+    { return 0; }
+
+    // シーンリソース取得.
+    auto resScene = GetResScene(m_pBinary);
+    assert(resScene != nullptr);
+
+    return resScene->LightCount();
 }
 
 } // namespace r3d

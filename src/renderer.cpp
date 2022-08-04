@@ -1316,7 +1316,7 @@ bool Renderer::BuildScene()
 #else
     // シーン構築.
     {
-        if (!m_Scene.Init(m_SceneDesc.Path, m_GfxCmdList.GetCommandList()))
+        if (!m_Scene.Init(m_SceneDesc.Path, m_GfxCmdList))
         {
             ELOGA("Error : Scene::Init() Failed.");
             return false;
@@ -1474,7 +1474,7 @@ void Renderer::ChangeFrame(uint32_t index)
     m_CameraZAxis = m_Camera.GetAxisZ();
 #else
     m_CurrView = m_CameraController.GetView();
-    m_CurrProj = asdx::Matrix::CreatePerspectiveFiledOfView(
+    m_CurrProj = asdx::Matrix::CreatePerspectiveFieldOfView(
         asdx::ToRadian(37.5f),
         float(m_SceneDesc.Width) / float(m_SceneDesc.Height),
         m_CameraController.GetNearClip(),
@@ -1533,7 +1533,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         param.EnableAccumulation    = enableAccumulation;
         param.AccumulatedFrames     = m_AccumulatedFrames;
         param.ExposureAdjustment    = 1.0f;
-        param.LightCount            = 0;
+        param.LightCount            = m_Scene.GetLightCount();
         param.Size.x                = float(m_SceneDesc.Width);
         param.Size.y                = float(m_SceneDesc.Height);
         param.Size.z                = 1.0f / param.Size.x;

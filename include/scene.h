@@ -10,11 +10,22 @@
 //-----------------------------------------------------------------------------
 #include <fnd/asdxMath.h>
 #include <gfx/asdxConstantBuffer.h>
+#include <gfx/asdxStructuredBuffer.h>
+#include <gfx/asdxCommandList.h>
 #include <vector>
 #include <model_mgr.h>
 
 
 namespace r3d {
+
+///////////////////////////////////////////////////////////////////////////////
+// LIGHT_TYPE enum
+///////////////////////////////////////////////////////////////////////////////
+enum LIGHT_TYPE
+{
+    LIGHT_TYPE_POINT,
+    LIGHT_TYPE_DIRECTIONAL,
+};
 
 ///////////////////////////////////////////////////////////////////////////////
 // PinholeCamera structure
@@ -28,6 +39,7 @@ struct PinholeCamera
     float               NearClip;
     float               FarClip;
 };
+
 
 ///////////////////////////////////////////////////////////////////////////////
 // SceneTexture class
@@ -95,7 +107,7 @@ public:
     //=========================================================================
     // public methods.
     //=========================================================================
-    bool Init(const char* path, ID3D12GraphicsCommandList6* pCmdList);
+    bool Init(const char* path, asdx::CommandList& cmdList);
     void Term();
 
     asdx::IConstantBufferView* GetParamCBV() const;
@@ -104,8 +116,11 @@ public:
     asdx::IShaderResourceView* GetTB() const;
     asdx::IShaderResourceView* GetMB() const;
     asdx::IShaderResourceView* GetIBL() const;
+    asdx::IShaderResourceView* GetLB() const;
 
     void Draw(ID3D12GraphicsCommandList6* pCmdList);
+
+    uint32_t GetLightCount() const;
 
 private:
     ///////////////////////////////////////////////////////////////////////////
@@ -142,6 +157,7 @@ private:
     std::vector<SceneTexture>               m_Textures;
     asdx::ConstantBuffer                    m_Param;
     ModelMgr                                m_ModelMgr;
+    asdx::StructuredBuffer                  m_LB;
 
     //=========================================================================
     // private methods.

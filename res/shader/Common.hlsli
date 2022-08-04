@@ -17,7 +17,7 @@
 #define INVALID_ID          (-1)
 #define STANDARD_RAY_INDEX  (0)
 #define SHADOW_RAY_INDEX    (1)
-#define USE_GGX             (1)
+#define USE_GGX             (0)
 
 //-----------------------------------------------------------------------------
 // Type Definitions
@@ -551,7 +551,7 @@ float3 SampleDir(float3 V, float3 N, float3 u, Material material)
         float p = ProbabilityToSampleDiffuse(diffuseColor, specularColor);
 
         // Diffuse.
-        if (u.z < p)
+        if (u.z > p)
         {
             float3 T, B;
             CalcONB(N, T, B);
@@ -630,7 +630,7 @@ float3 EvaluateMaterial
         float p = ProbabilityToSampleDiffuse(diffuseColor, specularColor);
 
         // Diffuse
-        if (u.z <= p)
+        if (u.z > p)
         {
             float3 T, B;
             CalcONB(N, T, B);

@@ -87,17 +87,27 @@ struct ResInstance
     Transform:Matrix3x4;
 }
 
+struct ResLight
+{
+    Type:uint;
+    Color:Vector3;
+    Position:Vector3;
+    Radius:float;
+}
+
 table ResScene
 {
     MeshCount:uint;
     InstanceCount:uint;
     TextureCount:uint;
     MaterialCount:uint;
+    LightCount:uint;
     IblTexture:ResTexture;
     Meshes:[ResMesh];
     Instances:[ResInstance];
     Textures:[ResTexture];
     Materials:[ResMaterial];
+    Lights:[ResLight];
 }
 
 root_type ResScene;

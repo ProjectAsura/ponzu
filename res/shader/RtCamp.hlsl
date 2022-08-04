@@ -56,7 +56,7 @@ void OnGenerateRay()
     float3 W = float3(1.0f, 1.0f, 1.0f);  // 重み.
     float3 L = float3(0.0f, 0.0f, 0.0f);  // 放射輝度.
 
-    for(int bounce=0; /*bounce<SceneParam.MaxBounce*/; ++bounce)
+    for(int bounce=0; bounce<SceneParam.MaxBounce; ++bounce)
     {
         // 交差判定.
         TraceRay(
@@ -100,7 +100,6 @@ void OnGenerateRay()
         // 自己発光による放射輝度.
         L += W * material.Emissive;
 
-#if 0
         // Next Event Estimation.
         {
             // BSDFがPerfect Specular以外の成分を持っている場合.
@@ -118,49 +117,20 @@ void OnGenerateRay()
                     // シャドウレイを飛ばして，光源上のサンプリングとレイ原点の間に遮断が無い場合.
                     float cosShadow = abs(dot(N, dir));
                     float cosLight  = 1.0f;
+
+                    // BSDF.
                     float3 fs = material.BaseColor.rgb / F_PI;
 
+                    // 幾何項.
                     float G = (cosShadow * cosLight);
 
-                    float brdfPdf = abs(dir.z / F_PI) * cosLight;
-                    float misWeight = lightPdf / (brdfPdf + lightPdf);
+                    // ライト.
+                    float3 Le = SampleIBL(dir);
 
-                    float3 lightIntensity = BackGround.SampleLevel(LinearWrap, st, 0.0f).rgb;
-
-                    L += (W * lightIntensity * fs * G /*/ lightPdf*/)/* * misWeight*/;
-                    //L += W * lightIntensity * fs * G * brdfPdf;
-
+                    L += W * (fs * Le * G) / lightPdf;
                 }
-
-                //// 光源上の1点をランダムにサンプリング.
-                //float3 lightPos;    // 光源上の位置.
-                //float  lightPdf;    // 光源の確率密度関数.
-                ////SampleLight();
-
-                ////float3 L      = lightPos - vertex.Position;
-                ////float  distSq = dot(dir, dir);
-                ////float  dist   = sqrt(distSq);
-                ////L /= dist;
-
-                //// 光源上のサンプリング点に向かってシャドウレイを飛ばす.
-                //if (CastShadowRay(lightPos, geometryNormal, dir, len))
-                //{
-                //    // シャドウレイを飛ばして，光源上のサンプリングとレイ原点の間に遮蔽が無い場合
-
-                //    float cosShadow = abs(dot(N, L));
-                //    float cosLight  = abs(dot(lightN, -L));
-                //    float fs = material.BaseColor.rgb / F_PI;
-                //    float G  = (cosShadow * cosLight) / distSq;
-
-                //    float brdfPdf = abs(dir.z / F_PI) * cosLight / distSq;
-                //    float misWeight = lightPdf / (brdfPdf + lightPdf);
-                //  
-                //    // L += W * Light * BRDF * G / lightPDF.
-                //    L += (W * light.Intensity * fs * G / lightPdf) * misWeight;
-                //}
             }
         }
-#endif
 
         // 最後のバウンスであれば早期終了(BRDFをサンプルしてもロジック的に反映されないため).
         if (bounce == SceneParam.MaxBounce - 1)
@@ -178,6 +148,8 @@ void OnGenerateRay()
             float p = min(0.95f, Luminance(brdf));
             if (p > Random(seed))
             { break; }
+
+            W /= p;
         }
 
         W *= brdf / pdf;
