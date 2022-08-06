@@ -41,9 +41,11 @@ namespace r3d {
 ///////////////////////////////////////////////////////////////////////////////
 struct SceneDesc
 {
-    double      TimeSec;
-    uint32_t    Width;
-    uint32_t    Height;
+    double      RenderTimeSec;      // 描画時間[sec]
+    uint32_t    Width;              // 横幅[px]
+    uint32_t    Height;             // 縦幅[px]
+    double      FPS;                // Frame Per Second.
+    double      AnimationTimeSec;   // 総アニメーション時間.
     const char* Path;
 };
 
@@ -184,6 +186,8 @@ private:
 
     asdx::RootSignature             m_CopyRootSig;
     asdx::PipelineState             m_CopyPSO;
+
+    bool                m_EndRequest = false;
 
 #if (!CAMP_RELEASE)
     //+++++++++++++++++++

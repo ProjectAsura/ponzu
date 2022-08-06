@@ -250,16 +250,18 @@ bool Renderer::OnInit()
     // 1フレームあたりの時間を算出.
     {
         auto setupTime  = m_Timer.GetRelativeSec();
-        auto renderTime = m_SceneDesc.TimeSec - setupTime;
-        m_AnimationOneFrameTime = renderTime / (60.0 * 10); // 60FPS * 10秒.
-        printf_s("One Frame Time : %lf[sec]\n", m_AnimationOneFrameTime);
-
+        auto renderTime = m_SceneDesc.RenderTimeSec - setupTime;
+        auto totalFrame = double(m_SceneDesc.FPS * m_SceneDesc.AnimationTimeSec);
+        m_AnimationOneFrameTime = renderTime / totalFrame;
         m_AnimationElapsedTime = 0.0f;
         m_ReadBackIndex = 2;
         m_MapIndex      = 0;
 
         ChangeFrame(0);
     }
+
+    // 標準出力をフラッシュ.
+    std::fflush(stdout);
  
     // 正常終了.
     return true;
@@ -1356,6 +1358,9 @@ bool Renderer::BuildScene()
 //-----------------------------------------------------------------------------
 void Renderer::OnTerm()
 {
+    asdx::StopWatch timer;
+    timer.Start();
+
 #if ASDX_ENABLE_IMGUI
     asdx::GuiMgr::Instance().Term();
 #endif
@@ -1411,6 +1416,10 @@ void Renderer::OnTerm()
     //m_MeshDrawCalls.clear();
 
     m_ModelMgr.Term();
+
+    timer.End();
+    printf_s("Terminate Process ... done! %lf[msec]\n", timer.GetElapsedMsec());
+    printf_s("Total Time        ... %lf[sec]\n", m_Timer.GetRelativeSec());
 }
 
 //-----------------------------------------------------------------------------
@@ -1420,9 +1429,24 @@ void Renderer::OnFrameMove(asdx::FrameEventArgs& args)
 {
 #if (CAMP_RELEASE)
     // 制限時間を超えた
-    if (args.Time >= m_SceneDesc.TimeSec)
+    if (args.Time >= m_SceneDesc.RenderTimeSec)
     {
         PostQuitMessage(0);
+        m_EndRequest = true;
+
+        uint8_t* ptr = nullptr;
+        auto idx = m_MapIndex;
+        auto hr  = m_ReadBackTexture[idx]->Map(0, nullptr, reinterpret_cast<void**>(&ptr));
+        if (SUCCEEDED(hr))
+        {
+            memcpy(m_ExportData[idx].Pixels.data(), ptr, m_ExportData[idx].Pixels.size());
+            m_ExportData[idx].FrameIndex = m_CaptureIndex;
+        }
+        m_ReadBackTexture[idx]->Unmap(0, nullptr);
+
+        // 画像に出力.
+        _beginthreadex(nullptr, 0, Export, &m_ExportData[idx], 0, nullptr);
+
         return;
     }
 
@@ -1447,6 +1471,10 @@ void Renderer::OnFrameMove(asdx::FrameEventArgs& args)
         m_AnimationElapsedTime = 0.0;
 
         ChangeFrame(m_CaptureIndex);
+
+        // 適宜調整する.
+        auto totalFrame = double(m_SceneDesc.FPS * m_SceneDesc.AnimationTimeSec - (m_CaptureIndex - 1));
+        m_AnimationOneFrameTime = (m_SceneDesc.RenderTimeSec - m_Timer.GetRelativeSec()) / totalFrame;
     }
 #else
     ChangeFrame(GetFrameCount());
@@ -1491,6 +1519,9 @@ void Renderer::ChangeFrame(uint32_t index)
 //-----------------------------------------------------------------------------
 void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
 {
+    if (m_EndRequest)
+    { return; }
+
     auto idx = GetCurrentBackBufferIndex();
 
     // コマンド記録開始.
