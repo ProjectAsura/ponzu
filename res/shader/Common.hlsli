@@ -551,7 +551,7 @@ float3 SampleDir(float3 V, float3 N, float3 u, Material material)
         float p = ProbabilityToSampleDiffuse(diffuseColor, specularColor);
 
         // Diffuse.
-        if (u.z > p)
+        if (u.z < p)
         {
             float3 T, B;
             CalcONB(N, T, B);
@@ -598,7 +598,7 @@ float3 SampleMaterial
     // 完全拡散反射.
     if (IsPerfectDiffuse(material))
     {
-        return (material.BaseColor.rgb / F_PI);
+        return material.BaseColor.rgb;
     }
     // 完全鏡面反射.
     else if (IsPerfectSpecular(material))
@@ -613,9 +613,9 @@ float3 SampleMaterial
         float p = ProbabilityToSampleDiffuse(diffuseColor, specularColor);
 
         // Diffuse
-        if (u > p)
+        if (u < p)
         {
-            return (diffuseColor / F_PI) / p;
+            return diffuseColor / p;
         }
 
         float a = max(Pow2(material.Roughness), 0.01f);
@@ -691,7 +691,7 @@ float3 EvaluateMaterial
         float p = ProbabilityToSampleDiffuse(diffuseColor, specularColor);
 
         // Diffuse
-        if (u.z > p)
+        if (u.z < p)
         {
             float3 T, B;
             CalcONB(N, T, B);
@@ -726,8 +726,8 @@ float3 EvaluateMaterial
         float  D = D_GGX(NdotH, a);
         float  G = G_SmithGGX(NdotL, NdotV, a);
         float3 F = F_Schlick(specularColor, VdotH);
-        float3 ggxTerm = D * F * G / (4 * NdotV); // (D * G * F / (4 * NdotL * NdotV)) * NdotL ---> Cancel out NdotL.
-        float  ggxProb = D * NdotH / (4 * VdotH);
+        float3 ggxTerm = D * F * G / (4 * NdotV) * NdotL;
+        float  ggxProb = D * NdotH / (4 * VdotH) * NdotL;
 
         dir = L;
         pdf = ggxProb;
