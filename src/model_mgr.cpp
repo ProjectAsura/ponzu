@@ -379,6 +379,8 @@ GeometryHandle ModelMgr::AddMesh(const Mesh& mesh)
             return result;
         }
 
+        item.VB->SetName(L"ModelMangaer::VB");
+
         uint8_t* ptr = nullptr;
         auto hr = item.VB->Map(0, nullptr, reinterpret_cast<void**>(&ptr));
         if (FAILED(hr))
@@ -406,6 +408,8 @@ GeometryHandle ModelMgr::AddMesh(const Mesh& mesh)
             ELOGA("Error : CreateBufferSRV() Failed.");
             return result;
         }
+
+        item.IB->SetName(L"ModelManager::IB");
 
         uint8_t* ptr = nullptr;
         auto hr = item.IB->Map(0, nullptr, reinterpret_cast<void**>(&ptr));
@@ -464,6 +468,8 @@ D3D12_GPU_VIRTUAL_ADDRESS ModelMgr::AddMaterials(const Material* ptr, uint32_t c
         dst.Normal    = GetNormal(src.Normal);
         dst.ORM       = GetOrm(src.ORM);
         dst.Emissive  = GetEmissive(src.Emissive);
+        dst.IntIor    = src.IntIor;
+        dst.ExtIor    = src.ExtIor;
     }
 
     m_OffsetMaterial += count;

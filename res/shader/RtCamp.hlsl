@@ -18,8 +18,8 @@ static const float3 kFurnaceColor = float3(0.5f, 0.5f, 0.5f);
 //-----------------------------------------------------------------------------
 // Resources
 //-----------------------------------------------------------------------------
-RWTexture2D<float4>             Canvas      : register(u0);
-Texture2D<float4>               BackGround  : register(t4);
+RWTexture2D<float4> Canvas      : register(u0);
+Texture2D<float4>   BackGround  : register(t4);
 
 
 //-----------------------------------------------------------------------------
@@ -84,7 +84,7 @@ void OnGenerateRay()
         }
 
         // 頂点データ取得.
-        Vertex vertex = GetVertex(payload.InstanceId, payload.PrimitiveId, payload.Barycentrics);
+        SurfaceHit vertex = GetSurfaceHit(payload.InstanceId, payload.PrimitiveId, payload.Barycentrics);
 
         // マテリアル取得.
         Material material = GetMaterial(payload.InstanceId, vertex.TexCoord, 0.0f);
@@ -98,8 +98,12 @@ void OnGenerateRay()
         { geometryNormal = -geometryNormal; }
 
         // 面の下に潜っている場合は反転.
+        bool into = true;
         if (dot(geometryNormal, N) < 0.0f)
-        { N = -N; }
+        {
+            N = -N;
+            into = false;
+        }
 
         // 自己発光による放射輝度.
         L += W * material.Emissive;
@@ -123,7 +127,7 @@ void OnGenerateRay()
                     float cosLight  = 1.0f;
 
                     // BSDF.
-                    float3 fs = SampleMaterial(V, N, dir, Random(seed), material);
+                    float3 fs = SampleMaterial(V, N, dir, Random(seed), into, material);
 
                     // 幾何項.
                     float G = (cosShadow * cosLight);
@@ -148,7 +152,7 @@ void OnGenerateRay()
         float3 u = float3(Random(seed), Random(seed), Random(seed));
         float3 dir;
         float  pdf;
-        float3 brdf = EvaluateMaterial(V, N, u, material, dir, pdf);
+        float3 brdf = EvaluateMaterial(V, N, u, into, material, dir, pdf);
 
         // ロシアンルーレット.
         if (bounce > SceneParam.MinBounce)

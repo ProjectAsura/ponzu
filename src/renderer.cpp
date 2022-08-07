@@ -876,7 +876,7 @@ bool Renderer::SystemSetup()
         auto pos    = asdx::Vector3(0.0f, 0.0f, 2.5f);
         auto target = asdx::Vector3(0.0f, 0.0f, 0.0f);
         auto upward = asdx::Vector3(0.0f, 1.0f, 0.0f);
-        m_CameraController.Init(pos, target, upward, 0.01f, 10000.0f);
+        m_CameraController.Init(pos, target, upward, 0.1f, 10000.0f);
     }
 
     // 初回フレーム計算用に設定しておく.
@@ -915,8 +915,8 @@ bool Renderer::SystemSetup()
         auto proj = asdx::Matrix::CreatePerspectiveFieldOfView(
             fovY,
             aspect,
-            0.01f,
-            1000.0f);
+            0.1f,
+            10000.0f);
 
         m_PrevView          = view;
         m_PrevProj          = proj;
@@ -1202,12 +1202,13 @@ bool Renderer::BuildScene()
 
     // Test
     {
+        const char* rawPath = "../res/model/dragon.obj";
         ModelOBJ model;
         OBJLoader loader;
         std::string path;
-        if (!asdx::SearchFilePathA("../res/model/dragon.obj", path))
+        if (!asdx::SearchFilePathA(rawPath, path))
         {
-            ELOGA("Error : File Path Not Found. path = ../res/model/dragon.obj");
+            ELOGA("Error : File Path Not Found. path = %s", rawPath);
             return false;
         }
 
@@ -1217,11 +1218,14 @@ bool Renderer::BuildScene()
             return false;
         }
 
-        Material dummy;
+        Material dummy = {};
         dummy.Normal    = INVALID_MATERIAL_MAP;
         dummy.BaseColor = INVALID_MATERIAL_MAP;
         dummy.ORM       = INVALID_MATERIAL_MAP;
         dummy.Emissive  = INVALID_MATERIAL_MAP;
+        //dummy.IntIor    = 2.4f;
+        //dummy.ExtIor    = 1.0f;
+        dummy.UvScale   = asdx::Vector2(1.0f, 1.0f);
         m_ModelMgr.AddMaterials(&dummy, 1);
 
         auto meshCount = model.Meshes.size();
@@ -1497,8 +1501,8 @@ void Renderer::ChangeFrame(uint32_t index)
     m_CurrProj = asdx::Matrix::CreatePerspectiveFieldOfView(
         asdx::ToRadian(37.5f),
         float(m_SceneDesc.Width) / float(m_SceneDesc.Height),
-        0.01f,
-        1000.0f);
+        0.1f,
+        10000.0f);
     m_CameraZAxis = m_Camera.GetAxisZ();
 #else
     m_CurrView = m_CameraController.GetView();

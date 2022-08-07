@@ -64,13 +64,16 @@ struct MeshVertex
 ///////////////////////////////////////////////////////////////////////////////
 struct MeshMaterial
 {
-    uint4   Textures;       // x:BaseColorMap, y:NormalMap, z:OrmMap, w:EmissiveMap.
+    uint4   Textures;       // x:BaseColorMap, y:NormalMap, z:OrmiMap, w:EmissiveMap.
+    float   IntIor;         // Interior Index Of Refraction.
+    float   ExtIor;         // Exterior Index Of Refraction.
+    float2  UvScale;        // テクスチャ座標スケール.
 };
 
 ///////////////////////////////////////////////////////////////////////////////
-// Vertex structure
+// SurfaceHit structure
 ///////////////////////////////////////////////////////////////////////////////
-struct Vertex
+struct SurfaceHit
 {
     float3  Position;       // 位置座標.
     float3  Normal;         // シェーディング法線.
@@ -106,10 +109,12 @@ struct Light
 struct Material
 {
     float4  BaseColor;      // ベースカラー.
-    float3  Normal;
+    float3  Normal;         // 法線ベクトル.
     float   Roughness;      // ラフネス.
     float   Metalness;      // メタルネス.
     float3  Emissive;       // エミッシブ.
+    float   IntIor;         // 内部屈折率.
+    float   ExtIor;         // 外部屈折率(デフォルトは空気1.0).
 };
 
 
@@ -201,14 +206,14 @@ uint3 GetIndices(uint indexId, uint triangleIndex)
 }
 
 //-----------------------------------------------------------------------------
-//      頂点データを取得します.
+//      表面交差情報を取得します.
 //-----------------------------------------------------------------------------
-Vertex GetVertex(uint instanceId, uint triangleIndex, float2 barycentrices)
+SurfaceHit GetSurfaceHit(uint instanceId, uint triangleIndex, float2 barycentrices)
 {
     uint2 id = Instances.Load2(instanceId * INSTANCE_STRIDE);
 
     uint3 indices = GetIndices(id.y, triangleIndex);
-    Vertex vertex = (Vertex)0;
+    SurfaceHit surfaceHit = (SurfaceHit)0;
 
     // 重心座標を求める.
     float3 factor = float3(
@@ -222,7 +227,7 @@ Vertex GetVertex(uint instanceId, uint triangleIndex, float2 barycentrices)
 
     float4 row0 = Transforms.Load4(instanceId * TRANSFORM_STRIDE);
     float4 row1 = Transforms.Load4(instanceId * TRANSFORM_STRIDE + 16);
-    float4 row2 = Transforms.Load4(instanceId * TRANSFORM_STRIDE + 16);
+    float4 row2 = Transforms.Load4(instanceId * TRANSFORM_STRIDE + 32);
     float3x4 world = float3x4(row0, row1, row2);
 
     [unroll]
@@ -233,20 +238,20 @@ Vertex GetVertex(uint instanceId, uint triangleIndex, float2 barycentrices)
         v[i] = asfloat(vertices.Load3(address));
         float4 pos = float4(v[i], 1.0f);
 
-        vertex.Position += mul(world, pos).xyz * factor[i];
-        vertex.Normal   += asfloat(vertices.Load3(address + NORMAL_OFFSET)) * factor[i];
-        vertex.Tangent  += asfloat(vertices.Load3(address + TANGENT_OFFSET)) * factor[i];
-        vertex.TexCoord += asfloat(vertices.Load2(address + TEXCOORD_OFFSET)) * factor[i];
+        surfaceHit.Position += mul(world, pos).xyz * factor[i];
+        surfaceHit.Normal   += asfloat(vertices.Load3(address + NORMAL_OFFSET)) * factor[i];
+        surfaceHit.Tangent  += asfloat(vertices.Load3(address + TANGENT_OFFSET)) * factor[i];
+        surfaceHit.TexCoord += asfloat(vertices.Load2(address + TEXCOORD_OFFSET)) * factor[i];
     }
 
-    vertex.Normal  = normalize(mul(world, float4(vertex.Normal,  0.0f)).xyz);
-    vertex.Tangent = normalize(mul(world, float4(vertex.Tangent, 0.0f)).xyz);
+    surfaceHit.Normal  = normalize(mul((float3x3)world, normalize(surfaceHit.Normal)));
+    surfaceHit.Tangent = normalize(mul((float3x3)world, normalize(surfaceHit.Tangent)));
 
     float3 e0 = v[2] - v[0];
     float3 e1 = v[1] - v[0];
-    vertex.GeometryNormal = normalize(cross(e0, e1));
+    surfaceHit.GeometryNormal = normalize(cross(e0, e1));
 
-    return vertex;
+    return surfaceHit;
 }
 
 //-----------------------------------------------------------------------------
@@ -258,19 +263,20 @@ Material GetMaterial(uint instanceId, float2 uv, float mip)
 
     uint  address = materialId * MATERIAL_STRIDE;
     uint4 data    = Materials.Load4(address);
+    float4 data2  = asfloat(Materials.Load4(address + 16));
 
     Texture2D<float4> baseColorMap = ResourceDescriptorHeap[data.x];
-    float4 bc = baseColorMap.SampleLevel(LinearWrap, uv, mip);
+    float4 bc = baseColorMap.SampleLevel(LinearWrap, uv * data2.zw, mip);
 
     Texture2D<float4> normalMap = ResourceDescriptorHeap[data.y];
-    float3 n = normalMap.SampleLevel(LinearWrap, uv, mip).xyz * 2.0f - 1.0f;
+    float3 n = normalMap.SampleLevel(LinearWrap, uv * data2.zw, mip).xyz * 2.0f - 1.0f;
     n = normalize(n);
 
     Texture2D<float4> ormMap = ResourceDescriptorHeap[data.z];
-    float3 orm = ormMap.SampleLevel(LinearWrap, uv, mip).rgb;
+    float3 orm = ormMap.SampleLevel(LinearWrap, uv * data2.zw, mip).rgb;
 
     Texture2D<float4> emissiveMap = ResourceDescriptorHeap[data.w];
-    float3 e = emissiveMap.SampleLevel(LinearWrap, uv, mip).rgb;
+    float3 e = emissiveMap.SampleLevel(LinearWrap, uv * data2.zw, mip).rgb;
 
     Material param;
     param.BaseColor = bc;
@@ -278,6 +284,8 @@ Material GetMaterial(uint instanceId, float2 uv, float mip)
     param.Roughness = orm.y;
     param.Metalness = orm.z;
     param.Emissive  = e;
+    param.IntIor    = data2.x;
+    param.ExtIor    = data2.y;
 
     return param;
 }
@@ -293,6 +301,12 @@ bool IsPerfectSpecular(Material material)
 //-----------------------------------------------------------------------------
 bool IsPerfectDiffuse(Material material)
 { return (material.Metalness == 0.0f && material.Roughness == 1.0f); }
+
+//-----------------------------------------------------------------------------
+//      透明屈折マテリアルかどうかチェックします.
+//-----------------------------------------------------------------------------
+bool IsDielectric(Material material)
+{ return (material.IntIor > 0.0f) && (material.ExtIor > 0.0); }
 
 //-----------------------------------------------------------------------------
 //      ライト強度を取得します.
@@ -523,11 +537,10 @@ float3 SampleGGXVNDF(float3 Ve, float alpha_x, float alpha_y, float2 u)
     return Ne;
 }
 
-
 //-----------------------------------------------------------------------------
 //      出射方向をサンプリングします.
 //-----------------------------------------------------------------------------
-float3 SampleDir(float3 V, float3 N, float3 u, Material material)
+float3 SampleDir(float3 V, float3 N, float3 u, bool into, Material material)
 {
     // 完全拡散反射.
     if (IsPerfectDiffuse(material))
@@ -541,7 +554,36 @@ float3 SampleDir(float3 V, float3 N, float3 u, Material material)
     // 完全鏡面反射.
     else if (IsPerfectSpecular(material))
     {
-        return normalize(-reflect(V, N));
+        return normalize(reflect(-V, N));
+    }
+    // 透明屈折.
+    else if (IsDielectric(material))
+    {
+        // Snellの法則.
+        float nnt = (into) ? (material.ExtIor / material.IntIor) : (material.IntIor / material.ExtIor);
+        float NoV = dot(N, V);
+        float cos2t = 1.0f - nnt * nnt * (1.0f - NoV * NoV);
+
+        // 反射ベクトル.
+        float3 reflection = normalize(reflect(-V, N));
+
+        // 全反射チェック.
+        if (cos2t < 0.0f)
+        { return reflection; }
+
+        // 屈折ベクトル.
+        float3 refraction = -V * nnt - N * ((into) ? 1.0 : -1.0) * (NoV * nnt + sqrt(max(0.0f, cos2t)));
+
+        float a = material.ExtIor - material.IntIor;
+        float b = material.ExtIor + material.IntIor;
+        float R0 = (a * b) / (b * b);
+        float Re = F_Schlick(R0, abs(dot(refraction, N)));
+
+        float p = 0.25f + 0.5f * Re; // フレネルのグラフを参照.
+        if (u.z < p)
+        { return reflection; }
+        else
+        { return refraction; }
     }
     else
     {
@@ -592,6 +634,7 @@ float3 SampleMaterial
     float3      N,          // 法線ベクトル.
     float3      L,          // ライトベクトル.
     float       u,          // 乱数.
+    bool        into,
     Material    material    // マテリアル.
 )
 {
@@ -604,6 +647,37 @@ float3 SampleMaterial
     else if (IsPerfectSpecular(material))
     {
         return material.BaseColor.rgb;
+    }
+    // 透明屈折.
+    else if (IsDielectric(material))
+    {
+        // Snellの法則.
+        float nnt = (into) ? (material.ExtIor / material.IntIor) : (material.IntIor / material.ExtIor);
+        float NoV = dot(N, V);
+        float cos2t = 1.0f - nnt * nnt * (1.0f - NoV * NoV);
+
+        // 反射ベクトル.
+        float3 refrect = normalize(reflect(-V, N));
+
+        // 全反射チェック.
+        if (cos2t < 0.0f)
+        { return material.BaseColor.rgb; }
+
+        // 屈折ベクトル.
+        float3 refract = -V * nnt - N * ((into) ? 1.0 : -1.0) * (NoV * nnt + sqrt(max(0.0f, cos2t)));
+        refract = normalize(refract);
+
+        float a = material.ExtIor - material.IntIor;
+        float b = material.ExtIor + material.IntIor;
+        float R0 = (a * b) / (b * b);
+        float Re = F_Schlick(R0, abs(dot(refract, N)));
+        float Tr = (1.0f - Re);
+
+        float p = 0.25f + 0.5f * Re; // フレネルのグラフを参照.
+        if (u < p)
+        { return material.BaseColor.rgb * Re / (p * 0.5f); }
+        else
+        { return material.BaseColor.rgb * Tr / ((1.0f - p) * 0.5f); }
     }
     else
     {
@@ -652,6 +726,7 @@ float3 EvaluateMaterial
     float3      V,          // 入射方向.
     float3      N,          // 法線ベクトル.
     float3      u,          // 乱数.
+    bool        into,
     Material    material,   // マテリアル.
     out float3  dir,        // 出射方向.
     out float   pdf         // 確率密度.
@@ -682,6 +757,47 @@ float3 EvaluateMaterial
         pdf = 1.0f;
 
         return material.BaseColor.rgb;
+    }
+    else if (IsDielectric(material))
+    {
+        // Snellの法則.
+        float nnt = (into) ? (material.ExtIor / material.IntIor) : (material.IntIor / material.ExtIor);
+        float NoV = dot(N, V);
+        float cos2t = 1.0f - nnt * nnt * (1.0f - NoV * NoV);
+
+        // 反射ベクトル.
+        float3 reflection = normalize(reflect(-V, N));
+
+        // 全反射チェック.
+        if (cos2t < 0.0f)
+        {
+            dir = reflection;
+            pdf = 1.0f;
+            return material.BaseColor.rgb;
+        }
+
+        // 屈折ベクトル.
+        float3 refraction = -V * nnt - N * ((into) ? 1.0 : -1.0) * (NoV * nnt + sqrt(max(0.0f, cos2t)));
+
+        float a = material.ExtIor - material.IntIor;
+        float b = material.ExtIor + material.IntIor;
+        float R0 = (a * b) / (b * b);
+        float Re = F_Schlick(R0, abs(dot(refraction, N)));
+        float Tr = (1.0f - Re);
+
+        float p = 0.25f + 0.5f * Re; // フレネルのグラフを参照.
+        if (u.z < p)
+        {
+            dir = reflection;
+            pdf = p * 0.5f;
+            return material.BaseColor.rgb * Re;
+        }
+        else
+        {
+            dir = refraction;
+            pdf = (1.0f - p) * 0.5f;
+            return material.BaseColor.rgb * Tr;
+        }
     }
     else
     {

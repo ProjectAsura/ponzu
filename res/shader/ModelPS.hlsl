@@ -9,7 +9,7 @@
 //-----------------------------------------------------------------------------
 #include <Math.hlsli>
 
-#define MATERIAL_STRIDE     (12)
+#define MATERIAL_STRIDE     (32)
 #define INSTANCE_STRIDE     (12)
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -80,10 +80,11 @@ PSOutput main(const VSOutput input)
     Texture2D<float4> baseColorMap = ResourceDescriptorHeap[data.x];
     float4 bc = baseColorMap.Sample(LinearWrap, input.TexCoord);
 
-    Texture2D<float4> normalMap = ResourceDescriptorHeap[data.y];
-    float3 n = normalMap.Sample(LinearWrap, input.TexCoord).xyz * 2.0f - 1.0f;
-    float3 bitangent = normalize(cross(input.Tangent, input.Normal));
-    float3 normal = FromTangentSpaceToWorld(n, input.Tangent, bitangent, input.Normal);
+    //Texture2D<float4> normalMap = ResourceDescriptorHeap[data.y];
+    //float3 n = normalMap.Sample(LinearWrap, input.TexCoord).xyz * 2.0f - 1.0f;
+    //float3 bitangent = normalize(cross(input.Tangent, input.Normal));
+    //float3 normal = FromTangentSpaceToWorld(n, input.Tangent, bitangent, input.Normal);
+    float3 normal = input.Normal;
 
     output.Albedo   = bc;
     output.Normal   = float4(normal * 0.5f + 0.5f, 1.0f);

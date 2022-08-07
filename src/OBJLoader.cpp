@@ -34,7 +34,7 @@ void CalcNormals(MeshOBJ& mesh)
     // 法線データ初期化.
     for(size_t i=0; i<vertexCount; ++i)
     {
-        normals[i] = asdx::Vector3(0.0f, 0.0f, 1.0f);
+        normals[i] = asdx::Vector3(0.0f, 0.0f, 0.0f);
     }
 
     auto indexCount = mesh.Indices.size();
@@ -72,7 +72,7 @@ void CalcNormals(MeshOBJ& mesh)
     auto cosSmooth = cosf(asdx::ToDegree(SMOOTHING_ANGLE));
 
     // スムージング処理.
-    for(size_t i=0; i<indexCount - 3; i+=3)
+    for(size_t i=0; i<indexCount; i+=3)
     {
         auto i0 = mesh.Indices[i + 0];
         auto i1 = mesh.Indices[i + 1];
@@ -114,11 +114,11 @@ void CalcTangents(MeshOBJ& mesh)
     // 接線ベクトルを初期化.
     for(size_t i=0; i<vertexCount; ++i)
     {
-        mesh.Vertices[i].Tangent = asdx::Vector3(1.0f, 0.0f, 0.0f);
+        mesh.Vertices[i].Tangent = asdx::Vector3(0.0f, 0.0f, 0.0f);
     }
 
     auto indexCount = mesh.Indices.size();
-    for(size_t i=0; i<indexCount - 3; i+=3)
+    for(size_t i=0; i<indexCount; i+=3)
     {
         auto i0 = mesh.Indices[i + 0];
         auto i1 = mesh.Indices[i + 1];
@@ -355,7 +355,7 @@ bool OBJLoader::LoadOBJ(const char* path, ModelOBJ& model)
             }
 
             // 四角形.
-            if (count > 3)
+            if (count > 3 && p[3] != UINT32_MAX)
             {
                 assert(count == 4);
 
@@ -419,7 +419,7 @@ bool OBJLoader::LoadOBJ(const char* path, ModelOBJ& model)
     stream.close();
 
     //model.Meshes.resize(subsets.size());
-    std::sort(subsets.begin(), subsets.end(),
+    std::stable_sort(subsets.begin(), subsets.end(),
         [](const SubsetOBJ& lhs, const SubsetOBJ& rhs)
         {
             return std::tie(lhs.MaterialName, lhs.IndexStart) < std::tie(rhs.MaterialName, rhs.IndexStart);
@@ -439,7 +439,7 @@ bool OBJLoader::LoadOBJ(const char* path, ModelOBJ& model)
         {
             if (!matName.empty())
             {
-                if (!normals.empty())
+                if (normals.empty())
                 { CalcNormals(dstMesh); }
 
                 if (!texcoords.empty())
@@ -451,13 +451,15 @@ bool OBJLoader::LoadOBJ(const char* path, ModelOBJ& model)
                 dstMesh.Indices .shrink_to_fit();
 
                 model.Meshes.emplace_back(dstMesh);
+
+                dstMesh = MeshOBJ();
+                vertIndex = 0;
             }
 
             dstMesh.Name         = "mesh";
             dstMesh.Name         += std::to_string(meshId);
             dstMesh.MaterialName = subset.MaterialName;
 
-            vertIndex = 0;
             meshId++;
             matName = subset.MaterialName;
         }
@@ -485,7 +487,7 @@ bool OBJLoader::LoadOBJ(const char* path, ModelOBJ& model)
 
     if (!matName.empty())
     {
-        if (!normals.empty())
+        if (normals.empty())
         { CalcNormals(dstMesh); }
 
         if (!texcoords.empty())
