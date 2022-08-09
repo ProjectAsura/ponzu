@@ -380,16 +380,9 @@ float3 OffsetRay(const float3 p, const float3 n)
 //-----------------------------------------------------------------------------
 RayDesc GeneratePinholeCameraRay(float2 pixel)
 {
-    float4 orig   = float4(0.0f,  0.0f, 0.0f, 1.0f); // カメラの位置.
-    float4 screen = float4(pixel, 0.0f, 1.0f);       // スクリーンの位置.
-
-    orig   = mul(SceneParam.InvView, orig);
-    screen = mul(SceneParam.InvViewProj, screen);
-    screen.xyz /= screen.w;
-
     RayDesc ray;
-    ray.Origin      = orig.xyz;
-    ray.Direction   = normalize(screen.xyz - orig.xyz);
+    ray.Origin      = GetPosition(SceneParam.View);
+    ray.Direction   = CalcRayDir(pixel, SceneParam.View, SceneParam.Proj);
     ray.TMin        = 0.0f;
     ray.TMax        = FLT_MAX;
 
