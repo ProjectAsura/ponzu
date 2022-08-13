@@ -94,16 +94,6 @@ void OnGenerateRay()
 
         float3 geometryNormal = vertex.GeometryNormal;
         float3 V = -ray.Direction;
-        if (dot(geometryNormal, V) < 0.0f)
-        { geometryNormal = -geometryNormal; }
-
-        // 面の下に潜っている場合は反転.
-        bool into = true;
-        if (dot(geometryNormal, N) < 0.0f)
-        {
-            N = -N;
-            into = false;
-        }
 
         // 自己発光による放射輝度.
         L += W * material.Emissive;
@@ -127,7 +117,7 @@ void OnGenerateRay()
                     float cosLight  = 1.0f;
 
                     // BSDF.
-                    float3 fs = SampleMaterial(V, N, dir, Random(seed), into, material);
+                    float3 fs = SampleMaterial(V, N, dir, Random(seed), material);
 
                     // 幾何項.
                     float G = (cosShadow * cosLight);
@@ -152,7 +142,7 @@ void OnGenerateRay()
         float3 u = float3(Random(seed), Random(seed), Random(seed));
         float3 dir;
         float  pdf;
-        float3 brdf = EvaluateMaterial(V, N, u, into, material, dir, pdf);
+        float3 brdf = EvaluateMaterial(V, N, u, material, dir, pdf);
 
         // ロシアンルーレット.
         if (bounce > SceneParam.MinBounce)

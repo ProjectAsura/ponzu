@@ -1302,7 +1302,7 @@ bool Renderer::BuildScene()
         dummy.BaseColor = INVALID_MATERIAL_MAP;
         dummy.ORM       = INVALID_MATERIAL_MAP;
         dummy.Emissive  = INVALID_MATERIAL_MAP;
-        //dummy.IntIor    = 2.4f;
+        //dummy.IntIor    = 1.4f;
         //dummy.ExtIor    = 1.0f;
         dummy.UvScale   = asdx::Vector2(1.0f, 1.0f);
         m_ModelMgr.AddMaterials(&dummy, 1);

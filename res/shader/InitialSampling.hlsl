@@ -102,19 +102,13 @@ void OnGenerateRay()
 
     float3 V = -ray.Direction;
     float3 N = visibleVertex.GeometryNormal;
-    bool into = true;
-    if (dot(N, V) < 0.0f)
-    {
-        N = -N;
-        into = false;
-    }
 
     float3 u = float3(Random(seed), Random(seed), Random(seed));
     float3 dir;
     float  pdf_v;
 
     // マテリアルを評価.
-    float3 brdfWeight = EvaluateMaterial(V, N, u, into, material, dir, pdf_v);
+    float3 brdfWeight = EvaluateMaterial(V, N, u, material, dir, pdf_v);
     brdfWeight /= pdf_v;
 
     throughput *= brdfWeight;
@@ -158,17 +152,12 @@ void OnGenerateRay()
 
     V = -ray.Direction;
     N = sampleVertex.GeometryNormal;
-    if (dot(N, V) < 0.0f)
-    {
-        N = -N;
-        into = false;
-    }
 
     u = float3(Random(seed), Random(seed), Random(seed));
     float pdf_s;
 
     // マテリアルを評価.
-    brdfWeight = EvaluateMaterial(V, N, u, into, material, dir, pdf_s);
+    brdfWeight = EvaluateMaterial(V, N, u, material, dir, pdf_s);
     brdfWeight /= pdf_s;
 
     throughput *= brdfWeight;

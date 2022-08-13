@@ -533,8 +533,50 @@ float3 SampleGGXVNDF(float3 Ve, float alpha_x, float alpha_y, float2 u)
 //-----------------------------------------------------------------------------
 //      出射方向をサンプリングします.
 //-----------------------------------------------------------------------------
-float3 SampleDir(float3 V, float3 N, float3 u, bool into, Material material)
+float3 SampleDir(float3 V, float3 N, float3 u, Material material)
 {
+    // 物体からのレイの入出を考慮した法線.
+    float3 Nm = dot(N, -V) < 0.0f ? N : -N;
+
+    // レイがオブジェクトから出射するか入射するか?
+    bool into = dot(N, Nm) > 0.0f;
+
+    // 透明屈折.
+    if (IsDielectric(material))
+    {
+        // Snellの法則.
+        float nc = material.ExtIor;
+        float nt = material.IntIor;
+
+        // 相対屈折率.
+        float eta = (into) ? (nc / nt) : (nt / nc);
+
+        float ddn = dot(Nm, -V);
+        float cos2t = 1.0f - Pow2(eta) * (1.0f - Pow2(ddn));
+
+        // 反射ベクトル.
+        float3 reflection = normalize(reflect(-V, N));
+
+        // 全反射チェック.
+        if (cos2t < 0.0f)
+        { return material.BaseColor.rgb; }
+
+        // 屈折ベクトル.
+        float3 refraction = normalize(refract(-V, N, eta));
+
+        float a = nt - nc;
+        float b = nt + nc;
+        float R0 = (a * b) / (b * b);
+
+        float c = 1.0f - (into ? -ddn : dot(refraction, -Nm));
+        float Re = R0 + (1.0f - R0) * Pow5(c);
+
+        float p = 0.25f + 0.5f * Re; // フレネルのグラフを参照.
+        if (u.z < p)
+        { return reflection; }
+        else
+        { return refraction; }
+    }
     // 完全拡散反射.
     if (IsPerfectDiffuse(material))
     {
@@ -548,35 +590,6 @@ float3 SampleDir(float3 V, float3 N, float3 u, bool into, Material material)
     else if (IsPerfectSpecular(material))
     {
         return normalize(reflect(-V, N));
-    }
-    // 透明屈折.
-    else if (IsDielectric(material))
-    {
-        // Snellの法則.
-        float nnt = (into) ? (material.ExtIor / material.IntIor) : (material.IntIor / material.ExtIor);
-        float NoV = dot(N, V);
-        float cos2t = 1.0f - nnt * nnt * (1.0f - NoV * NoV);
-
-        // 反射ベクトル.
-        float3 reflection = normalize(reflect(-V, N));
-
-        // 全反射チェック.
-        if (cos2t < 0.0f)
-        { return reflection; }
-
-        // 屈折ベクトル.
-        float3 refraction = -V * nnt - N * ((into) ? 1.0 : -1.0) * (NoV * nnt + sqrt(max(0.0f, cos2t)));
-
-        float a = material.ExtIor - material.IntIor;
-        float b = material.ExtIor + material.IntIor;
-        float R0 = (a * b) / (b * b);
-        float Re = F_Schlick(R0, abs(dot(refraction, N)));
-
-        float p = 0.25f + 0.5f * Re; // フレネルのグラフを参照.
-        if (u.z < p)
-        { return reflection; }
-        else
-        { return refraction; }
     }
     else
     {
@@ -627,27 +640,27 @@ float3 SampleMaterial
     float3      N,          // 法線ベクトル.
     float3      L,          // ライトベクトル.
     float       u,          // 乱数.
-    bool        into,
     Material    material    // マテリアル.
 )
 {
-    // 完全拡散反射.
-    if (IsPerfectDiffuse(material))
-    {
-        return material.BaseColor.rgb;
-    }
-    // 完全鏡面反射.
-    else if (IsPerfectSpecular(material))
-    {
-        return material.BaseColor.rgb;
-    }
+    // 物体からのレイの入出を考慮した法線.
+    float3 Nm = dot(N, -V) < 0.0f ? N : -N;
+
+    // レイがオブジェクトから出射するか入射するか?
+    bool into = dot(N, Nm) > 0.0f;
+
     // 透明屈折.
-    else if (IsDielectric(material))
+    if (IsDielectric(material))
     {
         // Snellの法則.
-        float nnt = (into) ? (material.ExtIor / material.IntIor) : (material.IntIor / material.ExtIor);
-        float NoV = dot(N, V);
-        float cos2t = 1.0f - nnt * nnt * (1.0f - NoV * NoV);
+        float nc = material.ExtIor;
+        float nt = material.IntIor;
+
+        // 相対屈折率.
+        float eta = (into) ? (nc / nt) : (nt / nc);
+
+        float ddn = dot(Nm, -V);
+        float cos2t = 1.0f - Pow2(eta) * (1.0f - Pow2(ddn));
 
         // 反射ベクトル.
         float3 refrect = normalize(reflect(-V, N));
@@ -657,20 +670,37 @@ float3 SampleMaterial
         { return material.BaseColor.rgb; }
 
         // 屈折ベクトル.
-        float3 refract = -V * nnt - N * ((into) ? 1.0 : -1.0) * (NoV * nnt + sqrt(max(0.0f, cos2t)));
-        refract = normalize(refract);
+        float3 refraction = normalize(refract(-V, N, eta));
 
-        float a = material.ExtIor - material.IntIor;
-        float b = material.ExtIor + material.IntIor;
+        float a = nt - nc;
+        float b = nt + nc;
         float R0 = (a * b) / (b * b);
-        float Re = F_Schlick(R0, abs(dot(refract, N)));
-        float Tr = (1.0f - Re);
+
+        float c = 1.0f - (into ? -ddn : dot(refraction, -Nm));
+        float Re = R0 + (1.0f - R0) * Pow5(c);
+
+        float eta2 = Pow2(eta);
+        float Tr = (1.0f - Re) * eta2;
 
         float p = 0.25f + 0.5f * Re; // フレネルのグラフを参照.
         if (u < p)
-        { return material.BaseColor.rgb * Re / (p * 0.5f); }
+        {
+            return material.BaseColor.rgb * Re / (p * 0.5f);
+        }
         else
-        { return material.BaseColor.rgb * Tr / ((1.0f - p) * 0.5f); }
+        {
+            return material.BaseColor.rgb * Tr / ((1.0f - p) * 0.5f);
+        }
+    }
+    // 完全拡散反射.
+    else if (IsPerfectDiffuse(material))
+    {
+        return material.BaseColor.rgb;
+    }
+    // 完全鏡面反射.
+    else if (IsPerfectSpecular(material))
+    {
+        return material.BaseColor.rgb;
     }
     else
     {
@@ -690,10 +720,10 @@ float3 SampleMaterial
 #if USE_GGX
         float3 H = normalize(V + L);
 
-        float NdotL = abs(dot(N, L));
-        float NdotH = abs(dot(N, H));
+        float NdotL = abs(dot(Nm, L));
+        float NdotH = abs(dot(Nm, H));
         float VdotH = abs(dot(V, H));
-        float NdotV = abs(dot(N, V));
+        float NdotV = abs(dot(Nm, V));
 
         float  G = G_SmithGGX(NdotL, NdotV, a);
         float3 F = F_Schlick(specularColor, VdotH);
@@ -716,53 +746,38 @@ float3 SampleMaterial
 //-----------------------------------------------------------------------------
 float3 EvaluateMaterial
 (
-    float3      V,          // 入射方向.
+    float3      V,          // 視線ベクトル.(-Vでレイの方向ベクトルになる).
     float3      N,          // 法線ベクトル.
     float3      u,          // 乱数.
-    bool        into,
     Material    material,   // マテリアル.
     out float3  dir,        // 出射方向.
     out float   pdf         // 確率密度.
 )
 {
-    // 完全拡散反射.
-    if (IsPerfectDiffuse(material))
-    {
-        float3 T, B;
-        CalcONB(N, T, B);
+    // 物体からのレイの入出を考慮した法線.
+    float3 Nm = dot(N, -V) < 0.0f ? N : -N;
 
-        float3 s = SampleLambert(u.xy);
-        float3 L = normalize(T * s.x + B * s.y + N * s.z);
+    // レイがオブジェクトから出射するか入射するか?
+    bool into = dot(N, Nm) > 0.0f;
 
-        float NoL = abs(dot(N, L));
-
-        dir = L;
-        pdf = NoL / F_PI;
-
-        return (material.BaseColor.rgb / F_PI) * NoL;
-
-    }
-    // 完全鏡面反射.
-    else if (IsPerfectSpecular(material))
-    {
-        float3 L = normalize(reflect(-V, N));
-        dir = L;
-        pdf = 1.0f;
-
-        return material.BaseColor.rgb;
-    }
-    else if (IsDielectric(material))
+    // 屈折半透明.
+    if (IsDielectric(material))
     {
         // Snellの法則.
-        float nnt = (into) ? (material.ExtIor / material.IntIor) : (material.IntIor / material.ExtIor);
-        float NoV = dot(N, V);
-        float cos2t = 1.0f - nnt * nnt * (1.0f - NoV * NoV);
+        float nc = material.ExtIor;
+        float nt = material.IntIor;
+
+        // 相対屈折率.
+        float eta = (into) ? (nc / nt) : (nt / nc);
+
+        float ddn = dot(Nm, -V);
+        float cos2t = 1.0f - Pow2(eta) * (1.0f - Pow2(ddn));
 
         // 反射ベクトル.
         float3 reflection = normalize(reflect(-V, N));
 
         // 全反射チェック.
-        if (cos2t < 0.0f)
+        if (cos2t <= 0.0f)
         {
             dir = reflection;
             pdf = 1.0f;
@@ -770,13 +785,17 @@ float3 EvaluateMaterial
         }
 
         // 屈折ベクトル.
-        float3 refraction = -V * nnt - N * ((into) ? 1.0 : -1.0) * (NoV * nnt + sqrt(max(0.0f, cos2t)));
+        float3 refraction = normalize(refract(-V, N, eta));
 
-        float a = material.ExtIor - material.IntIor;
-        float b = material.ExtIor + material.IntIor;
+        float a = nt - nc;
+        float b = nt + nc;
         float R0 = (a * b) / (b * b);
-        float Re = F_Schlick(R0, abs(dot(refraction, N)));
-        float Tr = (1.0f - Re);
+
+        float c = 1.0f - (into ? -ddn : dot(refraction, -Nm));
+        float Re = R0 + (1.0f - R0) * Pow5(c);
+
+        float eta2 = Pow2(eta);
+        float Tr = (1.0f - Re) * eta2;
 
         float p = 0.25f + 0.5f * Re; // フレネルのグラフを参照.
         if (u.z < p)
@@ -792,6 +811,32 @@ float3 EvaluateMaterial
             return material.BaseColor.rgb * Tr;
         }
     }
+    // 完全拡散反射.
+    else if (IsPerfectDiffuse(material))
+    {
+        float3 T, B;
+        CalcONB(Nm, T, B);
+
+        float3 s = SampleLambert(u.xy);
+        float3 L = normalize(T * s.x + B * s.y + Nm * s.z);
+
+        float NoL = abs(dot(Nm, L));
+
+        dir = L;
+        pdf = NoL / F_PI;
+
+        return (material.BaseColor.rgb / F_PI) * NoL;
+
+    }
+    // 完全鏡面反射.
+    else if (IsPerfectSpecular(material))
+    {
+        float3 L = normalize(reflect(-V, Nm));
+        dir = L;
+        pdf = 1.0f;
+
+        return material.BaseColor.rgb;
+    }
     else
     {
         float3 diffuseColor  = ToKd(material.BaseColor.rgb, material.Metalness);
@@ -803,12 +848,12 @@ float3 EvaluateMaterial
         if (u.z < p)
         {
             float3 T, B;
-            CalcONB(N, T, B);
+            CalcONB(Nm, T, B);
 
             float3 s = SampleLambert(u.xy);
-            float3 L = normalize(T * s.x + B * s.y + N * s.z);
+            float3 L = normalize(T * s.x + B * s.y + Nm * s.z);
 
-            float NoL = abs(dot(N, L));
+            float NoL = abs(dot(Nm, L));
 
             dir = L;
             pdf = (NoL / F_PI);
@@ -821,16 +866,16 @@ float3 EvaluateMaterial
 
 #if USE_GGX
         float3 T, B;
-        CalcONB(N, T, B);
+        CalcONB(Nm, T, B);
 
         float3 s = SampleGGX(u.xy, a);
         float3 H = normalize(T * s.x + B * s.y + N * s.z);
         float3 L = normalize(reflect(-V, H));
 
-        float NdotL = abs(dot(N, L));
-        float NdotH = abs(dot(N, H));
+        float NdotL = abs(dot(Nm, L));
+        float NdotH = abs(dot(Nm, H));
         float VdotH = abs(dot(V, H));
-        float NdotV = abs(dot(N, V));
+        float NdotV = abs(dot(Nm, V));
 
         float  D = D_GGX(NdotH, a);
         float  G = G_SmithGGX(NdotL, NdotV, a);
