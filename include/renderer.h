@@ -26,6 +26,7 @@
 #include <gfx/asdxCommandQueue.h>
 #include <gfx/asdxQuad.h>
 #include <edit/asdxGuiMgr.h>
+#include <renderer/asdxTaaRenderer.h>
 #include <model_mgr.h>
 #include <scene.h>
 
@@ -149,6 +150,7 @@ private:
 
     asdx::ComputeTarget             m_TemporalReservoirBuffer;
     asdx::ComputeTarget             m_SpatialReservoirBuffer;
+    asdx::ColorTarget               m_ToneMapTarget;
     asdx::ColorTarget               m_FinalBuffer;
 
     RtPipeline                      m_InitialSampling;
@@ -184,8 +186,16 @@ private:
     asdx::Texture       m_DefaultNormal;
     asdx::Texture       m_DefaultORM;
 
-    asdx::RootSignature             m_CopyRootSig;
-    asdx::PipelineState             m_CopyPSO;
+    asdx::RootSignature m_CopyRootSig;
+    asdx::PipelineState m_CopyPSO;
+
+    asdx::ColorTarget   m_HistoryTarget[2];
+    uint8_t             m_CurrHistoryBufferIndex = 0;
+    uint8_t             m_PrevHistoryBufferIndex = 1;
+    asdx::TaaRenderer   m_TaaRenderer;
+    asdx::Vector2       m_CurrJitter;
+    asdx::Vector2       m_PrevJitter;
+    uint32_t            m_JitterIndex = 0;
 
     bool                m_EndRequest = false;
 
