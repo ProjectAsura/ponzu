@@ -1,6 +1,6 @@
 ﻿//-----------------------------------------------------------------------------
-// File : TonemapPS.hlsl
-// Desc : Pixel Shader For Tonemap.
+// File : TonemapCS.hlsl
+// Desc : Compute Shader For Tonemap.
 // Copyright(c) Project Asura. All right reserved.
 //-----------------------------------------------------------------------------
 
@@ -9,32 +9,25 @@
 //-----------------------------------------------------------------------------
 #include <SceneParam.hlsli>
 
-
-///////////////////////////////////////////////////////////////////////////////
-// VSOutput structure
-///////////////////////////////////////////////////////////////////////////////
-struct VSOutput
-{
-    float4 Position : SV_POSITION;
-    float2 TexCoord : TEXCOORD0;
-};
-
-
-ConstantBuffer<SceneParameter>  SceneParam : register(b0);
-
 //-----------------------------------------------------------------------------
-// Textures and Samplers.
+// Resources
 //-----------------------------------------------------------------------------
-Texture2D       ColorBuffer  : register(t0);
-SamplerState    ColorSampler : register(s0);
+ConstantBuffer<SceneParameter>  SceneParam   : register(b0);
+Texture2D                       ColorBuffer  : register(t0);
+RWTexture2D<float4>             OutputBuffer : register(u0);
 
 //-----------------------------------------------------------------------------
 //      エントリーポイントです.
 //-----------------------------------------------------------------------------
-float4 main(const VSOutput input) : SV_TARGET0
+[numthreads(8, 8, 1)]
+void main(uint3 dispatchId : SV_DispatchThreadID)
 {
-    float4 color = ColorBuffer.SampleLevel(ColorSampler, input.TexCoord, 0.0f);
+    if (any(dispatchId.xy >= (uint2)SceneParam.Size.xy)) {
+        return;
+    }
+
+    float4 color = ColorBuffer.Load(int3(dispatchId.xy, 0));
     float3 output = (color.rgb / SceneParam.AccumulatedFrames) * SceneParam.ExposureAdjustment;
 
-    return float4(output, 1.0f);
+    OutputBuffer[dispatchId.xy] = float4(output, 1.0f);
 }

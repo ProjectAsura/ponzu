@@ -14,6 +14,10 @@
 #define ASDX_ENABLE_IMGUI   (1)
 #endif
 
+#ifndef ENABLE_RESTIR
+#define ENABLE_RESTIR       (0)
+#endif//ENABLE_RESTIR
+
 //-----------------------------------------------------------------------------
 // Include
 //-----------------------------------------------------------------------------
@@ -125,8 +129,6 @@ private:
     //=========================================================================
     SceneDesc                       m_SceneDesc;
     asdx::WaitPoint                 m_FrameWaitPoint;
-    asdx::RootSignature             m_TonemapRootSig;
-    asdx::PipelineState             m_TonemapPSO;
     asdx::RootSignature             m_RayTracingRootSig;
     asdx::RayTracingPipelineState   m_RayTracingPSO;
     std::vector<asdx::Blas>         m_BLAS;
@@ -147,14 +149,16 @@ private:
     std::vector<MeshDrawCall>       m_MeshDrawCalls;
     Scene                           m_Scene;
     asdx::Camera                    m_Camera;
+    asdx::ComputeTarget             m_TonemapBuffer;
 
+#if ENABLE_RESTIR
     asdx::ComputeTarget             m_TemporalReservoirBuffer;
     asdx::ComputeTarget             m_SpatialReservoirBuffer;
-    asdx::ColorTarget               m_ToneMapTarget;
-    asdx::ColorTarget               m_FinalBuffer;
-
     RtPipeline                      m_InitialSampling;
     RtPipeline                      m_SpatialSampling;
+    asdx::RootSignature             m_ShadePixelRootSig;
+    asdx::PipelineState             m_ShadePixelPSO;
+#endif
 
     uint8_t                         m_ReadBackIndex = 0;
     uint8_t                         m_MapIndex      = 0;
@@ -166,9 +170,6 @@ private:
 
     double                          m_AnimationOneFrameTime = 0;
     double                          m_AnimationElapsedTime = 0;
-
-    asdx::RootSignature             m_ShadePixelRootSig;
-    asdx::PipelineState             m_ShadePixelPSO;
 
     asdx::Matrix        m_CurrView;
     asdx::Matrix        m_CurrProj;
@@ -186,15 +187,16 @@ private:
     asdx::Texture       m_DefaultNormal;
     asdx::Texture       m_DefaultORM;
 
+    asdx::RootSignature m_TonemapRootSig;
+    asdx::PipelineState m_TonemapPSO;
+
     asdx::RootSignature m_CopyRootSig;
     asdx::PipelineState m_CopyPSO;
 
-    asdx::ColorTarget   m_HistoryTarget[2];
+    asdx::ComputeTarget m_HistoryTarget[2];
     uint8_t             m_CurrHistoryBufferIndex = 0;
     uint8_t             m_PrevHistoryBufferIndex = 1;
     asdx::TaaRenderer   m_TaaRenderer;
-    asdx::Vector2       m_CurrJitter;
-    asdx::Vector2       m_PrevJitter;
     uint32_t            m_JitterIndex = 0;
 
     bool                m_EndRequest = false;
@@ -211,8 +213,10 @@ private:
     asdx::ShaderTable               m_DevMissTable;
     asdx::ShaderTable               m_DevHitGroupTable;
 
+#if ENABLE_RESTIR
     RtPipeline                      m_DevInitialSampling;
     RtPipeline                      m_DevSpatialSampling;
+#endif
 
     int                             m_BufferKind;
     asdx::CameraController          m_CameraController;

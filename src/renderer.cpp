@@ -28,7 +28,7 @@ namespace {
 // Constant Values.
 //-----------------------------------------------------------------------------
 #include "../res/shader/Compile/TonemapVS.inc"
-#include "../res/shader/Compile/TonemapPS.inc"
+#include "../res/shader/Compile/TonemapCS.inc"
 #include "../res/shader/Compile/RtCamp.inc"
 #include "../res/shader/Compile/ModelVS.inc"
 #include "../res/shader/Compile/ModelPS.inc"
@@ -50,20 +50,24 @@ static_assert(sizeof(r3d::Vertex) == sizeof(VertexOBJ), "Vertex size not matched
 enum BUFFER_KIND
 {
     BUFFER_KIND_CANVAS  = 0,
-    BUFFER_KIND_SPATIAL,
-    BUFFER_KIND_TEMPORAL,
     BUFFER_KIND_ALBEDO,
     BUFFER_KIND_NORMAL,
     BUFFER_KIND_VELOCITY,
+    #if ENABLE_RESTIR
+    BUFFER_KIND_SPATIAL,
+    BUFFER_KIND_TEMPORAL,
+    #endif
 };
 
 static const char* kBufferKindItems[] = {
     u8"Canvas",
-    u8"Spatial",
-    u8"Temporal",
     u8"Albedo",
     u8"Normal",
     u8"Velocity",
+    #if ENABLE_RESTIR
+    u8"Spatial",
+    u8"Temporal",
+    #endif
 };
 #endif
 
@@ -194,22 +198,6 @@ unsigned Export(void* args)
     //ILOGA("timer = %lf", timer.GetElapsedMsec());
 
     return 0;
-}
-
-//-----------------------------------------------------------------------------
-//      ハルトン数列.
-//-----------------------------------------------------------------------------
-float HaltonSequence(uint32_t i, uint32_t b)
-{
-    float f = 1.0f;
-    float r = 0.0f;
-    while (i > 0)
-    {
-        f = f / b;
-        r = r + f * (i % b);
-        i = i / b;
-    }
-    return r;
 }
 
 } // namespace
@@ -440,28 +428,6 @@ bool Renderer::SystemSetup()
         m_Canvas.SetName(L"Canvas");
     }
 
-    // トーンマップターゲット.
-    {
-        asdx::TargetDesc desc;
-        desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-        desc.Width              = m_SceneDesc.Width;
-        desc.Height             = m_SceneDesc.Height;
-        desc.DepthOrArraySize   = 1;
-        desc.Format             = DXGI_FORMAT_R8G8B8A8_UNORM;
-        desc.MipLevels          = 1;
-        desc.SampleDesc.Count   = 1;
-        desc.SampleDesc.Quality = 0;
-        desc.InitState          = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-
-        if (!m_ToneMapTarget.Init(&desc))
-        {
-            ELOGA("Error : FinalBuffer Init Failed.");
-            return false;
-        }
-
-        m_ToneMapTarget.SetName(L"ToneMapTarget");
-    }
-
     // ヒストリーバッファ.
     {
         asdx::TargetDesc desc;
@@ -488,7 +454,7 @@ bool Renderer::SystemSetup()
         m_HistoryTarget[1].SetName(L"HistoryTarget1");
     }
 
-    // 最終ターゲット.
+    // トーンマップターゲット.
     {
         asdx::TargetDesc desc;
         desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
@@ -499,15 +465,15 @@ bool Renderer::SystemSetup()
         desc.MipLevels          = 1;
         desc.SampleDesc.Count   = 1;
         desc.SampleDesc.Quality = 0;
-        desc.InitState          = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        desc.InitState          = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 
-        if (!m_FinalBuffer.Init(&desc))
+        if (!m_TonemapBuffer.Init(&desc))
         {
             ELOGA("Error : FinalBuffer Init Failed.");
             return false;
         }
 
-        m_FinalBuffer.SetName(L"FinalBuffer");
+        m_TonemapBuffer.SetName(L"TonemapBuffer");
     }
 
     // レイトレ用ルートシグニチャ生成.
@@ -619,11 +585,10 @@ bool Renderer::SystemSetup()
 
     // トーンマップ用ルートシグニチャ生成.
     {
-        asdx::DescriptorSetLayout<2, 1> layout;
-        layout.SetTableSRV(0, asdx::SV_PS, 0);
-        layout.SetCBV(1, asdx::SV_PS, 0);
-        layout.SetStaticSampler(0, asdx::SV_PS, asdx::STATIC_SAMPLER_LINEAR_CLAMP, 0);
-        layout.SetFlags(D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+        asdx::DescriptorSetLayout<3, 0> layout;
+        layout.SetTableSRV(0, asdx::SV_ALL, 0);
+        layout.SetCBV(1, asdx::SV_ALL, 0);
+        layout.SetTableUAV(2, asdx::SV_ALL, 0);
 
         if (!m_TonemapRootSig.Init(pDevice, layout.GetDesc()))
         {
@@ -634,21 +599,9 @@ bool Renderer::SystemSetup()
 
     // トーンマップ用パイプラインステート生成.
     {
-        D3D12_GRAPHICS_PIPELINE_STATE_DESC desc = {};
-        desc.pRootSignature         = m_TonemapRootSig.GetPtr();
-        desc.VS                     = { TonemapVS, sizeof(TonemapVS) };
-        desc.PS                     = { TonemapPS, sizeof(TonemapPS) };
-        desc.BlendState             = asdx::BLEND_DESC(asdx::BLEND_STATE_OPAQUE);
-        desc.DepthStencilState      = asdx::DEPTH_STENCIL_DESC(asdx::DEPTH_STATE_NONE);
-        desc.RasterizerState        = asdx::RASTERIZER_DESC(asdx::RASTERIZER_STATE_CULL_NONE);
-        desc.SampleMask             = D3D12_DEFAULT_SAMPLE_MASK;
-        desc.PrimitiveTopologyType  = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-        desc.NumRenderTargets       = 1;
-        desc.RTVFormats[0]          = m_SwapChainFormat;
-        desc.DSVFormat              = DXGI_FORMAT_UNKNOWN;
-        desc.InputLayout            = asdx::Quad::kInputLayout;
-        desc.SampleDesc.Count       = 1;
-        desc.SampleDesc.Quality     = 0;
+        D3D12_COMPUTE_PIPELINE_STATE_DESC desc = {};
+        desc.pRootSignature = m_TonemapRootSig.GetPtr();
+        desc.CS             = { TonemapCS, sizeof(TonemapCS) };
 
         if (!m_TonemapPSO.Init(pDevice, &desc))
         {
@@ -667,6 +620,7 @@ bool Renderer::SystemSetup()
         }
     }
 
+#if ENABLE_RESTIR
     // テンポラルリザーバーバッファとスパシャルリザーバーバッファの初期化.
     {
         auto stride = sizeof(Reservoir);
@@ -743,6 +697,7 @@ bool Renderer::SystemSetup()
             return false;
         }
     }
+#endif
 
     // アルベドバッファ.
     {
@@ -943,9 +898,9 @@ bool Renderer::SystemSetup()
     }
 
     // TAAレンダラー初期化.
-    if (!m_TaaRenderer.Init(m_SwapChainFormat))
+    if (!m_TaaRenderer.InitCS())
     {
-        ELOGA("Error : TaaRenderer::Init() Failed");
+        ELOGA("Error : TaaRenderer::InitCS() Failed");
         return false;
     }
 
@@ -1459,21 +1414,25 @@ void Renderer::OnTerm()
 
     m_TaaRenderer.Term();
     for(auto i=0; i<2; ++i)
-    {
-        m_HistoryTarget[i].Term();
-    }
-    m_ToneMapTarget.Term();
+    { m_HistoryTarget[i].Term(); }
 
+#if ENABLE_RESTIR
     m_SpatialReservoirBuffer .Term();
     m_TemporalReservoirBuffer.Term();
-    m_FinalBuffer            .Term();
-
+    m_InitialSampling.Reset();
+    m_SpatialSampling.Rest();
     m_ShadePixelRootSig .Term();
     m_ShadePixelPSO     .Term();
+#endif
+
+    m_TonemapBuffer.Term();
+
     m_TonemapPSO        .Term();
     m_TonemapRootSig    .Term();
+
     m_RayTracingPSO     .Term();
     m_RayTracingRootSig .Term();
+    
     m_CopyRootSig       .Term();
     m_CopyPSO           .Term();
 
@@ -1735,7 +1694,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         }
     }
 
-#if 0
+#if ENABLE_RESTIR
     // Initial Sampling & Temporal reuse
     {
         auto stateObject    = m_InitialSampling.PSO          .GetStateObject();
@@ -1904,65 +1863,52 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
             m_GfxCmdList,
             m_Canvas.GetResource(),
             D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
-        asdx::ScopedBarrier barrier1(
-            m_GfxCmdList,
-            m_ToneMapTarget.GetResource(),
-            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
-            D3D12_RESOURCE_STATE_RENDER_TARGET);
+        auto threadX = (m_SceneDesc.Width + 7) / 8;
+        auto threadY = (m_SceneDesc.Height + 7) / 8;
 
-        m_GfxCmdList.SetTarget(m_ToneMapTarget.GetRTV(), nullptr);
-        m_GfxCmdList.SetViewport(m_ToneMapTarget.GetResource());
-        m_GfxCmdList.SetRootSignature(m_TonemapRootSig.GetPtr(), false);
+        m_GfxCmdList.SetRootSignature(m_TonemapRootSig.GetPtr(), true);
         m_GfxCmdList.SetPipelineState(m_TonemapPSO.GetPtr());
-        m_GfxCmdList.SetTable(0, m_Canvas.GetSRV());
-        m_GfxCmdList.SetCBV(1, m_SceneParam.GetResource());
-        asdx::Quad::Instance().Draw(m_GfxCmdList.GetCommandList());
+        m_GfxCmdList.SetTable(0, m_Canvas.GetSRV(), true);
+        m_GfxCmdList.SetCBV(1, m_SceneParam.GetResource(), true);
+        m_GfxCmdList.SetTable(2, m_TonemapBuffer.GetUAV(), true);
+        m_GfxCmdList.Dispatch(threadX, threadY, 1);
+
+        m_GfxCmdList.BarrierUAV(m_TonemapBuffer.GetResource());
     }
 
     // テンポラルアンチエイリアシング実行.
     {
-        m_PrevJitter = m_CurrJitter;
-        m_CurrJitter.x = (HaltonSequence(m_JitterIndex + 1, 2) - 0.5f) / m_SceneDesc.Width;
-        m_CurrJitter.y = (HaltonSequence(m_JitterIndex + 1, 3) - 0.5f) / m_SceneDesc.Height;
+        auto jitter = asdx::TaaRenderer::CalcJitter(m_JitterIndex, m_SceneDesc.Width, m_SceneDesc.Height);
 
         m_JitterIndex++;
 
         asdx::ScopedBarrier barrier0(
             m_GfxCmdList,
             m_HistoryTarget[m_PrevHistoryBufferIndex].GetResource(),
-            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
-            D3D12_RESOURCE_STATE_RENDER_TARGET);
+            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-        m_TaaRenderer.Render(
+        m_TaaRenderer.RenderCS(
             m_GfxCmdList.GetCommandList(),
-            m_HistoryTarget[m_CurrHistoryBufferIndex].GetRTV(),
-            m_ToneMapTarget.GetSRV(),
+            m_HistoryTarget[m_CurrHistoryBufferIndex].GetUAV(),
+            m_TonemapBuffer.GetSRV(),
             m_HistoryTarget[m_PrevHistoryBufferIndex].GetSRV(),
             m_VelocityTarget.GetSRV(),
             m_DepthTarget.GetSRV(),
             1.0f,
             0.1f,
-            m_CurrJitter,
-            m_PrevJitter);
+            jitter);
 
-        asdx::ScopedBarrier barrier1(
-            m_GfxCmdList,
-            m_HistoryTarget[m_CurrHistoryBufferIndex].GetResource(),
-            D3D12_RESOURCE_STATE_RENDER_TARGET,
-            D3D12_RESOURCE_STATE_COPY_SOURCE);
-
-        m_GfxCmdList.CopyResource(
-            m_FinalBuffer.GetResource(),
-            m_HistoryTarget[m_CurrHistoryBufferIndex].GetResource());
+        m_GfxCmdList.BarrierUAV(m_HistoryTarget[m_CurrHistoryBufferIndex].GetResource());
     }
 
     // リードバック実行.
     {
         m_GfxCmdList.BarrierTransition(
-            m_FinalBuffer.GetResource(), 0,
-            D3D12_RESOURCE_STATE_COPY_DEST,
+            m_HistoryTarget[m_CurrHistoryBufferIndex].GetResource(), 0,
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
             D3D12_RESOURCE_STATE_COPY_SOURCE);
 
         D3D12_TEXTURE_COPY_LOCATION dst = {};
@@ -1976,7 +1922,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
 
         D3D12_TEXTURE_COPY_LOCATION src = {};
         src.Type                = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-        src.pResource           = m_FinalBuffer.GetResource();
+        src.pResource           = m_HistoryTarget[m_CurrHistoryBufferIndex].GetResource();
         src.SubresourceIndex    = 0;
 
         D3D12_BOX box = {};
@@ -1990,11 +1936,6 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         // 読み戻し用ターゲットにコピー.
         m_GfxCmdList.CopyTextureRegion(&dst, 0, 0, 0, &src, &box);
 
-        m_GfxCmdList.BarrierTransition(
-            m_FinalBuffer.GetResource(), 0,
-            D3D12_RESOURCE_STATE_COPY_SOURCE,
-            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-
         m_ReadBackIndex = (m_ReadBackIndex + 1) % 3;
         m_MapIndex      = (m_MapIndex + 1) % 3;
     }
@@ -2006,14 +1947,21 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
             D3D12_RESOURCE_STATE_PRESENT,
             D3D12_RESOURCE_STATE_RENDER_TARGET);
 
+        asdx::ScopedBarrier barrier0(
+            m_GfxCmdList,
+            m_HistoryTarget[m_CurrHistoryBufferIndex].GetResource(),
+            D3D12_RESOURCE_STATE_COPY_SOURCE,
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
     #if !(CAMP_RELEASE)
         const asdx::IShaderResourceView* pSRV = nullptr;
         switch(m_BufferKind)
         {
         case BUFFER_KIND_CANVAS:
-            pSRV = m_FinalBuffer.GetSRV();
+            pSRV = m_HistoryTarget[m_CurrHistoryBufferIndex].GetSRV();
             break;
 
+        #if ENABLE_RESTIR
         case BUFFER_KIND_SPATIAL:
             pSRV = m_SpatialReservoirBuffer.GetSRV();
             break;
@@ -2021,6 +1969,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         case BUFFER_KIND_TEMPORAL:
             pSRV = m_TemporalReservoirBuffer.GetSRV();
             break;
+        #endif
 
         case BUFFER_KIND_ALBEDO:
             pSRV = m_AlbedoTarget.GetSRV();
@@ -2053,11 +2002,6 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
 
         // 2D描画.
         Draw2D();
-
-        m_GfxCmdList.BarrierTransition(
-            m_FinalBuffer.GetResource(), 0,
-            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
-            D3D12_RESOURCE_STATE_COPY_DEST);
 
         m_GfxCmdList.BarrierTransition(
             m_ColorTarget[idx].GetResource(), 0,
@@ -2260,8 +2204,10 @@ void Renderer::ReloadShader()
     m_DevMissTable      .Term();
     m_DevHitGroupTable  .Term();
 
+#if ENABLE_RESTIR
     m_DevInitialSampling.Reset();
     m_DevSpatialSampling.Reset();
+#endif
 
     asdx::RefPtr<asdx::IBlob> DevShader;
 
@@ -2362,6 +2308,7 @@ void Renderer::ReloadShader()
         }
     }
 
+#if ENABLE_RESTIR
     // 初期サンプル & テンポラルリユース.
     {
         asdx::RefPtr<asdx::IBlob> binary;
@@ -2403,6 +2350,7 @@ void Renderer::ReloadShader()
             return;
         }
     }
+#endif
 
     // リロードフラグを立てる.
     m_ReloadShader = true;
