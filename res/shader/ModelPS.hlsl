@@ -74,11 +74,14 @@ PSOutput main(const VSOutput input)
 
     uint materialId = Instances.Load(ObjectParam.InstanceId * INSTANCE_STRIDE + 8);
 
-    uint  address = materialId * MATERIAL_STRIDE;
-    uint4 data    = Materials.Load4(address);
+    uint   address = materialId * MATERIAL_STRIDE;
+    uint4  data    = Materials.Load4(address);
+    float4 prop    = asfloat(Materials.Load4(address + 16));
+
+    float2 uv = input.TexCoord * prop.zw;
 
     Texture2D<float4> baseColorMap = ResourceDescriptorHeap[data.x];
-    float4 bc = baseColorMap.Sample(LinearWrap, input.TexCoord);
+    float4 bc = baseColorMap.Sample(LinearWrap, uv);
 
     //Texture2D<float4> normalMap = ResourceDescriptorHeap[data.y];
     //float3 n = normalMap.Sample(LinearWrap, input.TexCoord).xyz * 2.0f - 1.0f;

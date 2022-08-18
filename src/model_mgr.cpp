@@ -44,8 +44,8 @@ bool ModelMgr::Init
     {
         asdx::ResTexture res;
         res.Dimension       = asdx::TEXTURE_DIMENSION_2D;
-        res.Width           = 32;
-        res.Height          = 32;
+        res.Width           = 16;
+        res.Height          = 16;
         res.Depth           = 0;
         res.Format          = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
         res.MipMapCount     = 1;
@@ -54,8 +54,8 @@ bool ModelMgr::Init
 
         auto& subRes = res.pResources[0];
 
-        subRes.Width        = 32;
-        subRes.Height       = 32;
+        subRes.Width        = 16;
+        subRes.Height       = 16;
         subRes.MipIndex     = 0;
         subRes.Pitch        = sizeof(uint8_t) * 4 * subRes.Width;
         subRes.SlicePitch   = subRes.Pitch * subRes.Height;
@@ -78,7 +78,7 @@ bool ModelMgr::Init
                 subRes.pPixels[idx + 1] = 255;
                 subRes.pPixels[idx + 2] = 255;
                 subRes.pPixels[idx + 3] = 255;
-    #endif
+        #endif
             }
         }
 
@@ -96,8 +96,8 @@ bool ModelMgr::Init
     {
         asdx::ResTexture res;
         res.Dimension       = asdx::TEXTURE_DIMENSION_2D;
-        res.Width           = 32;
-        res.Height          = 32;
+        res.Width           = 16;
+        res.Height          = 16;
         res.Depth           = 0;
         res.Format          = DXGI_FORMAT_R8G8B8A8_UNORM;
         res.MipMapCount     = 1;
@@ -106,8 +106,8 @@ bool ModelMgr::Init
 
         auto& subRes = res.pResources[0];
 
-        subRes.Width        = 32;
-        subRes.Height       = 32;
+        subRes.Width        = 16;
+        subRes.Height       = 16;
         subRes.MipIndex     = 0;
         subRes.Pitch        = sizeof(uint8_t) * 4 * subRes.Width;
         subRes.SlicePitch   = subRes.Pitch * subRes.Height;
@@ -139,8 +139,8 @@ bool ModelMgr::Init
     {
         asdx::ResTexture res;
         res.Dimension       = asdx::TEXTURE_DIMENSION_2D;
-        res.Width           = 32;
-        res.Height          = 32;
+        res.Width           = 16;
+        res.Height          = 16;
         res.Depth           = 0;
         res.Format          = DXGI_FORMAT_R8G8B8A8_UNORM;
         res.MipMapCount     = 1;
@@ -149,8 +149,8 @@ bool ModelMgr::Init
 
         auto& subRes = res.pResources[0];
 
-        subRes.Width        = 32;
-        subRes.Height       = 32;
+        subRes.Width        = 16;
+        subRes.Height       = 16;
         subRes.MipIndex     = 0;
         subRes.Pitch        = sizeof(uint8_t) * 4 * subRes.Width;
         subRes.SlicePitch   = subRes.Pitch * subRes.Height;
@@ -162,7 +162,7 @@ bool ModelMgr::Init
             {
                 auto idx = y * 4 * res.Width + x * 4;
                 subRes.pPixels[idx + 0] = 255;
-                subRes.pPixels[idx + 1] = 128;
+                subRes.pPixels[idx + 1] = 255;
                 subRes.pPixels[idx + 2] = 0;
                 subRes.pPixels[idx + 3] = 255;
             }
@@ -182,8 +182,8 @@ bool ModelMgr::Init
     {
         asdx::ResTexture res;
         res.Dimension       = asdx::TEXTURE_DIMENSION_2D;
-        res.Width           = 32;
-        res.Height          = 32;
+        res.Width           = 16;
+        res.Height          = 16;
         res.Depth           = 0;
         res.Format          = DXGI_FORMAT_R8G8B8A8_UNORM;
         res.MipMapCount     = 1;
@@ -192,8 +192,8 @@ bool ModelMgr::Init
 
         auto& subRes = res.pResources[0];
 
-        subRes.Width        = 32;
-        subRes.Height       = 32;
+        subRes.Width        = 16;
+        subRes.Height       = 16;
         subRes.MipIndex     = 0;
         subRes.Pitch        = sizeof(uint8_t) * 4 * subRes.Width;
         subRes.SlicePitch   = subRes.Pitch * subRes.Height;
@@ -328,6 +328,8 @@ void ModelMgr::Term()
         m_Meshes[i].IB.Reset();
         m_Meshes[i].VB_SRV.Reset();
         m_Meshes[i].IB_SRV.Reset();
+        m_Meshes[i].VertexCount = 0;
+        m_Meshes[i].IndexCount  = 0;
     }
 
     m_Meshes.clear();
@@ -424,6 +426,9 @@ GeometryHandle ModelMgr::AddMesh(const Mesh& mesh)
         item.IB->Unmap(0, nullptr);
     }
 
+    item.VertexCount = mesh.VertexCount;
+    item.IndexCount  = mesh.IndexCount;
+
     result.AddressVB    = item.VB->GetGPUVirtualAddress();
     result.AddressIB    = item.IB->GetGPUVirtualAddress();
     result.IndexVB      = item.VB_SRV->GetDescriptorIndex();
@@ -470,6 +475,7 @@ D3D12_GPU_VIRTUAL_ADDRESS ModelMgr::AddMaterials(const Material* ptr, uint32_t c
         dst.Emissive  = GetEmissive(src.Emissive);
         dst.IntIor    = src.IntIor;
         dst.ExtIor    = src.ExtIor;
+        dst.UvScale   = src.UvScale;
     }
 
     m_OffsetMaterial += count;
@@ -570,5 +576,17 @@ uint32_t ModelMgr::GetEmissive(uint32_t handle)
         ? m_DefaultEmissive.GetView()->GetDescriptorIndex()
         : handle;
 }
+
+//-----------------------------------------------------------------------------
+//      メッシュを取得します.
+//-----------------------------------------------------------------------------
+const ModelMgr::MeshBuffer& ModelMgr::GetMesh(size_t index) const
+{ return m_Meshes[index]; }
+
+//-----------------------------------------------------------------------------
+//      メッシュ数を取得します.
+//-----------------------------------------------------------------------------
+size_t ModelMgr::GetMeshCount() const
+{ return m_Meshes.size(); }
 
 } // namespace r3d

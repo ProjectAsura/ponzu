@@ -96,6 +96,19 @@ class ModelMgr
     /* NOTHING */
 
 public:
+    ///////////////////////////////////////////////////////////////////////////
+    // MeshBuffer structure
+    ///////////////////////////////////////////////////////////////////////////
+    struct MeshBuffer
+    {
+        asdx::RefPtr<ID3D12Resource>            VB;
+        asdx::RefPtr<ID3D12Resource>            IB;
+        asdx::RefPtr<asdx::IShaderResourceView> VB_SRV;
+        asdx::RefPtr<asdx::IShaderResourceView> IB_SRV;
+        uint32_t                                VertexCount;
+        uint32_t                                IndexCount;
+    };
+
     //=========================================================================
     // public variables.
     //=========================================================================
@@ -209,18 +222,17 @@ public:
     //-------------------------------------------------------------------------
     uint32_t GetSizeMB() const;
 
-private:
-    ///////////////////////////////////////////////////////////////////////////
-    // MeshBuffer structure
-    ///////////////////////////////////////////////////////////////////////////
-    struct MeshBuffer
-    {
-        asdx::RefPtr<ID3D12Resource>            VB;
-        asdx::RefPtr<ID3D12Resource>            IB;
-        asdx::RefPtr<asdx::IShaderResourceView> VB_SRV;
-        asdx::RefPtr<asdx::IShaderResourceView> IB_SRV;
-    };
+    //-------------------------------------------------------------------------
+    //! @brief      メッシュを取得します.
+    //-------------------------------------------------------------------------
+    const MeshBuffer& GetMesh(size_t index) const;
 
+    //-------------------------------------------------------------------------
+    //! @brief      メッシュ数を取得します.
+    //-------------------------------------------------------------------------
+    size_t GetMeshCount() const;
+
+private:
     //=========================================================================
     // private variables.
     //=========================================================================
