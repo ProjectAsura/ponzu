@@ -193,19 +193,28 @@ FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(4) ResMaterial FLATBUFFERS_FINAL_CLASS {
   uint32_t Normal_;
   uint32_t Orm_;
   uint32_t Emissive_;
+  float IntIor_;
+  float ExtIor_;
+  r3d::Vector2 UvScale_;
 
  public:
   ResMaterial()
       : BaseColor_(0),
         Normal_(0),
         Orm_(0),
-        Emissive_(0) {
+        Emissive_(0),
+        IntIor_(0),
+        ExtIor_(0),
+        UvScale_() {
   }
-  ResMaterial(uint32_t _BaseColor, uint32_t _Normal, uint32_t _Orm, uint32_t _Emissive)
+  ResMaterial(uint32_t _BaseColor, uint32_t _Normal, uint32_t _Orm, uint32_t _Emissive, float _IntIor, float _ExtIor, const r3d::Vector2 &_UvScale)
       : BaseColor_(flatbuffers::EndianScalar(_BaseColor)),
         Normal_(flatbuffers::EndianScalar(_Normal)),
         Orm_(flatbuffers::EndianScalar(_Orm)),
-        Emissive_(flatbuffers::EndianScalar(_Emissive)) {
+        Emissive_(flatbuffers::EndianScalar(_Emissive)),
+        IntIor_(flatbuffers::EndianScalar(_IntIor)),
+        ExtIor_(flatbuffers::EndianScalar(_ExtIor)),
+        UvScale_(_UvScale) {
   }
   uint32_t BaseColor() const {
     return flatbuffers::EndianScalar(BaseColor_);
@@ -219,31 +228,46 @@ FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(4) ResMaterial FLATBUFFERS_FINAL_CLASS {
   uint32_t Emissive() const {
     return flatbuffers::EndianScalar(Emissive_);
   }
+  float IntIor() const {
+    return flatbuffers::EndianScalar(IntIor_);
+  }
+  float ExtIor() const {
+    return flatbuffers::EndianScalar(ExtIor_);
+  }
+  const r3d::Vector2 &UvScale() const {
+    return UvScale_;
+  }
 };
-FLATBUFFERS_STRUCT_END(ResMaterial, 16);
+FLATBUFFERS_STRUCT_END(ResMaterial, 32);
 
 FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(4) ResInstance FLATBUFFERS_FINAL_CLASS {
  private:
   uint32_t MeshIndex_;
+  uint32_t MaterialIndex_;
   r3d::Matrix3x4 Transform_;
 
  public:
   ResInstance()
       : MeshIndex_(0),
+        MaterialIndex_(0),
         Transform_() {
   }
-  ResInstance(uint32_t _MeshIndex, const r3d::Matrix3x4 &_Transform)
+  ResInstance(uint32_t _MeshIndex, uint32_t _MaterialIndex, const r3d::Matrix3x4 &_Transform)
       : MeshIndex_(flatbuffers::EndianScalar(_MeshIndex)),
+        MaterialIndex_(flatbuffers::EndianScalar(_MaterialIndex)),
         Transform_(_Transform) {
   }
   uint32_t MeshIndex() const {
     return flatbuffers::EndianScalar(MeshIndex_);
   }
+  uint32_t MaterialIndex() const {
+    return flatbuffers::EndianScalar(MaterialIndex_);
+  }
   const r3d::Matrix3x4 &Transform() const {
     return Transform_;
   }
 };
-FLATBUFFERS_STRUCT_END(ResInstance, 52);
+FLATBUFFERS_STRUCT_END(ResInstance, 56);
 
 FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(4) ResLight FLATBUFFERS_FINAL_CLASS {
  private:
@@ -542,15 +566,11 @@ inline flatbuffers::Offset<ResTexture> CreateResTextureDirect(
 struct ResMesh FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef ResMeshBuilder Builder;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
-    VT_MATEIRALID = 4,
-    VT_VERTEXCOUNT = 6,
-    VT_INDEXCOUNT = 8,
-    VT_VERTICES = 10,
-    VT_INDICES = 12
+    VT_VERTEXCOUNT = 4,
+    VT_INDEXCOUNT = 6,
+    VT_VERTICES = 8,
+    VT_INDICES = 10
   };
-  uint32_t MateiralId() const {
-    return GetField<uint32_t>(VT_MATEIRALID, 0);
-  }
   uint32_t VertexCount() const {
     return GetField<uint32_t>(VT_VERTEXCOUNT, 0);
   }
@@ -565,7 +585,6 @@ struct ResMesh FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   }
   bool Verify(flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
-           VerifyField<uint32_t>(verifier, VT_MATEIRALID) &&
            VerifyField<uint32_t>(verifier, VT_VERTEXCOUNT) &&
            VerifyField<uint32_t>(verifier, VT_INDEXCOUNT) &&
            VerifyOffset(verifier, VT_VERTICES) &&
@@ -580,9 +599,6 @@ struct ResMeshBuilder {
   typedef ResMesh Table;
   flatbuffers::FlatBufferBuilder &fbb_;
   flatbuffers::uoffset_t start_;
-  void add_MateiralId(uint32_t MateiralId) {
-    fbb_.AddElement<uint32_t>(ResMesh::VT_MATEIRALID, MateiralId, 0);
-  }
   void add_VertexCount(uint32_t VertexCount) {
     fbb_.AddElement<uint32_t>(ResMesh::VT_VERTEXCOUNT, VertexCount, 0);
   }
@@ -608,7 +624,6 @@ struct ResMeshBuilder {
 
 inline flatbuffers::Offset<ResMesh> CreateResMesh(
     flatbuffers::FlatBufferBuilder &_fbb,
-    uint32_t MateiralId = 0,
     uint32_t VertexCount = 0,
     uint32_t IndexCount = 0,
     flatbuffers::Offset<flatbuffers::Vector<const r3d::ResVertex *>> Vertices = 0,
@@ -618,13 +633,11 @@ inline flatbuffers::Offset<ResMesh> CreateResMesh(
   builder_.add_Vertices(Vertices);
   builder_.add_IndexCount(IndexCount);
   builder_.add_VertexCount(VertexCount);
-  builder_.add_MateiralId(MateiralId);
   return builder_.Finish();
 }
 
 inline flatbuffers::Offset<ResMesh> CreateResMeshDirect(
     flatbuffers::FlatBufferBuilder &_fbb,
-    uint32_t MateiralId = 0,
     uint32_t VertexCount = 0,
     uint32_t IndexCount = 0,
     const std::vector<r3d::ResVertex> *Vertices = nullptr,
@@ -633,7 +646,6 @@ inline flatbuffers::Offset<ResMesh> CreateResMeshDirect(
   auto Indices__ = Indices ? _fbb.CreateVector<uint32_t>(*Indices) : 0;
   return r3d::CreateResMesh(
       _fbb,
-      MateiralId,
       VertexCount,
       IndexCount,
       Vertices__,

@@ -18,8 +18,9 @@ static const float3 kFurnaceColor = float3(0.5f, 0.5f, 0.5f);
 //-----------------------------------------------------------------------------
 // Resources
 //-----------------------------------------------------------------------------
-RWTexture2D<float4> Canvas      : register(u0);
-Texture2D<float4>   BackGround  : register(t4);
+RWTexture2D<float4>     Canvas      : register(u0);
+Texture2D<float4>       BackGround  : register(t4);
+StructuredBuffer<Light> Lights      : register(t5);
 
 
 //-----------------------------------------------------------------------------
@@ -100,8 +101,8 @@ void OnGenerateRay()
 
         // Next Event Estimation.
         {
-            // BSDFがPerfect Specular以外の成分を持っている場合.
-            if (!IsPerfectSpecular(material))
+            // BSDFがデルタ関数を持たない場合のみ.
+            if (!HasDelta(material))
             {
                 // 光源をサンプリング.
                 float lightPdf;

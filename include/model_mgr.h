@@ -67,13 +67,13 @@ struct GeometryHandle
 };
 
 ///////////////////////////////////////////////////////////////////////////////
-// Instance structure
+// CpuInstance structure
 ///////////////////////////////////////////////////////////////////////////////
-struct Instance
+struct CpuInstance
 {
-    uint32_t        VertexBufferId; //!< 頂点バッファのハンドルです.
-    uint32_t        IndexBufferId;  //!< インデックスバッファの
-    uint32_t        MaterialId;     //!< マテリアルID.
+    uint32_t            MeshId;         //!< メッシュ番号.
+    uint32_t            MaterialId;     //!< マテリアル番号.
+    asdx::Transform3x4  Transform;      //!< 変換行列.
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -166,7 +166,7 @@ public:
     //! @param[in]      transform       変換行列.
     //! @return     インスタンスハンドルを返却します.
     //-------------------------------------------------------------------------
-    InstanceHandle AddInstance(const Instance& instance, const asdx::Transform3x4& transform);
+    InstanceHandle AddInstance(const CpuInstance& instance);
 
     //-------------------------------------------------------------------------
     //! @brief      マテリアルを登録します.
@@ -233,6 +233,16 @@ public:
     size_t GetMeshCount() const;
 
 private:
+    ///////////////////////////////////////////////////////////////////////////////
+    // GpuInstance structure
+    ///////////////////////////////////////////////////////////////////////////////
+    struct GpuInstance
+    {
+        uint32_t        VertexBufferId; //!< 頂点バッファのハンドルです.
+        uint32_t        IndexBufferId;  //!< インデックスバッファの
+        uint32_t        MaterialId;     //!< マテリアルID.
+    };
+
     //=========================================================================
     // private variables.
     //=========================================================================
@@ -252,7 +262,7 @@ private:
     uint32_t    m_MaxInstanceCount;
     uint32_t    m_MaxMaterialCount;
 
-    Instance*               m_pInstances    = nullptr;
+    GpuInstance*            m_pInstances    = nullptr;
     asdx::Transform3x4*     m_pTransforms   = nullptr;
     Material*               m_pMaterials    = nullptr;
 

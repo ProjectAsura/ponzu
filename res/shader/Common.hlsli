@@ -97,9 +97,9 @@ struct Instance
 ///////////////////////////////////////////////////////////////////////////////
 struct Light
 {
-    float3  Position;       // 位置座標.
     uint    Type;           // ライトタイプ.
     float3  Intensity;      // 強度.
+    float3  Position;       // 位置座標.
     float   Radius;         // 半径.
 };
 
@@ -307,6 +307,12 @@ bool IsPerfectDiffuse(Material material)
 //-----------------------------------------------------------------------------
 bool IsDielectric(Material material)
 { return (material.IntIor > 0.0f) && (material.ExtIor > 0.0); }
+
+//-----------------------------------------------------------------------------
+//      デルタ関数を持つかどうかチェックします.
+//-----------------------------------------------------------------------------
+bool HasDelta(Material material)
+{ return IsPerfectSpecular(material) || IsDielectric(material); }
 
 //-----------------------------------------------------------------------------
 //      ライト強度を取得します.
@@ -545,40 +551,42 @@ float3 SampleDir(float3 V, float3 N, float3 u, Material material)
     if (IsDielectric(material))
     {
         // Snellの法則.
-        float nc = material.ExtIor;
-        float nt = material.IntIor;
+        float n1 = material.ExtIor;
+        float n2 = material.IntIor;
 
         // 相対屈折率.
-        float eta = (into) ? (nc / nt) : (nt / nc);
+        float eta = (into) ? (n1 / n2) : (n2 / n1);
 
-        float ddn = dot(Nm, -V);
-        float cos2t = 1.0f - Pow2(eta) * (1.0f - Pow2(ddn));
+        float DoN = dot(-V, Nm);
+        float cos2Theta2 = 1.0f - Pow2(eta) * (1.0f - Pow2(DoN));
 
         // 反射ベクトル.
-        float3 reflection = normalize(reflect(-V, N));
+        float3 reflection = normalize(reflect(-V, Nm));
 
         // 全反射チェック.
-        if (cos2t < 0.0f)
-        { return material.BaseColor.rgb; }
+        if (cos2Theta2 < 0.0f)
+        { return reflection; }
 
         // 屈折ベクトル.
-        float3 refraction = normalize(refract(-V, N, eta));
+        float3 refraction = normalize(-V * eta - Nm * (DoN * eta + sqrt(cos2Theta2)));
 
-        float a = nt - nc;
-        float b = nt + nc;
-        float R0 = (a * b) / (b * b);
+        float a = n2 - n1;
+        float b = n2 + n1;
+        float F0 = Pow2(a) / Pow2(b);
+        float cosTheta1 = abs(DoN);
 
-        float c = 1.0f - (into ? -ddn : dot(refraction, -Nm));
-        float Re = R0 + (1.0f - R0) * Pow5(c);
+        // Schlickの近似によるフレネル項.
+        float Fr = F_Schlick(F0, cosTheta1);
+        float Tr = (1.0f - Fr);
 
-        float p = 0.25f + 0.5f * Re; // フレネルのグラフを参照.
+        float p = 0.25f + 0.5f * Fr; // フレネルのグラフを参照.
         if (u.z < p)
         { return reflection; }
         else
         { return refraction; }
     }
     // 完全拡散反射.
-    if (IsPerfectDiffuse(material))
+    else if (IsPerfectDiffuse(material))
     {
         float3 T, B;
         CalcONB(N, T, B);
@@ -670,33 +678,22 @@ float3 SampleMaterial
         { return material.BaseColor.rgb; }
 
         // 屈折ベクトル.
-        float3 refraction = normalize(refract(-V, Nm, eta));
+        float3 refraction = normalize(-V * eta - Nm * (DoN * eta + sqrt(cos2Theta2)));
 
         float a = n2 - n1;
         float b = n2 + n1;
         float F0 = Pow2(a) / Pow2(b);
-        float cosTheta1 = 1.0f - (into ? DoN : dot(refraction, Nm));
+        float cosTheta1 = abs(DoN);
 
         // Schlickの近似によるフレネル項.
-        float Fr = F0 + (1.0f - F0) * Pow5(cosTheta1);
-
-        // レイが運ぶ放射輝度は屈折率の異なる物体間を移動するとき，
-        // 屈折率の比の2乗分だけ変化する(放射輝度が単位立体角であるため).
-        // 屈折光の運ぶ光の割合はフレネル反射を除いた 1 - Fr であるため，(1 - Fr) * eta^2 となる.
-        float eta2 = Pow2(eta);
-        float Tr = (1.0f - Fr) * eta2;
+        float Fr = F_Schlick(F0, cosTheta1);
+        float Tr = (1.0f - Fr);
 
         float p = 0.25f + 0.5f * Fr; // フレネルのグラフを参照.
         if (u < p)
-        {
-            float pdf = p * 0.5f;
-            return material.BaseColor.rgb * Fr / pdf;
-        }
+        { return material.BaseColor.rgb * Fr / p; }
         else
-        {
-            float pdf = (1.0f - p) * 0.5f;
-            return material.BaseColor.rgb * Tr / pdf;
-        }
+        { return material.BaseColor.rgb * Tr / (1.0f - p); }
     }
     // 完全拡散反射.
     else if (IsPerfectDiffuse(material))
@@ -717,9 +714,7 @@ float3 SampleMaterial
 
         // Diffuse
         if (u < p)
-        {
-            return diffuseColor / p * (1.0f.xxx - specularColor);
-        }
+        { return diffuseColor / p * (1.0f.xxx - specularColor); }
 
         float a = max(Pow2(material.Roughness), 0.01f);
 
@@ -791,33 +786,28 @@ float3 EvaluateMaterial
         }
 
         // 屈折ベクトル.
-        float3 refraction = normalize(refract(-V, Nm, eta));
+        float3 refraction = normalize(-V * eta - Nm * (DoN * eta + sqrt(cos2Theta2)));
 
         float a = n2 - n1;
         float b = n2 + n1;
         float F0 = Pow2(a) / Pow2(b);
-        float cosTheta1 = 1.0f - (into ? DoN : dot(refraction, Nm));
+        float cosTheta1 = abs(DoN);
 
         // Schlickの近似によるフレネル項.
-        float Fr = F0 + (1.0f - F0) * Pow5(cosTheta1);
-
-        // レイが運ぶ放射輝度は屈折率の異なる物体間を移動するとき，
-        // 屈折率の比の2乗分だけ変化する(放射輝度が単位立体角であるため).
-        // 屈折光の運ぶ光の割合はフレネル反射を除いた 1 - Fr であるため，(1 - Fr) * eta^2 となる.
-        float eta2 = Pow2(eta);
-        float Tr = (1.0f - Fr) * eta2;
+        float Fr = F_Schlick(F0, cosTheta1);
+        float Tr = (1.0f - Fr);
 
         float p = 0.25f + 0.5f * Fr; // フレネルのグラフを参照.
         if (u.z < p)
         {
             dir = reflection;
-            pdf = p * 0.5f;
+            pdf = p;
             return material.BaseColor.rgb * Fr;
         }
         else
         {
             dir = refraction;
-            pdf = (1.0f - p) * 0.5f;
+            pdf = (1.0f - p);
             return material.BaseColor.rgb * Tr;
         }
     }
@@ -830,7 +820,7 @@ float3 EvaluateMaterial
         float3 s = SampleLambert(u.xy);
         float3 L = normalize(T * s.x + B * s.y + Nm * s.z);
 
-        float NoL = abs(dot(Nm, L));
+        float NoL = dot(Nm, L);
 
         dir = L;
         pdf = NoL / F_PI;

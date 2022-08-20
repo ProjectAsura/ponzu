@@ -30,7 +30,7 @@ bool ModelMgr::Init
 {
     auto pDevice = asdx::GetD3D12Device();
 
-    const auto sizeIB = maxInstanceCount * sizeof(Instance);
+    const auto sizeIB = maxInstanceCount * sizeof(GpuInstance);
     const auto sizeTB = maxInstanceCount * sizeof(asdx::Transform3x4);
     const auto sizeMB = maxMaterialCount * sizeof(Material);
 
@@ -441,13 +441,17 @@ GeometryHandle ModelMgr::AddMesh(const Mesh& mesh)
 //-----------------------------------------------------------------------------
 //      インスタンスを登録します.
 //-----------------------------------------------------------------------------
-InstanceHandle ModelMgr::AddInstance(const Instance& instance, const asdx::Transform3x4& transform)
+InstanceHandle ModelMgr::AddInstance(const CpuInstance& instance)
 {
     assert(m_OffsetInstance + 1 < m_MaxInstanceCount);
+    assert(instance.MeshId < m_Meshes.size());
 
     auto idx = m_OffsetInstance;
-    m_pInstances [idx] = instance;
-    m_pTransforms[idx] = transform;
+    m_pInstances[idx].VertexBufferId = m_Meshes[instance.MeshId].VB_SRV->GetDescriptorIndex();
+    m_pInstances[idx].IndexBufferId  = m_Meshes[instance.MeshId].IB_SRV->GetDescriptorIndex();
+    m_pInstances[idx].MaterialId     = instance.MaterialId;
+
+    m_pTransforms[idx] = instance.Transform;
 
     m_OffsetInstance++;
 
@@ -523,7 +527,7 @@ D3D12_GPU_VIRTUAL_ADDRESS ModelMgr::GetAddressMB() const
 //      インスタンスバッファサイズを取得します.
 //-----------------------------------------------------------------------------
 uint32_t ModelMgr::GetSizeIB() const
-{ return m_MaxInstanceCount * sizeof(Instance); }
+{ return m_MaxInstanceCount * sizeof(GpuInstance); }
 
 //-----------------------------------------------------------------------------
 //      トランスフォームバッファサイズを取得します.

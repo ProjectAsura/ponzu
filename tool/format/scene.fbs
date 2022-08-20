@@ -70,11 +70,13 @@ struct ResMaterial
     Normal:uint;
     Orm:uint;
     Emissive:uint;
+    IntIor:float;
+    ExtIor:float;
+    UvScale:Vector2;
 }
 
 table ResMesh
 {
-    MateiralId:uint;
     VertexCount:uint;
     IndexCount:uint;
     Vertices:[ResVertex];
@@ -84,6 +86,7 @@ table ResMesh
 struct ResInstance
 {
     MeshIndex:uint;
+    MaterialIndex:uint;
     Transform:Matrix3x4;
 }
 

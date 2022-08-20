@@ -1234,9 +1234,32 @@ bool Renderer::BuildScene()
         }
     }
 
+    // テクスチャ.
+    {
+        std::string path;
+        if (!asdx::SearchFilePathA("../res/texture/floor_tiles_08_diff_2k.dds", path))
+        {
+            ELOGA("Error : Texture Not Found.");
+            return false;
+        }
+
+        asdx::ResTexture res;
+        if (!res.LoadFromFileA(path.c_str()))
+        {
+            ELOGA("Error : Texture Load Failed.");
+            return false;
+        }
+
+        if (!m_PlaneBC.Init(m_GfxCmdList, res))
+        {
+            ELOGA("Error : Texture Init Failed.");
+            return false;
+        }
+    }
+
     // Test
     {
-        const char* rawPath = "../res/model/dragon.obj";
+        const char* rawPath = "../res/model/dosei_with_ground.obj";
         ModelOBJ model;
         OBJLoader loader;
         std::string path;
@@ -1252,15 +1275,25 @@ bool Renderer::BuildScene()
             return false;
         }
 
-        Material dummy = {};
-        dummy.Normal    = INVALID_MATERIAL_MAP;
-        dummy.BaseColor = INVALID_MATERIAL_MAP;
-        dummy.ORM       = INVALID_MATERIAL_MAP;
-        dummy.Emissive  = INVALID_MATERIAL_MAP;
-        //dummy.IntIor    = 1.4f;
-        //dummy.ExtIor    = 1.0f;
-        dummy.UvScale   = asdx::Vector2(1.0f, 1.0f);
-        m_ModelMgr.AddMaterials(&dummy, 1);
+        Material dummy0 = {};
+        dummy0.Normal    = INVALID_MATERIAL_MAP;
+        dummy0.BaseColor = INVALID_MATERIAL_MAP;
+        dummy0.ORM       = INVALID_MATERIAL_MAP;
+        dummy0.Emissive  = INVALID_MATERIAL_MAP;
+        dummy0.IntIor    = 1.4f;
+        dummy0.ExtIor    = 1.0f;
+        dummy0.UvScale   = asdx::Vector2(1.0f, 1.0f);
+        m_ModelMgr.AddMaterials(&dummy0, 1);
+
+        Material dummy1 = {};
+        dummy1.Normal    = INVALID_MATERIAL_MAP;
+        dummy1.BaseColor = m_PlaneBC.GetView()->GetDescriptorIndex();
+        dummy1.ORM       = INVALID_MATERIAL_MAP;
+        dummy1.Emissive  = INVALID_MATERIAL_MAP;
+        //dummy0.IntIor    = 1.4f;
+        //dummy0.ExtIor    = 1.0f;
+        dummy1.UvScale   = asdx::Vector2(10.0f, 10.0f);
+        m_ModelMgr.AddMaterials(&dummy1, 1);
 
         auto meshCount = model.Meshes.size();
 
@@ -1281,14 +1314,13 @@ bool Renderer::BuildScene()
 
             auto geometryHandle = m_ModelMgr.AddMesh(mesh);
 
-            r3d::Instance instance = {};
-            instance.VertexBufferId = geometryHandle.IndexVB;
-            instance.IndexBufferId  = geometryHandle.IndexIB;
-            instance.MaterialId     = 0;
+            r3d::CpuInstance instance = {};
+            instance.Transform      = asdx::Transform3x4();
+            instance.MeshId         = uint32_t(i);
+            instance.MaterialId     = (i != 3) ? 0 : 1;
+            //instance.MaterialId     = 0;
 
-            // 単位行列.
-            asdx::Transform3x4 transform;
-            auto instanceHandle = m_ModelMgr.AddInstance(instance, transform);
+            auto instanceHandle = m_ModelMgr.AddInstance(instance);
 
             D3D12_RAYTRACING_GEOMETRY_DESC desc = {};
             desc.Type                                   = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
@@ -1314,7 +1346,7 @@ bool Renderer::BuildScene()
             // ビルドコマンドを積んでおく.
             m_BLAS[i].Build(m_GfxCmdList.GetCommandList());
 
-            memcpy(instanceDescs[i].Transform, transform.m, sizeof(float) * 12);
+            memcpy(instanceDescs[i].Transform, instance.Transform.m, sizeof(float) * 12);
             instanceDescs[i].InstanceID                             = instanceHandle.InstanceId;
             instanceDescs[i].InstanceMask                           = 0xFF;
             instanceDescs[i].InstanceContributionToHitGroupIndex    = 0;
@@ -1353,6 +1385,11 @@ bool Renderer::BuildScene()
         // ビルドコマンドを積んでおく.
         m_TLAS.Build(m_GfxCmdList.GetCommandList());
     }
+
+    // ライト生成.
+    {
+    }
+
 #else
     // シーン構築.
     {
@@ -1411,6 +1448,8 @@ void Renderer::OnTerm()
     m_DevMissTable      .Term();
     m_DevHitGroupTable  .Term();
 #endif
+
+    m_PlaneBC.Term();
 
     m_TaaRenderer.Term();
     for(auto i=0; i<2; ++i)
