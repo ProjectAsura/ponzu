@@ -197,8 +197,6 @@ private:
 
     bool                m_EndRequest = false;
 
-    asdx::Texture       m_PlaneBC;
-
 
 #if (!CAMP_RELEASE)
     //+++++++++++++++++++

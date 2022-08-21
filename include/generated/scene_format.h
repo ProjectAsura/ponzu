@@ -682,8 +682,8 @@ struct ResScene FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   uint32_t LightCount() const {
     return GetField<uint32_t>(VT_LIGHTCOUNT, 0);
   }
-  const flatbuffers::String *IblTexture() const {
-    return GetPointer<const flatbuffers::String *>(VT_IBLTEXTURE);
+  const r3d::ResTexture *IblTexture() const {
+    return GetPointer<const r3d::ResTexture *>(VT_IBLTEXTURE);
   }
   const flatbuffers::Vector<flatbuffers::Offset<r3d::ResMesh>> *Meshes() const {
     return GetPointer<const flatbuffers::Vector<flatbuffers::Offset<r3d::ResMesh>> *>(VT_MESHES);
@@ -708,7 +708,7 @@ struct ResScene FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
            VerifyField<uint32_t>(verifier, VT_MATERIALCOUNT) &&
            VerifyField<uint32_t>(verifier, VT_LIGHTCOUNT) &&
            VerifyOffset(verifier, VT_IBLTEXTURE) &&
-           verifier.VerifyString(IblTexture()) &&
+           verifier.VerifyTable(IblTexture()) &&
            VerifyOffset(verifier, VT_MESHES) &&
            verifier.VerifyVector(Meshes()) &&
            verifier.VerifyVectorOfTables(Meshes()) &&
@@ -744,7 +744,7 @@ struct ResSceneBuilder {
   void add_LightCount(uint32_t LightCount) {
     fbb_.AddElement<uint32_t>(ResScene::VT_LIGHTCOUNT, LightCount, 0);
   }
-  void add_IblTexture(flatbuffers::Offset<flatbuffers::String> IblTexture) {
+  void add_IblTexture(flatbuffers::Offset<r3d::ResTexture> IblTexture) {
     fbb_.AddOffset(ResScene::VT_IBLTEXTURE, IblTexture);
   }
   void add_Meshes(flatbuffers::Offset<flatbuffers::Vector<flatbuffers::Offset<r3d::ResMesh>>> Meshes) {
@@ -780,7 +780,7 @@ inline flatbuffers::Offset<ResScene> CreateResScene(
     uint32_t TextureCount = 0,
     uint32_t MaterialCount = 0,
     uint32_t LightCount = 0,
-    flatbuffers::Offset<flatbuffers::String> IblTexture = 0,
+    flatbuffers::Offset<r3d::ResTexture> IblTexture = 0,
     flatbuffers::Offset<flatbuffers::Vector<flatbuffers::Offset<r3d::ResMesh>>> Meshes = 0,
     flatbuffers::Offset<flatbuffers::Vector<const r3d::ResInstance *>> Instances = 0,
     flatbuffers::Offset<flatbuffers::Vector<flatbuffers::Offset<r3d::ResTexture>>> Textures = 0,
@@ -808,13 +808,12 @@ inline flatbuffers::Offset<ResScene> CreateResSceneDirect(
     uint32_t TextureCount = 0,
     uint32_t MaterialCount = 0,
     uint32_t LightCount = 0,
-    const char *IblTexture = nullptr,
+    flatbuffers::Offset<r3d::ResTexture> IblTexture = 0,
     const std::vector<flatbuffers::Offset<r3d::ResMesh>> *Meshes = nullptr,
     const std::vector<r3d::ResInstance> *Instances = nullptr,
     const std::vector<flatbuffers::Offset<r3d::ResTexture>> *Textures = nullptr,
     const std::vector<r3d::ResMaterial> *Materials = nullptr,
     const std::vector<r3d::ResLight> *Lights = nullptr) {
-  auto IblTexture__ = IblTexture ? _fbb.CreateString(IblTexture) : 0;
   auto Meshes__ = Meshes ? _fbb.CreateVector<flatbuffers::Offset<r3d::ResMesh>>(*Meshes) : 0;
   auto Instances__ = Instances ? _fbb.CreateVectorOfStructs<r3d::ResInstance>(*Instances) : 0;
   auto Textures__ = Textures ? _fbb.CreateVector<flatbuffers::Offset<r3d::ResTexture>>(*Textures) : 0;
@@ -827,7 +826,7 @@ inline flatbuffers::Offset<ResScene> CreateResSceneDirect(
       TextureCount,
       MaterialCount,
       LightCount,
-      IblTexture__,
+      IblTexture,
       Meshes__,
       Instances__,
       Textures__,

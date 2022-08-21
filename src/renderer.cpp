@@ -1502,7 +1502,7 @@ void Renderer::OnTerm()
     m_DevHitGroupTable  .Term();
 #endif
 
-    m_PlaneBC.Term();
+    m_Scene.Term();
 
     m_TaaRenderer.Term();
     for(auto i=0; i<2; ++i)

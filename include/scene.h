@@ -74,7 +74,10 @@ public:
     //-------------------------------------------------------------------------
     //! @brief      初期化処理を行います.
     //-------------------------------------------------------------------------
-    bool Init(ID3D12GraphicsCommandList6* pCmdList, const void* resTexture);
+    bool Init(
+        ID3D12GraphicsCommandList6* pCmdList,
+        const void*                 resTexture,
+        uint32_t                    componentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING);
 
     //-------------------------------------------------------------------------
     //! @brief      終了処理を行います.
@@ -164,7 +167,7 @@ private:
     std::vector<SceneInstance>              m_Instances;
     std::vector<asdx::Blas>                 m_BLAS;
     asdx::Tlas                              m_TLAS;
-    asdx::Texture                           m_IBL;
+    SceneTexture                            m_IBL;
     std::vector<SceneTexture>               m_Textures;
     asdx::ConstantBuffer                    m_Param;
     ModelMgr                                m_ModelMgr;

@@ -105,7 +105,7 @@ table ResScene
     TextureCount:uint;
     MaterialCount:uint;
     LightCount:uint;
-    IblTexture:string;
+    IblTexture:ResTexture;
     Meshes:[ResMesh];
     Instances:[ResInstance];
     Textures:[ResTexture];

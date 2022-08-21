@@ -226,7 +226,12 @@ namespace r3d {
 //-----------------------------------------------------------------------------
 //      初期化処理を行います.
 //-----------------------------------------------------------------------------
-bool SceneTexture::Init(ID3D12GraphicsCommandList6* pCmdList, const void* resTexture)
+bool SceneTexture::Init
+(
+    ID3D12GraphicsCommandList6* pCmdList,
+    const void*                 resTexture,
+    uint32_t                    componentMapping
+)
 {
     const auto resource = reinterpret_cast<const r3d::ResTexture*>(resTexture);
     if (resource == nullptr)
@@ -245,7 +250,7 @@ bool SceneTexture::Init(ID3D12GraphicsCommandList6* pCmdList, const void* resTex
     auto mostDetailedMip = 0u;
 
     D3D12_SHADER_RESOURCE_VIEW_DESC viewDesc = {};
-    viewDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    viewDesc.Shader4ComponentMapping = componentMapping;
 
     ID3D12Resource* pResource = nullptr;
     {
@@ -469,22 +474,10 @@ bool Scene::Init(const char* path, asdx::CommandList& cmdList)
 
     // IBLテクスチャのセットアップ.
     {
-        std::string iblPath;
+        // なぜかうまくいかないため，ここだけ明示的にマッピングを変える.
+        uint32_t mapping = D3D12_ENCODE_SHADER_4_COMPONENT_MAPPING(1, 2, 3, 0);
 
-        if (!asdx::SearchFilePathA(resScene->IblTexture()->c_str(), iblPath))
-        {
-            ELOGA("Error : File Not Found. path = %s", resScene->IblTexture()->c_str());
-            return false;
-        }
-
-        asdx::ResTexture resource;
-        if (!resource.LoadFromFileA(iblPath.c_str()))
-        {
-            ELOGA("Error : Texture Load Failed. path = %s", iblPath.c_str());
-            return false;
-        }
-
-        if (!m_IBL.Init(cmdList, resource))
+        if (!m_IBL.Init(cmdList.GetCommandList(), resScene->IblTexture(), mapping))
         {
             ELOGA("Error : IBL Initialize Failed.");
             return false;
@@ -853,6 +846,59 @@ bool SceneExporter::Export(const char* path)
         { srcTextures[i].Dispose(); }
     };
 
+    // IBLテクスチャ読み込み.
+    {
+        std::string texPath;
+        if (!asdx::SearchFilePathA(m_IBL.c_str(), texPath))
+        {
+            ELOGA("Error : File Not Found. path = %s", m_IBL.c_str());
+            return false;
+        }
+
+        if (!srcIBL.SrcTexture.LoadFromFileA(texPath.c_str()))
+        {
+            ELOGA("Error : IBL Load Failed. path = %s", texPath.c_str());
+            return false;
+        }
+
+        auto count = srcIBL.SrcTexture.SurfaceCount * srcIBL.SrcTexture.MipMapCount;
+
+        srcIBL.Surfaces.resize(count);
+
+        for(auto i=0u; i<count; ++i)
+        {
+            srcIBL.Surfaces[i].Pixels.resize(srcIBL.SrcTexture.pResources[i].SlicePitch);
+
+            memcpy(
+                srcIBL.Surfaces[i].Pixels.data(),
+                srcIBL.SrcTexture.pResources[i].pPixels,
+                srcIBL.SrcTexture.pResources[i].SlicePitch);
+
+            auto item = r3d::CreateSubResourceDirect(
+                builder,
+                srcIBL.SrcTexture.pResources[i].Width,
+                srcIBL.SrcTexture.pResources[i].Height,
+                srcIBL.SrcTexture.pResources[i].MipIndex,
+                srcIBL.SrcTexture.pResources[i].Pitch,
+                srcIBL.SrcTexture.pResources[i].SlicePitch,
+                &srcIBL.Surfaces[i].Pixels);
+
+            srcIBL.SubResources.push_back(item);
+        }
+
+        dstIBL = r3d::CreateResTextureDirect(
+            builder,
+            srcIBL.SrcTexture.Dimension,
+            srcIBL.SrcTexture.Width,
+            srcIBL.SrcTexture.Height,
+            srcIBL.SrcTexture.Depth,
+            srcIBL.SrcTexture.Format,
+            srcIBL.SrcTexture.MipMapCount,
+            srcIBL.SrcTexture.SurfaceCount,
+            0,
+            &srcIBL.SubResources);
+    }
+
     // マテリアル用テクスチャ読み込み.
     {
         srcTextures.resize(m_Textures.size());
@@ -997,7 +1043,7 @@ bool SceneExporter::Export(const char* path)
             textureCount,
             materialCount,
             lightCount,
-            m_IBL.c_str(),
+            dstIBL,
             &dstMeshes,
             &dstInstances,
             &dstTextures,
