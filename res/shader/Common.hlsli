@@ -348,7 +348,7 @@ void GetLightData(Light light, float3 hitPos, out float3 lightVector, out float 
     }
     else if (light.Type == LIGHT_TYPE_DIRECTIONAL)
     {
-        lightVector   = light.Position;
+        lightVector   = -light.Position; // 照射方向なので，ライトに向かう方向に直す.
         lightDistance = FLT_MAX;
     }
     else

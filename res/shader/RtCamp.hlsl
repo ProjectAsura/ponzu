@@ -9,7 +9,8 @@
 //-----------------------------------------------------------------------------
 #include <Common.hlsli>
 
-#define FURNANCE_TEST       (0)
+#define FURNANCE_TEST           (0)
+#define RIS_CANDIDATES_LIGHTS   (8)
 
 #if FURNANCE_TEST
 static const float3 kFurnaceColor = float3(0.5f, 0.5f, 0.5f);
@@ -31,6 +32,87 @@ float3 SampleIBL(float3 dir)
     float2 uv = ToSphereMapCoord(dir);
     return BackGround.SampleLevel(LinearWrap, uv, 0.0f).rgb * SceneParam.SkyIntensity;
 }
+
+//-----------------------------------------------------------------------------
+//      ランダムにライトを一つ選択します.
+//-----------------------------------------------------------------------------
+bool SampleLightUniform
+(
+    inout uint4 seed,
+    float3      hitPosition,
+    float3      surfaceNormal,
+    out Light   light,
+    out float   lightSampleWeight
+)
+{
+    if (SceneParam.LightCount == 0)
+    { return false; }
+
+    uint index = min(SceneParam.LightCount - 1, uint(Random(seed) * SceneParam.LightCount));
+    light = Lights[index];
+
+    // PDF of uniform distribution is (1/light count).
+    lightSampleWeight = float(SceneParam.LightCount);
+
+    return true;
+}
+
+//-----------------------------------------------------------------------------
+//      RIS(Resampled Importance Sampling) を用いてランダムにライトを選択します.
+//-----------------------------------------------------------------------------
+bool SampleLightRIS
+(
+    inout uint4 seed,
+    float3      hitPosition,
+    float3      surfaceNormal,
+    out Light   selectedSample,
+    out float   lightSampleWeight
+)
+{
+    if (SceneParam.LightCount == 0)
+    { return false; }
+
+    selectedSample = (Light)0;
+    float totalWeights = 0.0f;
+    float samplePdfG   = 0.0f;
+
+    const int count = RIS_CANDIDATES_LIGHTS;
+
+    for(int i=0; i<count; ++i)
+    {
+        float candidateWeight;
+        Light candidateLight;
+
+        if (SampleLightUniform(seed, hitPosition, surfaceNormal, candidateLight, candidateWeight))
+        {
+            float3 lightVector;
+            float  lightDistance;
+            GetLightData(candidateLight, hitPosition, lightVector, lightDistance);
+
+            // 裏面向きのライトは無視.
+            float3 L = normalize(lightVector);
+            if (dot(surfaceNormal, L) < 1e-5f)
+            { continue; }
+
+            float candidatePdfG = Luminance(GetLightIntensity(candidateLight, lightDistance));
+            const float candidateRISWeight = candidatePdfG * candidateWeight;
+
+            totalWeights += candidateRISWeight;
+            if (Random(seed) < (candidateRISWeight / totalWeights))
+            {
+                selectedSample = candidateLight;
+                samplePdfG     = candidatePdfG;
+            }
+        }
+    }
+
+    if (totalWeights == 0.0f)
+    { return false; }
+
+    lightSampleWeight = (totalWeights / float(count)) / samplePdfG;
+    return true;
+}
+
 
 //-----------------------------------------------------------------------------
 //      レイ生成シェーダです.
@@ -99,6 +181,7 @@ void OnGenerateRay()
         // 自己発光による放射輝度.
         L += W * material.Emissive;
 
+#if 0
         // Next Event Estimation.
         {
             // BSDFがデルタ関数を持たない場合のみ.
@@ -134,6 +217,32 @@ void OnGenerateRay()
                 }
             }
         }
+#else
+        // Next Event Estimation.
+        {
+            Light light;
+            float lightWeight;
+            if (SampleLightRIS(seed, vertex.Position, geometryNormal, light, lightWeight))
+            {
+                float3 lightVector;
+                float  lightDistance;
+                GetLightData(light, vertex.Position, lightVector, lightDistance);
+
+                float3 L = normalize(lightVector);
+
+                if (!CastShadowRay(vertex.Position, geometryNormal, L, lightDistance))
+                {
+                    // BSDF.
+                    float3 fs = SampleMaterial(V, N, L, Random(seed), material);
+
+                    // Light
+                    float3 Le = GetLightIntensity(light, lightDistance);
+
+                    L += W * fs * Le * lightWeight;
+                }
+            }
+        }
+#endif
 
         // 最後のバウンスであれば早期終了(BRDFをサンプルしてもロジック的に反映されないため).
         if (bounce == SceneParam.MaxBounce - 1)
