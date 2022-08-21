@@ -471,7 +471,7 @@ bool Renderer::SystemSetup()
 
     // レイトレ用ルートシグニチャ生成.
     {
-        asdx::DescriptorSetLayout<7, 1> layout;
+        asdx::DescriptorSetLayout<8, 1> layout;
         layout.SetTableUAV(0, asdx::SV_ALL, 0);
         layout.SetSRV     (1, asdx::SV_ALL, 0);
         layout.SetSRV     (2, asdx::SV_ALL, 1);
@@ -479,6 +479,7 @@ bool Renderer::SystemSetup()
         layout.SetSRV     (4, asdx::SV_ALL, 3);
         layout.SetTableSRV(5, asdx::SV_ALL, 4);
         layout.SetCBV     (6, asdx::SV_ALL, 0);
+        layout.SetTableSRV(7, asdx::SV_ALL, 5);
         layout.SetStaticSampler(0, asdx::SV_ALL, asdx::STATIC_SAMPLER_LINEAR_WRAP, 0);
         layout.SetFlags(D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED);
 
@@ -1222,6 +1223,12 @@ bool Renderer::BuildScene()
     //dummy0.ExtIor    = 1.0f;
     dummy1.UvScale   = asdx::Vector2(10.0f, 10.0f);
 
+    Light dirLight = {};
+    dirLight.Type       = LIGHT_TYPE_DIRECTIONAL;
+    dirLight.Position   = asdx::Vector3(0.0f, -1.0f, 0.0f);
+    dirLight.Intensity  = asdx::Vector3(1.0f, 1.0f, 1.0f) * 1000.0f;
+    dirLight.Radius     = 1.0f;
+
     std::vector<r3d::Mesh> meshes;
     if (!LoadMesh("../res/model/dragon.obj", meshes))
     {
@@ -1246,6 +1253,7 @@ bool Renderer::BuildScene()
     exporter.AddMaterial(dummy0);
     exporter.AddMaterial(dummy1);
     exporter.AddInstances(instances);
+    exporter.AddLight(dirLight);
 
     const char* exportPath = "../res/scene/rtcamp.scn";
 
@@ -1924,6 +1932,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         m_GfxCmdList.SetSRV(4, m_Scene.GetTB(), true);
         m_GfxCmdList.SetTable(5, m_Scene.GetIBL(), true);
         m_GfxCmdList.SetCBV(6, m_SceneParam.GetResource(), true);
+        m_GfxCmdList.SetTable(7, m_Scene.GetLB(), true);
 
         D3D12_DISPATCH_RAYS_DESC desc = {};
         desc.RayGenerationShaderRecord  = rayGenTable;

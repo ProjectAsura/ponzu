@@ -474,7 +474,7 @@ bool Scene::Init(const char* path, asdx::CommandList& cmdList)
 
     // IBLテクスチャのセットアップ.
     {
-        // なぜかうまくいかないため，ここだけ明示的にマッピングを変える.
+        // なぜか ARGB の順番になっているので，暫定としてコンポーネントマッピングで対応.
         uint32_t mapping = D3D12_ENCODE_SHADER_4_COMPONENT_MAPPING(1, 2, 3, 0);
 
         if (!m_IBL.Init(cmdList.GetCommandList(), resScene->IblTexture(), mapping))
@@ -733,6 +733,12 @@ asdx::IShaderResourceView* Scene::GetTB() const
 //-----------------------------------------------------------------------------
 asdx::IShaderResourceView* Scene::GetMB() const
 { return m_ModelMgr.GetMB(); }
+
+//-----------------------------------------------------------------------------
+//      ライトバッファのシェーダリソースビューを取得します.
+//-----------------------------------------------------------------------------
+asdx::IShaderResourceView* Scene::GetLB() const
+{ return m_LB.GetView(); }
 
 //-----------------------------------------------------------------------------
 //      IBLのシェーダリソースビューを取得します.

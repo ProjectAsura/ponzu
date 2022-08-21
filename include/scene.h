@@ -124,7 +124,6 @@ public:
     void Term();
 
     asdx::IConstantBufferView* GetParamCBV() const;
-    asdx::IShaderResourceView* GetVB() const;
     asdx::IShaderResourceView* GetIB() const;
     asdx::IShaderResourceView* GetTB() const;
     asdx::IShaderResourceView* GetMB() const;
