@@ -13,32 +13,23 @@
 #include <gfx/asdxRayTracing.h>
 #include <gfx/asdxCommandList.h>
 #include <gfx/asdxTexture.h>
+#include <generated/scene_format.h>
 
 
 namespace r3d {
 
 static constexpr uint32_t INVALID_MATERIAL_MAP = UINT32_MAX;
 
-///////////////////////////////////////////////////////////////////////////////
-// Vertex structure
-///////////////////////////////////////////////////////////////////////////////
-struct Vertex
-{
-    asdx::Vector3   Position;
-    asdx::Vector3   Normal;
-    asdx::Vector3   Tangent;
-    asdx::Vector2   TexCoord;
-};
 
 ///////////////////////////////////////////////////////////////////////////////
 // Mesh structure
 ///////////////////////////////////////////////////////////////////////////////
 struct Mesh
 {
-    uint32_t        VertexCount;    //!< 頂点数です.
-    uint32_t        IndexCount;     //!< インデックス数です.
-    const Vertex*   Vertices;       //!< 頂点データです.
-    const uint32_t* Indices;        //!< インデックスデータです.
+    uint32_t      VertexCount;
+    uint32_t      IndexCount;
+    ResVertex*    Vertices;
+    uint32_t*     Indices;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -232,6 +223,35 @@ public:
     //-------------------------------------------------------------------------
     size_t GetMeshCount() const;
 
+    //-------------------------------------------------------------------------
+    //! @brief      インスタンス数を取得します.
+    //-------------------------------------------------------------------------
+    size_t GetInstanceCount() const;
+
+    //-------------------------------------------------------------------------
+    //! @brief      ジオメトリハンドルを取得します.
+    //! 
+    //! @param[in]      index       メッシュ番号.
+    //! @return     ジオメトリハンドルを返却します.
+    //-------------------------------------------------------------------------
+    GeometryHandle GetGeometryHandle(uint32_t index) const;
+
+    //-------------------------------------------------------------------------
+    //! @brief      インスタンスハンドルを取得します.
+    //! 
+    //! @param[in]      index       インスタンス番号.
+    //! @return     インスタンスハンドルを返却します.
+    //-------------------------------------------------------------------------
+    InstanceHandle GetInstanceHandle(uint32_t index) const;
+
+    //-------------------------------------------------------------------------
+    //! @brief      CPUインスタンスを取得します.
+    //! 
+    //! @param[in]      index       インスタンス番号.
+    //! @return     CPUインスタンスを返却します.
+    //-------------------------------------------------------------------------
+    CpuInstance GetCpuInstance(uint32_t index) const;
+
 private:
     ///////////////////////////////////////////////////////////////////////////////
     // GpuInstance structure
@@ -274,6 +294,10 @@ private:
     asdx::Texture   m_DefaultNormal;
     asdx::Texture   m_DefaultORM;
     asdx::Texture   m_DefaultEmissive;
+
+    std::vector<GeometryHandle> m_GeometryHandles;
+    std::vector<InstanceHandle> m_InstanceHandles;
+    std::vector<CpuInstance>    m_CpuInstances;
 
     //=========================================================================
     // private methods.

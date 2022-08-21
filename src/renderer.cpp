@@ -44,7 +44,7 @@ static const D3D12_INPUT_ELEMENT_DESC kModelElements[] = {
     { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT   , 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 };
 
-static_assert(sizeof(r3d::Vertex) == sizeof(VertexOBJ), "Vertex size not matched!");
+static_assert(sizeof(r3d::ResVertex) == sizeof(VertexOBJ), "Vertex size not matched!");
 
 #if !(CAMP_RELEASE)
 enum BUFFER_KIND
@@ -304,13 +304,6 @@ bool Renderer::SystemSetup()
 
     // PNGライブラリ初期化.
     fpng::fpng_init();
-
-    // モデルマネージャ初期化.
-    if (!m_ModelMgr.Init(m_GfxCmdList, UINT16_MAX, UINT16_MAX))
-    {
-        ELOGA("Error : ModelMgr::Init() Failed.");
-        return false;
-    }
 
     // リードバックテクスチャ生成.
     {
@@ -1211,184 +1204,244 @@ bool Renderer::BuildScene()
 #if 1
     auto pDevice = asdx::GetD3D12Device();
 
-    // IBL読み込み.
+    Material dummy0 = {};
+    dummy0.Normal    = INVALID_MATERIAL_MAP;
+    dummy0.BaseColor = INVALID_MATERIAL_MAP;
+    dummy0.ORM       = INVALID_MATERIAL_MAP;
+    dummy0.Emissive  = INVALID_MATERIAL_MAP;
+    dummy0.IntIor    = 1.4f;
+    dummy0.ExtIor    = 1.0f;
+    dummy0.UvScale   = asdx::Vector2(1.0f, 1.0f);
+
+    Material dummy1 = {};
+    dummy1.Normal    = INVALID_MATERIAL_MAP;
+    dummy1.BaseColor = 0;
+    dummy1.ORM       = INVALID_MATERIAL_MAP;
+    dummy1.Emissive  = INVALID_MATERIAL_MAP;
+    //dummy0.IntIor    = 1.4f;
+    //dummy0.ExtIor    = 1.0f;
+    dummy1.UvScale   = asdx::Vector2(10.0f, 10.0f);
+
+    std::vector<r3d::Mesh> meshes;
+    if (!LoadMesh("../res/model/dragon.obj", meshes))
     {
-        std::string path;
-        if (!asdx::SearchFilePathA("../res/ibl/studio_garden_2k.dds", path))
-        {
-            ELOGA("Error : IBL File Not Found.");
-            return false;
-        }
+        ELOGA("Error : LoadMesh() Failed.");
+        return false;
+    }
 
-        asdx::ResTexture res;
-        if (!res.LoadFromFileA(path.c_str()))
-        {
-            ELOGA("Error : IBL Load Failed.");
-            return false;
-        }
+    std::vector<r3d::CpuInstance> instances;
+    instances.resize(meshes.size());
 
-        if (!m_IBL.Init(m_GfxCmdList, res))
+    for(size_t i=0; i<meshes.size(); ++i)
+    {
+        instances[i].MaterialId = 0;
+        instances[i].MeshId     = 0;
+        instances[i].Transform  = asdx::Transform3x4();
+    }
+
+    SceneExporter exporter;
+    exporter.SetIBL("../res/ibl/studio_garden_2k.dds");
+    exporter.AddTexture("../res/texture/floor_tiles_08_diff_2k.dds");
+    exporter.AddMeshes(meshes);
+    exporter.AddMaterial(dummy0);
+    exporter.AddMaterial(dummy1);
+    exporter.AddInstances(instances);
+
+    const char* exportPath = "../res/scene/rtcamp.scn";
+
+    if (!exporter.Export(exportPath))
+    {
+        ELOGA("Error : SceneExporter::Export() Failed.");
+        return false;
+    }
+
+    // シーン構築.
+    {
+        if (!m_Scene.Init(exportPath, m_GfxCmdList))
         {
-            ELOGA("Error : IBL Init Failed.");
+            ELOGA("Error : Scene::Init() Failed.");
             return false;
         }
     }
 
-    // テクスチャ.
-    {
-        std::string path;
-        if (!asdx::SearchFilePathA("../res/texture/floor_tiles_08_diff_2k.dds", path))
-        {
-            ELOGA("Error : Texture Not Found.");
-            return false;
-        }
+    //// IBL読み込み.
+    //{
+    //    std::string path;
+    //    if (!asdx::SearchFilePathA("../res/ibl/studio_garden_2k.dds", path))
+    //    {
+    //        ELOGA("Error : IBL File Not Found.");
+    //        return false;
+    //    }
 
-        asdx::ResTexture res;
-        if (!res.LoadFromFileA(path.c_str()))
-        {
-            ELOGA("Error : Texture Load Failed.");
-            return false;
-        }
+    //    asdx::ResTexture res;
+    //    if (!res.LoadFromFileA(path.c_str()))
+    //    {
+    //        ELOGA("Error : IBL Load Failed.");
+    //        return false;
+    //    }
 
-        if (!m_PlaneBC.Init(m_GfxCmdList, res))
-        {
-            ELOGA("Error : Texture Init Failed.");
-            return false;
-        }
-    }
+    //    if (!m_IBL.Init(m_GfxCmdList, res))
+    //    {
+    //        ELOGA("Error : IBL Init Failed.");
+    //        return false;
+    //    }
+    //}
 
-    // Test
-    {
-        const char* rawPath = "../res/model/dosei_with_ground.obj";
-        ModelOBJ model;
-        OBJLoader loader;
-        std::string path;
-        if (!asdx::SearchFilePathA(rawPath, path))
-        {
-            ELOGA("Error : File Path Not Found. path = %s", rawPath);
-            return false;
-        }
+    //// テクスチャ.
+    //{
+    //    std::string path;
+    //    if (!asdx::SearchFilePathA("../res/texture/floor_tiles_08_diff_2k.dds", path))
+    //    {
+    //        ELOGA("Error : Texture Not Found.");
+    //        return false;
+    //    }
 
-        if (!loader.Load(path.c_str(), model))
-        {
-            ELOGA("Error : Model Load Failed.");
-            return false;
-        }
+    //    asdx::ResTexture res;
+    //    if (!res.LoadFromFileA(path.c_str()))
+    //    {
+    //        ELOGA("Error : Texture Load Failed.");
+    //        return false;
+    //    }
 
-        Material dummy0 = {};
-        dummy0.Normal    = INVALID_MATERIAL_MAP;
-        dummy0.BaseColor = INVALID_MATERIAL_MAP;
-        dummy0.ORM       = INVALID_MATERIAL_MAP;
-        dummy0.Emissive  = INVALID_MATERIAL_MAP;
-        dummy0.IntIor    = 1.4f;
-        dummy0.ExtIor    = 1.0f;
-        dummy0.UvScale   = asdx::Vector2(1.0f, 1.0f);
-        m_ModelMgr.AddMaterials(&dummy0, 1);
+    //    if (!m_PlaneBC.Init(m_GfxCmdList, res))
+    //    {
+    //        ELOGA("Error : Texture Init Failed.");
+    //        return false;
+    //    }
+    //}
 
-        Material dummy1 = {};
-        dummy1.Normal    = INVALID_MATERIAL_MAP;
-        dummy1.BaseColor = m_PlaneBC.GetView()->GetDescriptorIndex();
-        dummy1.ORM       = INVALID_MATERIAL_MAP;
-        dummy1.Emissive  = INVALID_MATERIAL_MAP;
-        //dummy0.IntIor    = 1.4f;
-        //dummy0.ExtIor    = 1.0f;
-        dummy1.UvScale   = asdx::Vector2(10.0f, 10.0f);
-        m_ModelMgr.AddMaterials(&dummy1, 1);
+    //// Test
+    //{
+    //    const char* rawPath = "../res/model/dosei_with_ground.obj";
+    //    ModelOBJ model;
+    //    OBJLoader loader;
+    //    std::string path;
+    //    if (!asdx::SearchFilePathA(rawPath, path))
+    //    {
+    //        ELOGA("Error : File Path Not Found. path = %s", rawPath);
+    //        return false;
+    //    }
 
-        auto meshCount = model.Meshes.size();
+    //    if (!loader.Load(path.c_str(), model))
+    //    {
+    //        ELOGA("Error : Model Load Failed.");
+    //        return false;
+    //    }
 
-        m_BLAS.resize(meshCount);
+    //    Material dummy0 = {};
+    //    dummy0.Normal    = INVALID_MATERIAL_MAP;
+    //    dummy0.BaseColor = INVALID_MATERIAL_MAP;
+    //    dummy0.ORM       = INVALID_MATERIAL_MAP;
+    //    dummy0.Emissive  = INVALID_MATERIAL_MAP;
+    //    dummy0.IntIor    = 1.4f;
+    //    dummy0.ExtIor    = 1.0f;
+    //    dummy0.UvScale   = asdx::Vector2(1.0f, 1.0f);
+    //    m_ModelMgr.AddMaterials(&dummy0, 1);
 
-        std::vector<D3D12_RAYTRACING_INSTANCE_DESC> instanceDescs;
-        instanceDescs.resize(meshCount);
+    //    Material dummy1 = {};
+    //    dummy1.Normal    = INVALID_MATERIAL_MAP;
+    //    dummy1.BaseColor = m_PlaneBC.GetView()->GetDescriptorIndex();
+    //    dummy1.ORM       = INVALID_MATERIAL_MAP;
+    //    dummy1.Emissive  = INVALID_MATERIAL_MAP;
+    //    //dummy0.IntIor    = 1.4f;
+    //    //dummy0.ExtIor    = 1.0f;
+    //    dummy1.UvScale   = asdx::Vector2(10.0f, 10.0f);
+    //    m_ModelMgr.AddMaterials(&dummy1, 1);
 
-        m_MeshDrawCalls.resize(meshCount);
+    //    auto meshCount = model.Meshes.size();
+
+    //    m_BLAS.resize(meshCount);
+
+    //    std::vector<D3D12_RAYTRACING_INSTANCE_DESC> instanceDescs;
+    //    instanceDescs.resize(meshCount);
+
+    //    m_MeshDrawCalls.resize(meshCount);
  
-        for(size_t i=0; i<meshCount; ++i)
-        {
-            r3d::Mesh mesh = {};
-            mesh.VertexCount = uint32_t(model.Meshes[i].Vertices.size());
-            mesh.Vertices    = reinterpret_cast<Vertex*>(model.Meshes[i].Vertices.data());
-            mesh.IndexCount  = uint32_t(model.Meshes[i].Indices.size());
-            mesh.Indices     = model.Meshes[i].Indices.data();
+    //    for(size_t i=0; i<meshCount; ++i)
+    //    {
+    //        r3d::Mesh mesh = {};
+    //        mesh.VertexCount = uint32_t(model.Meshes[i].Vertices.size());
+    //        mesh.Vertices    = reinterpret_cast<Vertex*>(model.Meshes[i].Vertices.data());
+    //        mesh.IndexCount  = uint32_t(model.Meshes[i].Indices.size());
+    //        mesh.Indices     = model.Meshes[i].Indices.data();
 
-            auto geometryHandle = m_ModelMgr.AddMesh(mesh);
+    //        auto geometryHandle = m_ModelMgr.AddMesh(mesh);
 
-            r3d::CpuInstance instance = {};
-            instance.Transform      = asdx::Transform3x4();
-            instance.MeshId         = uint32_t(i);
-            instance.MaterialId     = (i != 3) ? 0 : 1;
-            //instance.MaterialId     = 0;
+    //        r3d::CpuInstance instance = {};
+    //        instance.Transform      = asdx::Transform3x4();
+    //        instance.MeshId         = uint32_t(i);
+    //        instance.MaterialId     = (i != 3) ? 0 : 1;
+    //        //instance.MaterialId     = 0;
 
-            auto instanceHandle = m_ModelMgr.AddInstance(instance);
+    //        auto instanceHandle = m_ModelMgr.AddInstance(instance);
 
-            D3D12_RAYTRACING_GEOMETRY_DESC desc = {};
-            desc.Type                                   = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
-            desc.Flags                                  = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
-            desc.Triangles.Transform3x4                 = instanceHandle.AddressTB;
-            desc.Triangles.IndexFormat                  = DXGI_FORMAT_R32_UINT;
-            desc.Triangles.IndexCount                   = mesh.IndexCount;
-            desc.Triangles.IndexBuffer                  = geometryHandle.AddressIB;
-            desc.Triangles.VertexFormat                 = DXGI_FORMAT_R32G32B32_FLOAT;
-            desc.Triangles.VertexBuffer.StartAddress    = geometryHandle.AddressVB;
-            desc.Triangles.VertexBuffer.StrideInBytes   = sizeof(Vertex);
-            desc.Triangles.VertexCount                  = mesh.VertexCount;
+    //        D3D12_RAYTRACING_GEOMETRY_DESC desc = {};
+    //        desc.Type                                   = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
+    //        desc.Flags                                  = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
+    //        desc.Triangles.Transform3x4                 = instanceHandle.AddressTB;
+    //        desc.Triangles.IndexFormat                  = DXGI_FORMAT_R32_UINT;
+    //        desc.Triangles.IndexCount                   = mesh.IndexCount;
+    //        desc.Triangles.IndexBuffer                  = geometryHandle.AddressIB;
+    //        desc.Triangles.VertexFormat                 = DXGI_FORMAT_R32G32B32_FLOAT;
+    //        desc.Triangles.VertexBuffer.StartAddress    = geometryHandle.AddressVB;
+    //        desc.Triangles.VertexBuffer.StrideInBytes   = sizeof(Vertex);
+    //        desc.Triangles.VertexCount                  = mesh.VertexCount;
 
-            if (!m_BLAS[i].Init(
-                pDevice,
-                1,
-                &desc, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE))
-            {
-                ELOGA("Error : Blas::Init() Failed.");
-                return false;
-            }
+    //        if (!m_BLAS[i].Init(
+    //            pDevice,
+    //            1,
+    //            &desc, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE))
+    //        {
+    //            ELOGA("Error : Blas::Init() Failed.");
+    //            return false;
+    //        }
 
-            // ビルドコマンドを積んでおく.
-            m_BLAS[i].Build(m_GfxCmdList.GetCommandList());
+    //        // ビルドコマンドを積んでおく.
+    //        m_BLAS[i].Build(m_GfxCmdList.GetCommandList());
 
-            memcpy(instanceDescs[i].Transform, instance.Transform.m, sizeof(float) * 12);
-            instanceDescs[i].InstanceID                             = instanceHandle.InstanceId;
-            instanceDescs[i].InstanceMask                           = 0xFF;
-            instanceDescs[i].InstanceContributionToHitGroupIndex    = 0;
-            instanceDescs[i].Flags                                  = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
-            instanceDescs[i].AccelerationStructure                  = m_BLAS[i].GetResource()->GetGPUVirtualAddress();
+    //        memcpy(instanceDescs[i].Transform, instance.Transform.m, sizeof(float) * 12);
+    //        instanceDescs[i].InstanceID                             = instanceHandle.InstanceId;
+    //        instanceDescs[i].InstanceMask                           = 0xFF;
+    //        instanceDescs[i].InstanceContributionToHitGroupIndex    = 0;
+    //        instanceDescs[i].Flags                                  = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
+    //        instanceDescs[i].AccelerationStructure                  = m_BLAS[i].GetResource()->GetGPUVirtualAddress();
 
-            D3D12_VERTEX_BUFFER_VIEW vbv = {};
-            vbv.BufferLocation = geometryHandle.AddressVB;
-            vbv.SizeInBytes    = sizeof(Vertex) * mesh.VertexCount;
-            vbv.StrideInBytes  = sizeof(Vertex);
+    //        D3D12_VERTEX_BUFFER_VIEW vbv = {};
+    //        vbv.BufferLocation = geometryHandle.AddressVB;
+    //        vbv.SizeInBytes    = sizeof(Vertex) * mesh.VertexCount;
+    //        vbv.StrideInBytes  = sizeof(Vertex);
 
-            D3D12_INDEX_BUFFER_VIEW ibv = {};
-            ibv.BufferLocation = geometryHandle.AddressIB;
-            ibv.SizeInBytes    = sizeof(uint32_t) * mesh.IndexCount;
-            ibv.Format         = DXGI_FORMAT_R32_UINT;
+    //        D3D12_INDEX_BUFFER_VIEW ibv = {};
+    //        ibv.BufferLocation = geometryHandle.AddressIB;
+    //        ibv.SizeInBytes    = sizeof(uint32_t) * mesh.IndexCount;
+    //        ibv.Format         = DXGI_FORMAT_R32_UINT;
 
-            m_MeshDrawCalls[i].StartIndex = 0;
-            m_MeshDrawCalls[i].IndexCount = mesh.IndexCount;
-            m_MeshDrawCalls[i].BaseVertex = 0;
-            m_MeshDrawCalls[i].InstanceId = instanceHandle.InstanceId;
-            m_MeshDrawCalls[i].VBV        = vbv;
-            m_MeshDrawCalls[i].IBV        = ibv;
-        }
+    //        m_MeshDrawCalls[i].StartIndex = 0;
+    //        m_MeshDrawCalls[i].IndexCount = mesh.IndexCount;
+    //        m_MeshDrawCalls[i].BaseVertex = 0;
+    //        m_MeshDrawCalls[i].InstanceId = instanceHandle.InstanceId;
+    //        m_MeshDrawCalls[i].VBV        = vbv;
+    //        m_MeshDrawCalls[i].IBV        = ibv;
+    //    }
 
-        auto instanceCount = uint32_t(instanceDescs.size());
-        if (!m_TLAS.Init(
-            pDevice,
-            instanceCount,
-            instanceDescs.data(),
-            D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE))
-        {
-            ELOGA("Error : Tlas::Init() Failed.");
-            return false;
-        }
+    //    auto instanceCount = uint32_t(instanceDescs.size());
+    //    if (!m_TLAS.Init(
+    //        pDevice,
+    //        instanceCount,
+    //        instanceDescs.data(),
+    //        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE))
+    //    {
+    //        ELOGA("Error : Tlas::Init() Failed.");
+    //        return false;
+    //    }
 
-        // ビルドコマンドを積んでおく.
-        m_TLAS.Build(m_GfxCmdList.GetCommandList());
-    }
+    //    // ビルドコマンドを積んでおく.
+    //    m_TLAS.Build(m_GfxCmdList.GetCommandList());
+    //}
 
-    // ライト生成.
-    {
-    }
+    //// ライト生成.
+    //{
+    //}
 
 #else
     // シーン構築.
@@ -1475,15 +1528,9 @@ void Renderer::OnTerm()
     m_CopyRootSig       .Term();
     m_CopyPSO           .Term();
 
-    for(size_t i=0; i<m_BLAS.size(); ++i)
-    { m_BLAS[i].Term(); }
-    m_BLAS.clear();
-
-    m_TLAS  .Term();
     m_Canvas.Term();
 
     m_SceneParam.Term();
-    m_IBL       .Term();
 
     m_RayGenTable   .Term();
     m_MissTable     .Term();
@@ -1501,9 +1548,6 @@ void Renderer::OnTerm()
     m_ModelDepthTarget.Term();
     m_ModelRootSig    .Term();
     m_ModelPSO        .Term();
-    //m_MeshDrawCalls.clear();
-
-    m_ModelMgr.Term();
 
     timer.End();
     printf_s("Terminate Process ... done! %lf[msec]\n", timer.GetElapsedMsec());
@@ -1710,9 +1754,9 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         m_GfxCmdList.SetPipelineState(m_ModelPSO.GetPtr());
 
         m_GfxCmdList.SetCBV(0, m_SceneParam.GetResource());
-        m_GfxCmdList.SetSRV(2, m_ModelMgr.GetTB());
-        m_GfxCmdList.SetSRV(3, m_ModelMgr.GetMB());
-        m_GfxCmdList.SetSRV(4, m_ModelMgr.GetIB());
+        m_GfxCmdList.SetSRV(2, m_Scene.GetTB());
+        m_GfxCmdList.SetSRV(3, m_Scene.GetMB());
+        m_GfxCmdList.SetSRV(4, m_Scene.GetIB());
         m_GfxCmdList.SetPrimitiveToplogy(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
         auto count = m_MeshDrawCalls.size();
@@ -1874,11 +1918,11 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         m_GfxCmdList.SetStateObject(stateObject);
         m_GfxCmdList.SetRootSignature(m_RayTracingRootSig.GetPtr(), true);
         m_GfxCmdList.SetTable(0, m_Canvas.GetUAV(), true);
-        m_GfxCmdList.SetSRV(1, m_TLAS.GetResource(), true);
-        m_GfxCmdList.SetSRV(2, m_ModelMgr.GetIB(), true);
-        m_GfxCmdList.SetSRV(3, m_ModelMgr.GetMB(), true);
-        m_GfxCmdList.SetSRV(4, m_ModelMgr.GetTB(), true);
-        m_GfxCmdList.SetTable(5, m_IBL.GetView(), true);
+        m_GfxCmdList.SetSRV(1, m_Scene.GetTLAS(), true);
+        m_GfxCmdList.SetSRV(2, m_Scene.GetIB(), true);
+        m_GfxCmdList.SetSRV(3, m_Scene.GetMB(), true);
+        m_GfxCmdList.SetSRV(4, m_Scene.GetTB(), true);
+        m_GfxCmdList.SetTable(5, m_Scene.GetIBL(), true);
         m_GfxCmdList.SetCBV(6, m_SceneParam.GetResource(), true);
 
         D3D12_DISPATCH_RAYS_DESC desc = {};
@@ -2035,7 +2079,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         m_GfxCmdList.SetViewport(m_ColorTarget[idx].GetResource());
         m_GfxCmdList.SetRootSignature(m_CopyRootSig.GetPtr(), false);
         m_GfxCmdList.SetPipelineState(m_CopyPSO.GetPtr());
-        m_GfxCmdList.SetTable(0, m_FinalBuffer.GetSRV());
+        m_GfxCmdList.SetTable(0, m_HistoryTarget[m_CurrHistoryBufferIndex].GetSRV());
         asdx::Quad::Instance().Draw(m_GfxCmdList.GetCommandList());
     #endif
 

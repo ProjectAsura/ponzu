@@ -48,7 +48,7 @@ table SubResource
     MipIndex:uint;
     Pitch:uint;
     SlicePitch:uint;
-    Pixels:[byte];
+    Pixels:[ubyte];
 }
 
 table ResTexture
@@ -105,7 +105,7 @@ table ResScene
     TextureCount:uint;
     MaterialCount:uint;
     LightCount:uint;
-    IblTexture:ResTexture;
+    IblTexture:string;
     Meshes:[ResMesh];
     Instances:[ResInstance];
     Textures:[ResTexture];

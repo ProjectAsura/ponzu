@@ -127,6 +127,7 @@ public:
     asdx::IShaderResourceView* GetMB() const;
     asdx::IShaderResourceView* GetIBL() const;
     asdx::IShaderResourceView* GetLB() const;
+    ID3D12Resource*            GetTLAS() const;
 
     void Draw(ID3D12GraphicsCommandList6* pCmdList);
 
@@ -163,12 +164,11 @@ private:
     std::vector<SceneInstance>              m_Instances;
     std::vector<asdx::Blas>                 m_BLAS;
     asdx::Tlas                              m_TLAS;
-    SceneTexture                            m_IBL;
+    asdx::Texture                           m_IBL;
     std::vector<SceneTexture>               m_Textures;
     asdx::ConstantBuffer                    m_Param;
     ModelMgr                                m_ModelMgr;
     asdx::StructuredBuffer                  m_LB;
-    std::vector<GeometryHandle>             m_GeometryHandles;
 
     //=========================================================================
     // private methods.
@@ -199,12 +199,14 @@ public:
     bool Export(const char* path);
     void Reset();
 
-    void AddLight   (const Light& value);
-    void AddMesh    (const Mesh& value);
-    void AddMaterial(const Material& value);
-    void AddInstance(const CpuInstance& value);
-    void AddTexture (const char* path);
-    void SetIBL     (const char* path);
+    void AddLight       (const Light& value);
+    void AddMesh        (const Mesh& value);
+    void AddMeshes      (const std::vector<Mesh>& values);
+    void AddMaterial    (const Material& value);
+    void AddInstance    (const CpuInstance& value);
+    void AddInstances   (const std::vector<CpuInstance>& values);
+    void AddTexture     (const char* path);
+    void SetIBL         (const char* path);
 
 private:
     //=========================================================================
@@ -217,6 +219,16 @@ private:
     std::vector<std::string>    m_Textures;
     std::string                 m_IBL;
 };
+
+//-----------------------------------------------------------------------------
+//! @brief      メッシュをロードします.
+//! 
+//! @param[in]      path        ファイルパスです.
+//! @param[out]     result      メッシュの格納先です.
+//! @retval true    ロードに成功.
+//! @retval false   ロードに失敗.
+//-----------------------------------------------------------------------------
+bool LoadMesh(const char* path, std::vector<Mesh>& result);
 #endif
 
 } // namespace r3d

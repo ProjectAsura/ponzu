@@ -339,6 +339,10 @@ void ModelMgr::Term()
     m_DefaultNormal     .Term();
     m_DefaultORM        .Term();
     m_DefaultEmissive   .Term();
+
+    m_GeometryHandles.clear();
+    m_InstanceHandles.clear();
+    m_CpuInstances   .clear();
 }
 
 //-----------------------------------------------------------------------------
@@ -368,7 +372,7 @@ GeometryHandle ModelMgr::AddMesh(const Mesh& mesh)
 
     // 頂点バッファ生成.
     {
-        auto vbSize = mesh.VertexCount * sizeof(Vertex);
+        auto vbSize = mesh.VertexCount * sizeof(ResVertex);
         if (!asdx::CreateUploadBuffer(pDevice, vbSize, item.VB.GetAddress()))
         {
             ELOGA("Error : CreateUploadBuffer() Failed.");
@@ -434,6 +438,8 @@ GeometryHandle ModelMgr::AddMesh(const Mesh& mesh)
     result.IndexVB      = item.VB_SRV->GetDescriptorIndex();
     result.IndexIB      = item.IB_SRV->GetDescriptorIndex();
 
+    m_GeometryHandles.push_back(result);
+
     m_Meshes.emplace_back(item);
     return result;
 }
@@ -458,6 +464,10 @@ InstanceHandle ModelMgr::AddInstance(const CpuInstance& instance)
     InstanceHandle result = {};
     result.InstanceId = idx;
     result.AddressTB  = m_AddressTB + idx * sizeof(asdx::Transform3x4);
+
+    m_InstanceHandles.push_back(result);
+    m_CpuInstances   .push_back(instance);
+
     return result;
 }
 
@@ -592,5 +602,38 @@ const ModelMgr::MeshBuffer& ModelMgr::GetMesh(size_t index) const
 //-----------------------------------------------------------------------------
 size_t ModelMgr::GetMeshCount() const
 { return m_Meshes.size(); }
+
+//-----------------------------------------------------------------------------
+//      インスタンス数を取得します.
+//-----------------------------------------------------------------------------
+size_t ModelMgr::GetInstanceCount() const
+{ return m_CpuInstances.size(); }
+
+//-----------------------------------------------------------------------------
+//      ジオメトリハンドルを取得します.
+//-----------------------------------------------------------------------------
+GeometryHandle ModelMgr::GetGeometryHandle(uint32_t index) const
+{
+    assert(index < m_GeometryHandles.size());
+    return m_GeometryHandles[index];
+}
+
+//-----------------------------------------------------------------------------
+//      インスタンスハンドルを取得します.
+//-----------------------------------------------------------------------------
+InstanceHandle ModelMgr::GetInstanceHandle(uint32_t index) const
+{
+    assert(index < m_InstanceHandles.size());
+    return m_InstanceHandles[index];
+}
+
+//-----------------------------------------------------------------------------
+//      CPUインスタンスを取得します.
+//-----------------------------------------------------------------------------
+CpuInstance ModelMgr::GetCpuInstance(uint32_t index) const
+{
+    assert(index < m_CpuInstances.size());
+    return m_CpuInstances[index];
+}
 
 } // namespace r3d

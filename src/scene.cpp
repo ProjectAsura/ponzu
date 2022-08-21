@@ -14,6 +14,10 @@
 #include <generated/scene_format.h>
 #include <Windows.h>
 
+#if !CAMP_RELEASE
+#include <OBJLoader.h>
+#endif//!CAMP_RELEASE
+
 
 namespace {
 
@@ -156,10 +160,14 @@ void UpdateTexture
 
         for(auto i=0u; i<count; ++i)
         {
+            auto srcResource = pResTexture->Resources()->Get(i);
+
             D3D12_SUBRESOURCE_DATA srcData = {};
-            srcData.pData       = pResTexture->Resources()->Get(i)->Pixels();
-            srcData.RowPitch    = pResTexture->Resources()->Get(i)->Pitch();
-            srcData.SlicePitch  = pResTexture->Resources()->Get(i)->SlicePitch();
+            srcData.pData       = srcResource->Pixels();
+            srcData.RowPitch    = srcResource->Pitch();
+            srcData.SlicePitch  = srcResource->SlicePitch();
+            assert(layouts[i].Footprint.Width  == srcResource->Width());
+            assert(layouts[i].Footprint.Height == srcResource->Height());
 
             D3D12_MEMCPY_DEST dstData = {};
             dstData.pData       = pData + layouts[i].Offset;
@@ -234,11 +242,7 @@ bool SceneTexture::Init(ID3D12GraphicsCommandList6* pCmdList, const void* resTex
     auto depth      = 1;
     auto format     = DXGI_FORMAT(resource->Format());
 
-#if ASDX_IS_SCARLETT
-    auto mostDetailedMip = resourc.MipMapCount - 1;
-#else
     auto mostDetailedMip = 0u;
-#endif
 
     D3D12_SHADER_RESOURCE_VIEW_DESC viewDesc = {};
     viewDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
@@ -309,6 +313,12 @@ bool SceneTexture::Init(ID3D12GraphicsCommandList6* pCmdList, const void* resTex
             {
                 dimension = D3D12_RESOURCE_DIMENSION_TEXTURE3D;
                 depth = resource->Depth();
+
+                viewDesc.ViewDimension                  = D3D12_SRV_DIMENSION_TEXTURE3D;
+                viewDesc.Format                         = format;
+                viewDesc.Texture3D.MipLevels            = resource->MipLevels();
+                viewDesc.Texture3D.MostDetailedMip      = 0;
+                viewDesc.Texture3D.ResourceMinLODClamp  = 0.0f;
             }
             break;
 
@@ -316,6 +326,25 @@ bool SceneTexture::Init(ID3D12GraphicsCommandList6* pCmdList, const void* resTex
             {
                 dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
                 depth = resource->SurfaceCount();
+
+                if (resource->SurfaceCount() > 6)
+                {
+                   viewDesc.ViewDimension                           = D3D12_SRV_DIMENSION_TEXTURECUBEARRAY;
+                   viewDesc.Format                                  = format;
+                   viewDesc.TextureCubeArray.First2DArrayFace       = 0;
+                   viewDesc.TextureCubeArray.MipLevels              = resource->MipLevels();
+                   viewDesc.TextureCubeArray.MostDetailedMip        = 0;
+                   viewDesc.TextureCubeArray.NumCubes               = resource->SurfaceCount() / 6;
+                   viewDesc.TextureCubeArray.ResourceMinLODClamp    = 0.0f;
+                }
+                else
+                {
+                    viewDesc.ViewDimension                      = D3D12_SRV_DIMENSION_TEXTURECUBE;
+                    viewDesc.Format                             = format;
+                    viewDesc.TextureCube.MipLevels              = resource->MipLevels();
+                    viewDesc.TextureCube.MostDetailedMip        = 0;
+                    viewDesc.TextureCube.ResourceMinLODClamp    = 0;
+                }
             }
             break;
         }
@@ -374,7 +403,7 @@ bool SceneTexture::Init(ID3D12GraphicsCommandList6* pCmdList, const void* resTex
     pResource->Release();
     pResource = nullptr;
 
-    return false;
+    return true;
 }
 
 //-----------------------------------------------------------------------------
@@ -399,6 +428,12 @@ asdx::IShaderResourceView* SceneTexture::GetView() const
 //-----------------------------------------------------------------------------
 bool Scene::Init(const char* path, asdx::CommandList& cmdList)
 {
+    if (!m_ModelMgr.Init(cmdList, UINT16_MAX, UINT16_MAX))
+    {
+        ELOGA("Error : ModelMgr::Init() Failed.");
+        return false;
+    }
+
     // ファイル読み込み.
     {
         auto hFile = CreateFileA(
@@ -434,7 +469,22 @@ bool Scene::Init(const char* path, asdx::CommandList& cmdList)
 
     // IBLテクスチャのセットアップ.
     {
-        if (!m_IBL.Init(cmdList.GetCommandList(), resScene->IblTexture()))
+        std::string iblPath;
+
+        if (!asdx::SearchFilePathA(resScene->IblTexture()->c_str(), iblPath))
+        {
+            ELOGA("Error : File Not Found. path = %s", resScene->IblTexture()->c_str());
+            return false;
+        }
+
+        asdx::ResTexture resource;
+        if (!resource.LoadFromFileA(iblPath.c_str()))
+        {
+            ELOGA("Error : Texture Load Failed. path = %s", iblPath.c_str());
+            return false;
+        }
+
+        if (!m_IBL.Init(cmdList, resource))
         {
             ELOGA("Error : IBL Initialize Failed.");
             return false;
@@ -474,6 +524,9 @@ bool Scene::Init(const char* path, asdx::CommandList& cmdList)
             material.Normal    = GetTextureHandle(srcMaterial->Normal());
             material.ORM       = GetTextureHandle(srcMaterial->Orm());
             material.Emissive  = GetTextureHandle(srcMaterial->Emissive());
+            material.ExtIor    = srcMaterial->ExtIor();
+            material.IntIor    = srcMaterial->IntIor();
+            material.UvScale   = asdx::Vector2(srcMaterial->UvScale().x(), srcMaterial->UvScale().y());
 
             m_ModelMgr.AddMaterials(&material, 1);
         }
@@ -484,7 +537,6 @@ bool Scene::Init(const char* path, asdx::CommandList& cmdList)
         auto count = resScene->MeshCount();
 
         m_BLAS.resize(count);
-        m_GeometryHandles.resize(count);
 
         auto resMeshes = resScene->Meshes();
         assert(resMeshes != nullptr);
@@ -497,8 +549,8 @@ bool Scene::Init(const char* path, asdx::CommandList& cmdList)
             r3d::Mesh mesh = {};
             mesh.VertexCount = srcMesh->VertexCount();
             mesh.IndexCount  = srcMesh->IndexCount();
-            mesh.Vertices    = reinterpret_cast<const r3d::Vertex*>(srcMesh->Vertices()->Data());
-            mesh.Indices     = reinterpret_cast<const uint32_t*>(srcMesh->Indices()->Data());
+            mesh.Vertices    = const_cast<r3d::ResVertex*>(reinterpret_cast<const r3d::ResVertex*>(srcMesh->Vertices()->Data()));
+            mesh.Indices     = const_cast<uint32_t*>(reinterpret_cast<const uint32_t*>(srcMesh->Indices()->Data()));
 
             auto geometryHandle = m_ModelMgr.AddMesh(mesh);
 
@@ -510,7 +562,7 @@ bool Scene::Init(const char* path, asdx::CommandList& cmdList)
             desc.Triangles.IndexBuffer                  = geometryHandle.AddressIB;
             desc.Triangles.VertexFormat                 = DXGI_FORMAT_R32G32B32_FLOAT;
             desc.Triangles.VertexBuffer.StartAddress    = geometryHandle.AddressVB;
-            desc.Triangles.VertexBuffer.StrideInBytes   = sizeof(Vertex);
+            desc.Triangles.VertexBuffer.StrideInBytes   = UINT(sizeof(ResVertex));
             desc.Triangles.VertexCount                  = mesh.VertexCount;
 
             if (!m_BLAS[i].Init(pDevice, 1, &desc, buildFlag))
@@ -520,13 +572,13 @@ bool Scene::Init(const char* path, asdx::CommandList& cmdList)
             }
 
             m_BLAS[i].Build(cmdList.GetCommandList());
-            m_GeometryHandles[i] = geometryHandle;
         }
     }
 
     // TLAS構築.
     {
         auto count = resScene->InstanceCount();
+        assert(count > 0);
 
         std::vector<D3D12_RAYTRACING_INSTANCE_DESC> instanceDescs;
         instanceDescs.resize(count);
@@ -588,21 +640,23 @@ bool Scene::Init(const char* path, asdx::CommandList& cmdList)
 
             auto mesh = resMeshes->Get(meshId);
 
+            auto geometryHandle = m_ModelMgr.GetGeometryHandle(meshId);
+
             D3D12_VERTEX_BUFFER_VIEW vbv = {};
-            vbv.BufferLocation  = m_GeometryHandles[meshId].AddressVB;
-            vbv.SizeInBytes     = sizeof(Vertex) * mesh->VertexCount();
-            vbv.StrideInBytes   = sizeof(Vertex);
+            vbv.BufferLocation  = geometryHandle.AddressVB;
+            vbv.SizeInBytes     = sizeof(ResVertex) * mesh->VertexCount();
+            vbv.StrideInBytes   = sizeof(ResVertex);
 
             D3D12_INDEX_BUFFER_VIEW ibv = {};
-            ibv.BufferLocation  = m_GeometryHandles[meshId].AddressIB;
+            ibv.BufferLocation  = geometryHandle.AddressIB;
             ibv.SizeInBytes     = sizeof(uint32_t) * mesh->IndexCount();
             ibv.Format          = DXGI_FORMAT_R32_UINT;
 
             m_DrawCalls[i].IndexCount = mesh->IndexCount();
             m_DrawCalls[i].VBV        = vbv;
             m_DrawCalls[i].IBV        = ibv;
-            m_DrawCalls[i].IndexVB    = m_GeometryHandles[meshId].IndexVB;
-            m_DrawCalls[i].IndexIB    = m_GeometryHandles[meshId].IndexIB;
+            m_DrawCalls[i].IndexVB    = geometryHandle.IndexVB;
+            m_DrawCalls[i].IndexIB    = geometryHandle.IndexIB;
             m_DrawCalls[i].MaterialId = matId;
         }
 
@@ -618,12 +672,16 @@ bool Scene::Init(const char* path, asdx::CommandList& cmdList)
     // ライトバッファ構築.
     {
         auto count  = resScene->LightCount();
-        auto stride = sizeof(r3d::ResLight);
+        auto stride = uint32_t(sizeof(r3d::ResLight));
 
-        if (!m_LB.Init(cmdList, count, stride, resScene->Lights()->data()))
+        // ライトがあれば初期化.
+        if (count > 0)
         {
-            ELOGA("Error : LB::Init() Failed.");
-            return false;
+            if (!m_LB.Init(cmdList, count, stride, resScene->Lights()->data()))
+            {
+                ELOGA("Error : LB::Init() Failed.");
+                return false;
+            }
         }
     }
 
@@ -690,6 +748,12 @@ asdx::IShaderResourceView* Scene::GetIBL() const
 { return m_IBL.GetView(); }
 
 //-----------------------------------------------------------------------------
+//      TLASを取得します.
+//-----------------------------------------------------------------------------
+ID3D12Resource* Scene::GetTLAS() const
+{ return m_TLAS.GetResource(); }
+
+//-----------------------------------------------------------------------------
 //      描画処理を行います.
 //-----------------------------------------------------------------------------
 void Scene::Draw(ID3D12GraphicsCommandList6* pCmdList)
@@ -741,6 +805,26 @@ uint32_t Scene::GetLightCount() const
 
 #if !CAMP_RELEASE
 
+struct ImTextureSurfaceMemory
+{
+    std::vector<uint8_t>     Pixels;
+};
+
+struct ImTextureMemory
+{
+    asdx::ResTexture                                    SrcTexture;
+    std::vector<flatbuffers::Offset<r3d::SubResource>>  SubResources;
+    std::vector<ImTextureSurfaceMemory>                 Surfaces;
+
+    void Dispose()
+    {
+        SrcTexture.Dispose();
+        for(size_t i=0; i<Surfaces.size(); ++i)
+        { Surfaces[i].Pixels.clear(); }
+        Surfaces.clear();
+    }
+};
+
 ///////////////////////////////////////////////////////////////////////////////
 // SceneExporter class
 ///////////////////////////////////////////////////////////////////////////////
@@ -757,8 +841,8 @@ bool SceneExporter::Export(const char* path)
     std::vector<r3d::ResInstance>                       dstInstances;
     flatbuffers::Offset<r3d::ResTexture>                dstIBL;
 
-    std::vector<asdx::ResTexture>   srcTextures;
-    asdx::ResTexture                srcIBL;
+    ImTextureMemory srcIBL;
+    std::vector<ImTextureMemory> srcTextures;
 
     flatbuffers::FlatBufferBuilder  builder(2048);
 
@@ -769,50 +853,10 @@ bool SceneExporter::Export(const char* path)
         { srcTextures[i].Dispose(); }
     };
 
-    // IBLテクスチャ読み込み.
-    {
-        std::string texPath;
-        if (!asdx::SearchFilePathA(m_IBL.c_str(), texPath))
-        {
-            ELOGA("Error : File Not Found. path = %s", m_IBL.c_str());
-            return false;
-        }
-
-        std::vector<flatbuffers::Offset<r3d::SubResource>> srcSubResources;
-
-        for(auto i=0u; i<srcIBL.SurfaceCount; ++i)
-        {
-            std::vector<int8_t> pix;
-            pix.resize(srcIBL.pResources[i].SlicePitch);
-            memcpy(pix.data(), srcIBL.pResources[i].pPixels, pix.size());
-
-            auto item = r3d::CreateSubResourceDirect(
-                builder,
-                srcIBL.pResources[i].Width,
-                srcIBL.pResources[i].Height,
-                srcIBL.pResources[i].MipIndex,
-                srcIBL.pResources[i].Pitch,
-                srcIBL.pResources[i].SlicePitch,
-                &pix);
-
-            srcSubResources.push_back(item);
-        }
-
-        dstIBL = r3d::CreateResTextureDirect(
-            builder,
-            srcIBL.Dimension,
-            srcIBL.Width,
-            srcIBL.Height,
-            srcIBL.Depth,
-            srcIBL.Format,
-            srcIBL.MipMapCount,
-            srcIBL.SurfaceCount,
-            0,
-            &srcSubResources);
-    }
-
     // マテリアル用テクスチャ読み込み.
     {
+        srcTextures.resize(m_Textures.size());
+
         for(size_t i=0; i<m_Textures.size(); ++i)
         {
             std::string texPath;
@@ -823,38 +867,49 @@ bool SceneExporter::Export(const char* path)
                 return false;
             }
 
-            std::vector<flatbuffers::Offset<r3d::SubResource>> srcSubResources;
-
-            for(auto j=0u; j<srcTextures[i].SurfaceCount; ++j)
+            if (!srcTextures[i].SrcTexture.LoadFromFileA(texPath.c_str()))
             {
-                std::vector<int8_t> pix;
-                pix.resize(srcTextures[i].pResources[j].SlicePitch);
-                memcpy(pix.data(), srcTextures[i].pResources[j].pPixels, pix.size());
+                ELOGA("Error : Texture Load Failed. path = %s", texPath.c_str());
+                dispose();
+                return false;
+            }
+
+            auto count = srcTextures[i].SrcTexture.SurfaceCount * srcTextures[i].SrcTexture.MipMapCount;
+
+            srcTextures[i].Surfaces.resize(count);
+
+            for(auto j=0u; j<count; ++j)
+            {
+                srcTextures[i].Surfaces[j].Pixels.resize(srcTextures[i].SrcTexture.pResources[j].SlicePitch);
+                memcpy(
+                    srcTextures[i].Surfaces[j].Pixels.data(),
+                    srcTextures[i].SrcTexture.pResources[j].pPixels,
+                    srcTextures[i].SrcTexture.pResources[j].SlicePitch);
 
                 auto item = r3d::CreateSubResourceDirect(
                     builder,
-                    srcTextures[i].pResources[j].Width,
-                    srcTextures[i].pResources[j].Height,
-                    srcTextures[i].pResources[j].MipIndex,
-                    srcTextures[i].pResources[j].Pitch,
-                    srcTextures[i].pResources[j].SlicePitch,
-                    &pix);
+                    srcTextures[i].SrcTexture.pResources[j].Width,
+                    srcTextures[i].SrcTexture.pResources[j].Height,
+                    srcTextures[i].SrcTexture.pResources[j].MipIndex,
+                    srcTextures[i].SrcTexture.pResources[j].Pitch,
+                    srcTextures[i].SrcTexture.pResources[j].SlicePitch,
+                    &srcTextures[i].Surfaces[j].Pixels);
 
-                srcSubResources.push_back(item);
+                srcTextures[i].SubResources.push_back(item);
             }
 
             dstTextures.push_back(
                 r3d::CreateResTextureDirect(
                     builder,
-                    srcTextures[i].Dimension,
-                    srcTextures[i].Width,
-                    srcTextures[i].Height,
-                    srcTextures[i].Depth,
-                    srcTextures[i].Format,
-                    srcTextures[i].MipMapCount,
-                    srcTextures[i].SurfaceCount,
+                    srcTextures[i].SrcTexture.Dimension,
+                    srcTextures[i].SrcTexture.Width,
+                    srcTextures[i].SrcTexture.Height,
+                    srcTextures[i].SrcTexture.Depth,
+                    srcTextures[i].SrcTexture.Format,
+                    srcTextures[i].SrcTexture.MipMapCount,
+                    srcTextures[i].SrcTexture.SurfaceCount,
                     0,
-                    &srcSubResources));
+                    &srcTextures[i].SubResources));
         }
     }
 
@@ -864,27 +919,8 @@ bool SceneExporter::Export(const char* path)
         {
             auto& srcMesh = m_Meshes[i];
 
-            std::vector<r3d::ResVertex> vertices;
-            std::vector<uint32_t> indices;
-
-            vertices.resize(srcMesh.VertexCount);
-            for(size_t j=0; j<srcMesh.VertexCount; ++j)
-            {
-                auto& srcVtx = srcMesh.Vertices[j];
-                auto dstVtx = r3d::ResVertex(
-                    r3d::Vector3(srcVtx.Position.x, srcVtx.Position.y, srcVtx.Position.z),
-                    r3d::Vector3(srcVtx.Normal.x, srcVtx.Normal.y, srcVtx.Normal.z),
-                    r3d::Vector3(srcVtx.Tangent.x, srcVtx.Tangent.y, srcVtx.Tangent.z),
-                    r3d::Vector2(srcVtx.TexCoord.x, srcVtx.TexCoord.y));
-
-                vertices[j] = dstVtx;
-            }
-
-            indices.resize(srcMesh.IndexCount);
-            for(size_t j=0; j<srcMesh.IndexCount; ++j)
-            {
-                indices[j] = srcMesh.Indices[j];
-            }
+            std::vector<ResVertex> vertices(srcMesh.Vertices, srcMesh.Vertices + srcMesh.VertexCount);
+            std::vector<uint32_t>  indices(srcMesh.Indices, srcMesh.Indices + srcMesh.IndexCount);
 
             dstMeshes.push_back(
                 r3d::CreateResMeshDirect(
@@ -920,7 +956,7 @@ bool SceneExporter::Export(const char* path)
             r3d::ResLight item(
                 m_Lights[i].Type,
                 r3d::Vector3(m_Lights[i].Intensity.x, m_Lights[i].Intensity.y, m_Lights[i].Intensity.z),
-                r3d::Vector3(m_Lights[i].Position.x, m_Lights[i].Position.y, m_Lights[i].Position.z),
+                r3d::Vector3(m_Lights[i].Position .x, m_Lights[i].Position .y, m_Lights[i].Position .z),
                 m_Lights[i].Radius);
 
             dstLights.push_back(item);
@@ -961,12 +997,14 @@ bool SceneExporter::Export(const char* path)
             textureCount,
             materialCount,
             lightCount,
-            dstIBL,
+            m_IBL.c_str(),
             &dstMeshes,
             &dstInstances,
             &dstTextures,
             &dstMaterials,
             &dstLights);
+
+        builder.Finish(dstScene);
 
         auto buffer = builder.GetBufferPointer();
         auto size   = builder.GetSize();
@@ -998,6 +1036,15 @@ bool SceneExporter::Export(const char* path)
 //-----------------------------------------------------------------------------
 void SceneExporter::Reset()
 {
+    for(size_t i=0; i<m_Meshes.size(); ++i)
+    {
+        if (m_Meshes[i].Vertices != nullptr)
+        { delete[] m_Meshes[i].Vertices; }
+
+        if (m_Meshes[i].Indices != nullptr)
+        { delete[] m_Meshes[i].Indices; }
+    }
+
     m_Lights   .clear();
     m_Meshes   .clear();
     m_Materials.clear();
@@ -1018,6 +1065,12 @@ void SceneExporter::AddMesh(const Mesh& value)
 { m_Meshes.emplace_back(value); }
 
 //-----------------------------------------------------------------------------
+//      メッシュを追加します.
+//-----------------------------------------------------------------------------
+void SceneExporter::AddMeshes(const std::vector<Mesh>& values)
+{ m_Meshes.insert(m_Meshes.end(), values.begin(), values.end()); }
+
+//-----------------------------------------------------------------------------
 //      マテリアルを追加します.
 //-----------------------------------------------------------------------------
 void SceneExporter::AddMaterial(const Material& value)
@@ -1030,6 +1083,12 @@ void SceneExporter::AddInstance(const CpuInstance& value)
 { m_Instances.emplace_back(value); }
 
 //-----------------------------------------------------------------------------
+//      インスタンスを追加します.
+//-----------------------------------------------------------------------------
+void SceneExporter::AddInstances(const std::vector<CpuInstance>& values)
+{ m_Instances.insert(m_Instances.end(), values.begin(), values.end()); }
+
+//-----------------------------------------------------------------------------
 //      テクスチャを追加します.
 //-----------------------------------------------------------------------------
 void SceneExporter::AddTexture(const char* path)
@@ -1040,6 +1099,57 @@ void SceneExporter::AddTexture(const char* path)
 //-----------------------------------------------------------------------------
 void SceneExporter::SetIBL(const char* path)
 { m_IBL = path; }
+
+//-----------------------------------------------------------------------------
+//      メッシュをロードします.
+//-----------------------------------------------------------------------------
+bool LoadMesh(const char* path, std::vector<Mesh>& result)
+{
+    std::string meshPath;
+    if (!asdx::SearchFilePathA(path, meshPath))
+    {
+        ELOGA("Error : File Not Found. path = %s", path);
+        return false;
+    }
+
+    ModelOBJ  model;
+    OBJLoader loader;
+    if (!loader.Load(meshPath.c_str(), model))
+    {
+        ELOGA("Error : Model Load Failed. path = %s", meshPath.c_str());
+        return false;
+    }
+
+    result.resize(model.Meshes.size());
+
+    for(size_t i=0; i<model.Meshes.size(); ++i)
+    {
+        auto& srcMesh = model.Meshes[i];
+        auto& dstMesh = result[i];
+
+        dstMesh.VertexCount = uint32_t(srcMesh.Vertices.size());
+        dstMesh.IndexCount  = uint32_t(srcMesh.Indices .size());
+
+        dstMesh.Vertices = new ResVertex[dstMesh.VertexCount];
+        dstMesh.Indices  = new uint32_t [dstMesh.IndexCount];
+
+        for(size_t j=0; j<srcMesh.Vertices.size(); ++j)
+        {
+            auto& srcVtx = srcMesh.Vertices[j];
+            dstMesh.Vertices[j] = ResVertex(
+                r3d::Vector3(srcVtx.Position.x, srcVtx.Position.y, srcVtx.Position.z),
+                r3d::Vector3(srcVtx.Normal  .x, srcVtx.Normal  .y, srcVtx.Normal  .z),
+                r3d::Vector3(srcVtx.Tangent .x, srcVtx.Tangent .y, srcVtx.Tangent .z),
+                r3d::Vector2(srcVtx.TexCoord.x, srcVtx.TexCoord.y)
+            );
+        }
+
+        for(size_t j=0; j<srcMesh.Indices.size(); ++j)
+        { dstMesh.Indices[j] = srcMesh.Indices[j]; }
+    }
+
+    return true;
+}
 
 #endif
 

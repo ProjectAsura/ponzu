@@ -131,11 +131,7 @@ private:
     asdx::WaitPoint                 m_FrameWaitPoint;
     asdx::RootSignature             m_RayTracingRootSig;
     asdx::RayTracingPipelineState   m_RayTracingPSO;
-    std::vector<asdx::Blas>         m_BLAS;
-    asdx::Tlas                      m_TLAS;
     asdx::ComputeTarget             m_Canvas;
-    ModelMgr                        m_ModelMgr;
-    asdx::Texture                   m_IBL;
     asdx::ConstantBuffer            m_SceneParam;
     asdx::ShaderTable               m_RayGenTable;
     asdx::ShaderTable               m_MissTable;
