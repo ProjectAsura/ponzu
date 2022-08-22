@@ -52,7 +52,7 @@ bool SampleLightUniform
     light = Lights[index];
 
     // PDF of uniform distribution is (1/light count).
-    lightSampleWeight = float(SceneParam.LightCount);
+    lightSampleWeight = float(SceneParam.LightCount); // PDFの逆数にして，割らずに掛ければ済むように.
 
     return true;
 }
@@ -143,6 +143,7 @@ void OnGenerateRay()
     float3 W = float3(1.0f, 1.0f, 1.0f);  // 重み.
     float3 L = float3(0.0f, 0.0f, 0.0f);  // 放射輝度.
 
+    [loop]
     for(int bounce=0; bounce<SceneParam.MaxBounce; ++bounce)
     {
         // 交差判定.
@@ -181,7 +182,7 @@ void OnGenerateRay()
         // 自己発光による放射輝度.
         L += W * material.Emissive;
 
-#if 0
+#if 1
         // Next Event Estimation.
         {
             // BSDFがデルタ関数を持たない場合のみ.
@@ -197,7 +198,7 @@ void OnGenerateRay()
                 if (!CastShadowRay(vertex.Position, geometryNormal, dir, FLT_MAX))
                 {
                     // シャドウレイを飛ばして，光源上のサンプリングとレイ原点の間に遮断が無い場合.
-                    float cosShadow = abs(dot(N, dir));
+                    float cosShadow = dot(N, dir);
                     float cosLight  = 1.0f;
 
                     // BSDF.
@@ -219,26 +220,29 @@ void OnGenerateRay()
         }
 #else
         // Next Event Estimation.
+        if (!HasDelta(material))
         {
-            Light light;
-            float lightWeight;
+            Light light = Lights[0];
+            float lightWeight = 1.0f;
             if (SampleLightRIS(seed, vertex.Position, geometryNormal, light, lightWeight))
             {
                 float3 lightVector;
                 float  lightDistance;
                 GetLightData(light, vertex.Position, lightVector, lightDistance);
 
-                float3 L = normalize(lightVector);
+                float3 dir = normalize(lightVector);
 
-                if (!CastShadowRay(vertex.Position, geometryNormal, L, lightDistance))
+                if (!CastShadowRay(vertex.Position, geometryNormal, dir, lightDistance))
                 {
                     // BSDF.
-                    float3 fs = SampleMaterial(V, N, L, Random(seed), material);
+                    float3 fs = SampleMaterial(V, N, dir, Random(seed), material);
 
                     // Light
                     float3 Le = GetLightIntensity(light, lightDistance);
 
-                    L += W * fs * Le * lightWeight;
+                    float cos = dot(N, dir);
+
+                    L += W * fs * Le * lightWeight * cos;
                 }
             }
         }

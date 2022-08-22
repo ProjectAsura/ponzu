@@ -1210,8 +1210,8 @@ bool Renderer::BuildScene()
     dummy0.BaseColor = INVALID_MATERIAL_MAP;
     dummy0.ORM       = INVALID_MATERIAL_MAP;
     dummy0.Emissive  = INVALID_MATERIAL_MAP;
-    dummy0.IntIor    = 1.4f;
-    dummy0.ExtIor    = 1.0f;
+    //dummy0.IntIor    = 1.4f;
+    //dummy0.ExtIor    = 1.0f;
     dummy0.UvScale   = asdx::Vector2(1.0f, 1.0f);
 
     Material dummy1 = {};
@@ -1225,8 +1225,8 @@ bool Renderer::BuildScene()
 
     Light dirLight = {};
     dirLight.Type       = LIGHT_TYPE_DIRECTIONAL;
-    dirLight.Position   = asdx::Vector3(0.0f, -1.0f, 0.0f);
-    dirLight.Intensity  = asdx::Vector3(1.0f, 1.0f, 1.0f) * 1000.0f;
+    dirLight.Position   = asdx::Vector3(0.0f, -1.0f, 1.0f);
+    dirLight.Intensity  = asdx::Vector3(1.0f, 1.0f, 1.0f);
     dirLight.Radius     = 1.0f;
 
     std::vector<r3d::Mesh> meshes;
@@ -1242,12 +1242,14 @@ bool Renderer::BuildScene()
     for(size_t i=0; i<meshes.size(); ++i)
     {
         instances[i].MaterialId = 0;
-        instances[i].MeshId     = 0;
+        instances[i].MeshId     = i;
         instances[i].Transform  = asdx::Transform3x4();
     }
 
+    //instances[3].MaterialId = 1;
+
     SceneExporter exporter;
-    exporter.SetIBL("../res/ibl/studio_garden_2k.dds");
+    exporter.SetIBL("../res/ibl/10-Shiodome_Stairs_3k.dds");
     exporter.AddTexture("../res/texture/floor_tiles_08_diff_2k.dds");
     exporter.AddMeshes(meshes);
     exporter.AddMaterial(dummy0);
@@ -1697,7 +1699,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         param.PrevInvView           = m_PrevInvView;
         param.PrevInvProj           = m_PrevInvProj;
         param.PrevInvViewProj       = m_PrevInvViewProj;
-        param.MaxBounce             = 16;
+        param.MaxBounce             = 128;
         param.MinBounce             = 3;
         param.FrameIndex            = GetFrameCount();
         param.SkyIntensity          = 1.0f;
@@ -1710,7 +1712,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         param.Size.z                = 1.0f / param.Size.x;
         param.Size.w                = 1.0f / param.Size.y;
         param.CameraDir             = m_CameraZAxis;
-        param.MaxIteration          = 9;
+        param.MaxIteration          = 32;
 
         m_SceneParam.SwapBuffer();
         m_SceneParam.Update(&param, sizeof(param));

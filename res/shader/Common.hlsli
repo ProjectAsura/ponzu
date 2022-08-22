@@ -348,7 +348,7 @@ void GetLightData(Light light, float3 hitPos, out float3 lightVector, out float 
     }
     else if (light.Type == LIGHT_TYPE_DIRECTIONAL)
     {
-        lightVector   = -light.Position; // 照射方向なので，ライトに向かう方向に直す.
+        lightVector   = light.Position;
         lightDistance = FLT_MAX;
     }
     else
@@ -407,7 +407,7 @@ bool CastShadowRay(float3 pos, float3 normal, float3 dir, float tmax)
     ray.TMax        = tmax;
 
     ShadowPayload payload;
-    payload.Visible = true;
+    payload.Visible = false;
 
     TraceRay(
         SceneAS,
@@ -971,7 +971,7 @@ float2 SampleMipMap(Texture2D T, float2 u, out float pdf)
 
     // We have found a texel (x, y) with probability  proportional to 
     // its normalized value. Compute the PDF and return the coordinates.
-    pdf = Load(T, x, y, 0) / Load(T, 0, 0, mipLevels);
+    pdf = Load(T, x, y, 0) / Load(T, 0, 0, mipLevels - 1);
     return float2((float)x / (float)width, (float)y / (float)height);
 }
 
