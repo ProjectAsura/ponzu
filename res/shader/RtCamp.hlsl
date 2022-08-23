@@ -222,8 +222,8 @@ void OnGenerateRay()
         // Next Event Estimation.
         if (!HasDelta(material))
         {
-            Light light = Lights[0];
-            float lightWeight = 1.0f;
+            Light light;
+            float lightWeight;
             if (SampleLightRIS(seed, vertex.Position, geometryNormal, light, lightWeight))
             {
                 float3 lightVector;
@@ -240,9 +240,7 @@ void OnGenerateRay()
                     // Light
                     float3 Le = GetLightIntensity(light, lightDistance);
 
-                    float cos = dot(N, dir);
-
-                    L += W * fs * Le * lightWeight * cos;
+                    L += W * fs * Le * lightWeight;
                 }
             }
         }
@@ -308,11 +306,11 @@ void OnMiss(inout Payload payload)
 //-----------------------------------------------------------------------------
 //      シャドウレイヒット時のシェーダ.
 //-----------------------------------------------------------------------------
-[shader("closesthit")]
-void OnShadowClosestHit(inout ShadowPayload payload, in HitArgs args)
+[shader("anyhit")]
+void OnShadowAnyHit(inout ShadowPayload payload, in HitArgs args)
 {
-    payload.Visible      = true;
-    payload.Barycentrics = args.barycentrics;
+    payload.Visible = true;
+    AcceptHitAndEndSearch();
 }
 
 //-----------------------------------------------------------------------------

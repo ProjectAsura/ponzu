@@ -757,11 +757,6 @@ ID3D12Resource* Scene::GetTLAS() const
 //-----------------------------------------------------------------------------
 void Scene::Draw(ID3D12GraphicsCommandList6* pCmdList)
 {
-    pCmdList->SetGraphicsRootConstantBufferView(0, m_Param.GetResource()->GetGPUVirtualAddress());
-    pCmdList->SetGraphicsRootShaderResourceView(2, m_ModelMgr.GetAddressTB());
-    pCmdList->SetGraphicsRootShaderResourceView(3, m_ModelMgr.GetAddressMB());
-    pCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
     auto count = m_Instances.size();
     for(auto i=0u; i<count; ++i)
     {

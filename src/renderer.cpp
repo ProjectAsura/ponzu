@@ -22,6 +22,8 @@
 extern "C" { __declspec(dllexport) extern const UINT D3D12SDKVersion = 602;}
 extern "C" { __declspec(dllexport) extern const char* D3D12SDKPath = u8".\\D3D12\\"; }
 
+#define MAX_RECURSION_DEPTH     (16)
+
 namespace {
 
 //-----------------------------------------------------------------------------
@@ -495,7 +497,7 @@ bool Renderer::SystemSetup()
         D3D12_EXPORT_DESC exports[] = {
             { L"OnGenerateRay"      , nullptr, D3D12_EXPORT_FLAG_NONE },
             { L"OnClosestHit"       , nullptr, D3D12_EXPORT_FLAG_NONE },
-            { L"OnShadowClosestHit" , nullptr, D3D12_EXPORT_FLAG_NONE },
+            { L"OnShadowAnyHit"     , nullptr, D3D12_EXPORT_FLAG_NONE },
             { L"OnMiss"             , nullptr, D3D12_EXPORT_FLAG_NONE },
             { L"OnShadowMiss"       , nullptr, D3D12_EXPORT_FLAG_NONE },
         };
@@ -505,7 +507,7 @@ bool Renderer::SystemSetup()
         groups[0].HitGroupExport            = L"StandardHit";
         groups[0].Type                      = D3D12_HIT_GROUP_TYPE_TRIANGLES;
 
-        groups[1].ClosestHitShaderImport    = L"OnShadowClosestHit";
+        groups[1].AnyHitShaderImport        = L"OnShadowAnyHit";
         groups[1].HitGroupExport            = L"ShadowHit";
         groups[1].Type                      = D3D12_HIT_GROUP_TYPE_TRIANGLES;
 
@@ -518,7 +520,7 @@ bool Renderer::SystemSetup()
         desc.pHitGroups                 = groups;
         desc.MaxPayloadSize             = sizeof(Payload);
         desc.MaxAttributeSize           = sizeof(asdx::Vector2);
-        desc.MaxTraceRecursionDepth     = 1;
+        desc.MaxTraceRecursionDepth     = MAX_RECURSION_DEPTH;
 
         if (!m_RayTracingPSO.Init(pDevice, desc))
         {
@@ -901,7 +903,7 @@ bool Renderer::SystemSetup()
 #if !(CAMP_RELEASE)
     // カメラ初期化.
     {
-        auto pos    = asdx::Vector3(0.0f, 0.0f, 2.5f);
+        auto pos    = asdx::Vector3(0.0f, 0.0f, 300.5f);
         auto target = asdx::Vector3(0.0f, 0.0f, 0.0f);
         auto upward = asdx::Vector3(0.0f, 1.0f, 0.0f);
         m_CameraController.Init(pos, target, upward, 0.1f, 10000.0f);
@@ -1018,7 +1020,7 @@ bool Renderer::InitInitialSamplingPipeline(RtPipeline& value, D3D12_SHADER_BYTEC
         desc.pHitGroups                 = groups;
         desc.MaxPayloadSize             = sizeof(Payload);
         desc.MaxAttributeSize           = sizeof(asdx::Vector2);
-        desc.MaxTraceRecursionDepth     = 1;
+        desc.MaxTraceRecursionDepth     = MAX_RECURSION_DEPTH;
 
         if (!value.PSO.Init(pDevice, desc))
         {
@@ -1133,7 +1135,7 @@ bool Renderer::InitSpatialSamplingPipeline(RtPipeline& value, D3D12_SHADER_BYTEC
         desc.pHitGroups                 = &groups;
         desc.MaxPayloadSize             = sizeof(Payload);
         desc.MaxAttributeSize           = sizeof(asdx::Vector2);
-        desc.MaxTraceRecursionDepth     = 1;
+        desc.MaxTraceRecursionDepth     = MAX_RECURSION_DEPTH;
 
         if (!value.PSO.Init(pDevice, desc))
         {
@@ -1226,11 +1228,11 @@ bool Renderer::BuildScene()
     Light dirLight = {};
     dirLight.Type       = LIGHT_TYPE_DIRECTIONAL;
     dirLight.Position   = asdx::Vector3(0.0f, -1.0f, 1.0f);
-    dirLight.Intensity  = asdx::Vector3(1.0f, 1.0f, 1.0f);
+    dirLight.Intensity  = asdx::Vector3(1.0f, 1.0f, 1.0f) * 100.0f;
     dirLight.Radius     = 1.0f;
 
     std::vector<r3d::Mesh> meshes;
-    if (!LoadMesh("../res/model/dragon.obj", meshes))
+    if (!LoadMesh("../res/model/dosei_with_ground.obj", meshes))
     {
         ELOGA("Error : LoadMesh() Failed.");
         return false;
@@ -1246,7 +1248,7 @@ bool Renderer::BuildScene()
         instances[i].Transform  = asdx::Transform3x4();
     }
 
-    //instances[3].MaterialId = 1;
+    instances[3].MaterialId = 1;
 
     SceneExporter exporter;
     exporter.SetIBL("../res/ibl/10-Shiodome_Stairs_3k.dds");
@@ -1699,7 +1701,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         param.PrevInvView           = m_PrevInvView;
         param.PrevInvProj           = m_PrevInvProj;
         param.PrevInvViewProj       = m_PrevInvViewProj;
-        param.MaxBounce             = 128;
+        param.MaxBounce             = MAX_RECURSION_DEPTH;
         param.MinBounce             = 3;
         param.FrameIndex            = GetFrameCount();
         param.SkyIntensity          = 1.0f;
@@ -1712,7 +1714,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         param.Size.z                = 1.0f / param.Size.x;
         param.Size.w                = 1.0f / param.Size.y;
         param.CameraDir             = m_CameraZAxis;
-        param.MaxIteration          = 32;
+        param.MaxIteration          = MAX_RECURSION_DEPTH;
 
         m_SceneParam.SwapBuffer();
         m_SceneParam.Update(&param, sizeof(param));
@@ -1769,22 +1771,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         m_GfxCmdList.SetSRV(4, m_Scene.GetIB());
         m_GfxCmdList.SetPrimitiveToplogy(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-        auto count = m_MeshDrawCalls.size();
-        for(size_t i=0; i<count; ++i)
-        {
-            auto& info = m_MeshDrawCalls[i];
-
-            m_GfxCmdList.SetVertexBuffers(0, 1, &info.VBV);
-            m_GfxCmdList.SetIndexBuffer(&info.IBV);
-
-            m_GfxCmdList.SetConstants(1, 1, &info.InstanceId, 0);
-            m_GfxCmdList.DrawIndexedInstanced(
-                info.IndexCount,
-                1,
-                info.StartIndex,
-                info.BaseVertex,
-                0);
-        }
+        m_Scene.Draw(m_GfxCmdList.GetCommandList());
     }
 
 #if ENABLE_RESTIR
@@ -2238,6 +2225,9 @@ void Renderer::Draw2D()
             ImGui::Text(u8"FPS   : %.3lf", GetFPS());
             ImGui::Text(u8"Frame : %ld", GetFrameCount());
             ImGui::Text(u8"Accum : %ld", m_AccumulatedFrames);
+            ImGui::Text(u8"Camera : %f", m_CameraController.GetPosition().x);
+            ImGui::Text(u8"       : %f", m_CameraController.GetPosition().y);
+            ImGui::Text(u8"       : %f", m_CameraController.GetPosition().z);
         }
         ImGui::End();
 
@@ -2316,7 +2306,7 @@ void Renderer::ReloadShader()
         D3D12_EXPORT_DESC exports[] = {
             { L"OnGenerateRay"      , nullptr, D3D12_EXPORT_FLAG_NONE },
             { L"OnClosestHit"       , nullptr, D3D12_EXPORT_FLAG_NONE },
-            { L"OnShadowClosestHit" , nullptr, D3D12_EXPORT_FLAG_NONE },
+            { L"OnShadowAnyHit"     , nullptr, D3D12_EXPORT_FLAG_NONE },
             { L"OnMiss"             , nullptr, D3D12_EXPORT_FLAG_NONE },
             { L"OnShadowMiss"       , nullptr, D3D12_EXPORT_FLAG_NONE },
         };
@@ -2326,7 +2316,7 @@ void Renderer::ReloadShader()
         groups[0].HitGroupExport            = L"StandardHit";
         groups[0].Type                      = D3D12_HIT_GROUP_TYPE_TRIANGLES;
 
-        groups[1].ClosestHitShaderImport    = L"OnShadowClosestHit";
+        groups[1].AnyHitShaderImport        = L"OnShadowAnyHit";
         groups[1].HitGroupExport            = L"ShadowHit";
         groups[1].Type                      = D3D12_HIT_GROUP_TYPE_TRIANGLES;
 

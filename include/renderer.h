@@ -142,7 +142,6 @@ private:
     asdx::DepthTarget               m_ModelDepthTarget;
     asdx::RootSignature             m_ModelRootSig;
     asdx::PipelineState             m_ModelPSO;
-    std::vector<MeshDrawCall>       m_MeshDrawCalls;
     Scene                           m_Scene;
     asdx::Camera                    m_Camera;
     asdx::ComputeTarget             m_TonemapBuffer;

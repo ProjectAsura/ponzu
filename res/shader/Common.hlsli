@@ -44,7 +44,7 @@ struct Payload
 ///////////////////////////////////////////////////////////////////////////////
 struct ShadowPayload
 {
-    float2 Barycentrics;
+    //float2 Barycentrics;
     bool   Visible;
 };
 
@@ -225,9 +225,9 @@ SurfaceHit GetSurfaceHit(uint instanceId, uint triangleIndex, float2 barycentric
 
     float3 v[3];
 
-    float4 row0 = Transforms.Load4(instanceId * TRANSFORM_STRIDE);
-    float4 row1 = Transforms.Load4(instanceId * TRANSFORM_STRIDE + 16);
-    float4 row2 = Transforms.Load4(instanceId * TRANSFORM_STRIDE + 32);
+    float4 row0 = asfloat(Transforms.Load4(instanceId * TRANSFORM_STRIDE));
+    float4 row1 = asfloat(Transforms.Load4(instanceId * TRANSFORM_STRIDE + 16));
+    float4 row2 = asfloat(Transforms.Load4(instanceId * TRANSFORM_STRIDE + 32));
     float3x4 world = float3x4(row0, row1, row2);
 
     [unroll]
@@ -348,7 +348,7 @@ void GetLightData(Light light, float3 hitPos, out float3 lightVector, out float 
     }
     else if (light.Type == LIGHT_TYPE_DIRECTIONAL)
     {
-        lightVector   = light.Position;
+        lightVector   = -light.Position;
         lightDistance = FLT_MAX;
     }
     else
@@ -407,7 +407,7 @@ bool CastShadowRay(float3 pos, float3 normal, float3 dir, float tmax)
     ray.TMax        = tmax;
 
     ShadowPayload payload;
-    payload.Visible = false;
+    payload.Visible = true;
 
     TraceRay(
         SceneAS,
