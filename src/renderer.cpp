@@ -1248,7 +1248,8 @@ bool Renderer::BuildScene()
         instances[i].Transform  = asdx::Transform3x4();
     }
 
-    instances[3].MaterialId = 1;
+    if (instances.size() > 3)
+    { instances[3].MaterialId = 1; }
 
     SceneExporter exporter;
     exporter.SetIBL("../res/ibl/10-Shiodome_Stairs_3k.dds");

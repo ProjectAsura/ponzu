@@ -302,10 +302,10 @@ private:
     //=========================================================================
     // private methods.
     //=========================================================================
-    uint32_t GetBaseColor(uint32_t handle);
-    uint32_t GetNormal(uint32_t handle);
-    uint32_t GetOrm(uint32_t handle);
-    uint32_t GetEmissive(uint32_t handle);
+    uint32_t GetBaseColor   (uint32_t handle);
+    uint32_t GetNormal      (uint32_t handle);
+    uint32_t GetOrm         (uint32_t handle);
+    uint32_t GetEmissive    (uint32_t handle);
 };
 
 } // namespace r3d

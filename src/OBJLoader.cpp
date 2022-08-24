@@ -38,7 +38,7 @@ void CalcNormals(MeshOBJ& mesh)
     }
 
     auto indexCount = mesh.Indices.size();
-    for(size_t i=0; i<indexCount - 3; i+=3)
+    for(size_t i=0; i<indexCount; i+=3)
     {
         auto i0 = mesh.Indices[i + 0];
         auto i1 = mesh.Indices[i + 1];

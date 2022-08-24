@@ -39,8 +39,6 @@ float3 SampleIBL(float3 dir)
 bool SampleLightUniform
 (
     inout uint4 seed,
-    float3      hitPosition,
-    float3      surfaceNormal,
     out Light   light,
     out float   lightSampleWeight
 )
@@ -83,7 +81,7 @@ bool SampleLightRIS
         float candidateWeight;
         Light candidateLight;
 
-        if (SampleLightUniform(seed, hitPosition, surfaceNormal, candidateLight, candidateWeight))
+        if (SampleLightUniform(seed, candidateLight, candidateWeight))
         {
             float3 lightVector;
             float  lightDistance;
@@ -179,6 +177,9 @@ void OnGenerateRay()
         float3 geometryNormal = vertex.GeometryNormal;
         float3 V = -ray.Direction;
 
+        if (dot(geometryNormal, V) < 0.0f)
+        { geometryNormal = -geometryNormal; }
+
         // 自己発光による放射輝度.
         L += W * material.Emissive;
 
@@ -186,7 +187,7 @@ void OnGenerateRay()
         // Next Event Estimation.
         {
             // BSDFがデルタ関数を持たない場合のみ.
-            if (!HasDelta(material))
+            //if (!HasDelta(material))
             {
                 // 光源をサンプリング.
                 float lightPdf;
@@ -220,11 +221,11 @@ void OnGenerateRay()
         }
 #else
         // Next Event Estimation.
-        if (!HasDelta(material))
+        //if (!HasDelta(material))
         {
             Light light;
             float lightWeight;
-            if (SampleLightRIS(seed, vertex.Position, geometryNormal, light, lightWeight))
+            if (SampleLightRIS(seed, vertex.Position, N, light, lightWeight))
             {
                 float3 lightVector;
                 float  lightDistance;
@@ -260,10 +261,10 @@ void OnGenerateRay()
         if (bounce > SceneParam.MinBounce)
         {
             float p = min(0.95f, Luminance(brdf));
-            if (p > Random(seed))
+            if (p < Random(seed))
             { break; }
 
-            W /= p;
+            brdf /= p;
         }
 
         W *= brdf / pdf;

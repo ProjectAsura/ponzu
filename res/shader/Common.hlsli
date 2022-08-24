@@ -17,7 +17,7 @@
 #define INVALID_ID          (-1)
 #define STANDARD_RAY_INDEX  (0)
 #define SHADOW_RAY_INDEX    (1)
-#define USE_GGX             (0)
+#define USE_GGX             (1)
 
 //-----------------------------------------------------------------------------
 // Type Definitions
@@ -247,8 +247,8 @@ SurfaceHit GetSurfaceHit(uint instanceId, uint triangleIndex, float2 barycentric
     surfaceHit.Normal  = normalize(mul((float3x3)world, normalize(surfaceHit.Normal)));
     surfaceHit.Tangent = normalize(mul((float3x3)world, normalize(surfaceHit.Tangent)));
 
-    float3 e0 = v[2] - v[0];
-    float3 e1 = v[1] - v[0];
+    float3 e0 = v[1] - v[0];
+    float3 e1 = v[2] - v[0];
     surfaceHit.GeometryNormal = normalize(cross(e0, e1));
 
     return surfaceHit;
@@ -542,7 +542,7 @@ float3 SampleGGXVNDF(float3 Ve, float alpha_x, float alpha_y, float2 u)
 float3 SampleDir(float3 V, float3 N, float3 u, Material material)
 {
     // 物体からのレイの入出を考慮した法線.
-    float3 Nm = dot(N, -V) < 0.0f ? N : -N;
+    float3 Nm = dot(N, V) > 0.0f ? N : -N;
 
     // レイがオブジェクトから出射するか入射するか?
     bool into = dot(N, Nm) > 0.0f;
@@ -577,7 +577,6 @@ float3 SampleDir(float3 V, float3 N, float3 u, Material material)
 
         // Schlickの近似によるフレネル項.
         float Fr = F_Schlick(F0, cosTheta1);
-        float Tr = (1.0f - Fr);
 
         float p = 0.25f + 0.5f * Fr; // フレネルのグラフを参照.
         if (u.z < p)
@@ -652,7 +651,7 @@ float3 SampleMaterial
 )
 {
     // 物体からのレイの入出を考慮した法線.
-    float3 Nm = dot(N, -V) < 0.0f ? N : -N;
+    float3 Nm = dot(N, V) > 0.0f ? N : -N;
 
     // レイがオブジェクトから出射するか入射するか?
     bool into = dot(N, Nm) > 0.0f;
@@ -687,7 +686,7 @@ float3 SampleMaterial
 
         // Schlickの近似によるフレネル項.
         float Fr = F_Schlick(F0, cosTheta1);
-        float Tr = (1.0f - Fr);
+        float Tr = (1.0f - Fr) * Pow2(eta);
 
         float p = 0.25f + 0.5f * Fr; // フレネルのグラフを参照.
         if (u < p)
@@ -756,7 +755,7 @@ float3 EvaluateMaterial
 )
 {
     // 物体からのレイの入出を考慮した法線.
-    float3 Nm = dot(N, -V) < 0.0f ? N : -N;
+    float3 Nm = dot(N, V) > 0.0f ? N : -N;
 
     // レイがオブジェクトから出射するか入射するか?
     bool into = dot(N, Nm) > 0.0f;
@@ -786,7 +785,7 @@ float3 EvaluateMaterial
         }
 
         // 屈折ベクトル.
-        float3 refraction = normalize(-V * eta - Nm * (DoN * eta + sqrt(cos2Theta2)));
+        float3 refraction = normalize(refract(-V, Nm, eta));
 
         float a = n2 - n1;
         float b = n2 + n1;
@@ -795,7 +794,7 @@ float3 EvaluateMaterial
 
         // Schlickの近似によるフレネル項.
         float Fr = F_Schlick(F0, cosTheta1);
-        float Tr = (1.0f - Fr);
+        float Tr = (1.0f - Fr) * Pow2(eta);
 
         float p = 0.25f + 0.5f * Fr; // フレネルのグラフを参照.
         if (u.z < p)
@@ -820,7 +819,7 @@ float3 EvaluateMaterial
         float3 s = SampleLambert(u.xy);
         float3 L = normalize(T * s.x + B * s.y + Nm * s.z);
 
-        float NoL = dot(Nm, L);
+        float NoL = saturate(dot(Nm, L));
 
         dir = L;
         pdf = NoL / F_PI;
@@ -859,7 +858,7 @@ float3 EvaluateMaterial
             pdf = (NoL / F_PI);
             pdf *= p;
 
-            return (diffuseColor / F_PI) * NoL * (1.0f.xxx - specularColor);
+            return (diffuseColor / F_PI) * NoL;
         }
 
         float a = max(Pow2(material.Roughness), 0.01f);
