@@ -1212,13 +1212,13 @@ bool Renderer::BuildScene()
     dummy0.BaseColor = INVALID_MATERIAL_MAP;
     dummy0.ORM       = INVALID_MATERIAL_MAP;
     dummy0.Emissive  = INVALID_MATERIAL_MAP;
-    //dummy0.IntIor    = 1.4f;
-    //dummy0.ExtIor    = 1.0f;
+    dummy0.IntIor    = 2.42f;
+    dummy0.ExtIor    = 1.0f;
     dummy0.UvScale   = asdx::Vector2(1.0f, 1.0f);
 
     Material dummy1 = {};
     dummy1.Normal    = INVALID_MATERIAL_MAP;
-    dummy1.BaseColor = 0;
+    dummy1.BaseColor = INVALID_MATERIAL_MAP;
     dummy1.ORM       = INVALID_MATERIAL_MAP;
     dummy1.Emissive  = INVALID_MATERIAL_MAP;
     //dummy0.IntIor    = 1.4f;

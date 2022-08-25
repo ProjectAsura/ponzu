@@ -13,6 +13,7 @@
 #include <fstream>
 #include <algorithm>
 #include <tuple>
+#include <mikktspace.h>
 
 //-----------------------------------------------------------------------------
 // Constant Values.
@@ -21,6 +22,81 @@ static const uint32_t OBJ_BUFFER_LENGTH = 2048;
 
 
 namespace {
+
+int GetFaceCount(const SMikkTSpaceContext* pContext)
+{
+    auto mesh = reinterpret_cast<MeshOBJ*>(pContext->m_pUserData);
+    assert(mesh != nullptr);
+    if (mesh == nullptr)
+    { return 0; }
+
+    return int(mesh->Indices.size() / 3);
+}
+
+int GetVertexCountOfFace(const SMikkTSpaceContext*, const int)
+{
+    // 三角形のみサポート.
+    return 3;
+}
+
+void GetPosition(const SMikkTSpaceContext* pContext, float fvPosOut[], const int iFace, const int iVert)
+{
+    auto mesh = reinterpret_cast<MeshOBJ*>(pContext->m_pUserData);
+    assert(mesh != nullptr);
+
+    if (mesh == nullptr)
+    { return; }
+
+    size_t idx = size_t(iFace) * 3 + iVert;
+    auto& vtx = mesh->Vertices[idx];
+    fvPosOut[0] = vtx.Position.x;
+    fvPosOut[1] = vtx.Position.y;
+    fvPosOut[2] = vtx.Position.z;
+}
+
+void GetNormal(const SMikkTSpaceContext* pContext, float fvNormOut[], const int iFace, const int iVert)
+{
+    auto mesh = reinterpret_cast<MeshOBJ*>(pContext->m_pUserData);
+    assert(mesh != nullptr);
+
+    if (mesh == nullptr)
+    { return; }
+
+    size_t idx = size_t(iFace) * 3 + iVert;
+    auto& vtx = mesh->Vertices[idx];
+    fvNormOut[0] = vtx.Normal.x;
+    fvNormOut[1] = vtx.Normal.y;
+    fvNormOut[2] = vtx.Normal.z;
+}
+
+void GetTexCoord(const SMikkTSpaceContext* pContext, float fvTexcOut[], const int iFace, const int iVert)
+{
+    auto mesh = reinterpret_cast<MeshOBJ*>(pContext->m_pUserData);
+    assert(mesh != nullptr);
+
+    if (mesh == nullptr)
+    { return; }
+
+    size_t idx = size_t(iFace) * 3 + iVert;
+    auto& vtx = mesh->Vertices[idx];
+    fvTexcOut[0] = vtx.TexCoord.x;
+    fvTexcOut[1] = vtx.TexCoord.y;
+}
+
+void SetTSpaceBasic(const SMikkTSpaceContext* pContext, const float fvTangent[], const float fSign, const int iFace, const int iVert)
+{
+    auto mesh = reinterpret_cast<MeshOBJ*>(pContext->m_pUserData);
+    assert(mesh != nullptr);
+
+    if (mesh == nullptr)
+    { return; }
+
+    size_t idx = size_t(iFace) * 3 + iVert;
+    auto& vtx = mesh->Vertices[idx];
+    vtx.Tangent.x = fvTangent[0];
+    vtx.Tangent.y = fvTangent[1];
+    vtx.Tangent.z = fvTangent[2];
+}
 
 //-----------------------------------------------------------------------------
 //      法線ベクトルを計算します.
@@ -109,104 +185,19 @@ void CalcNormals(MeshOBJ& mesh)
 //-----------------------------------------------------------------------------
 void CalcTangents(MeshOBJ& mesh)
 {
-    auto vertexCount = mesh.Vertices.size();
+    SMikkTSpaceInterface accessor = {};
+    accessor.m_getNumFaces          = GetFaceCount;
+    accessor.m_getNumVerticesOfFace = GetVertexCountOfFace;
+    accessor.m_getPosition          = GetPosition;
+    accessor.m_getNormal            = GetNormal;
+    accessor.m_getTexCoord          = GetTexCoord;
+    accessor.m_setTSpaceBasic       = SetTSpaceBasic;
 
-    // 接線ベクトルを初期化.
-    for(size_t i=0; i<vertexCount; ++i)
-    {
-        mesh.Vertices[i].Tangent = asdx::Vector3(0.0f, 0.0f, 0.0f);
-    }
+    SMikkTSpaceContext context = {};
+    context.m_pUserData     = &mesh;
+    context.m_pInterface    = &accessor;
 
-    auto indexCount = mesh.Indices.size();
-    for(size_t i=0; i<indexCount; i+=3)
-    {
-        auto i0 = mesh.Indices[i + 0];
-        auto i1 = mesh.Indices[i + 1];
-        auto i2 = mesh.Indices[i + 2];
-
-        const auto& p0 = mesh.Vertices[i0].Position;
-        const auto& p1 = mesh.Vertices[i1].Position;
-        const auto& p2 = mesh.Vertices[i2].Position;
-
-        const auto& t0 = mesh.Vertices[i0].TexCoord;
-        const auto& t1 = mesh.Vertices[i1].TexCoord;
-        const auto& t2 = mesh.Vertices[i2].TexCoord;
-
-        asdx::Vector3 e0, e1;
-        e0.x = p1.x - p0.x;
-        e0.y = t1.x - t0.x;
-        e0.z = t1.y - t0.y;
-
-        e1.x = p2.x - p0.x;
-        e1.y = t2.x - t0.x;
-        e1.z = t2.y - t0.y;
-
-        auto crs = asdx::Vector3::Cross(e0, e1);
-        crs = asdx::Vector3::SafeNormalize(crs, crs);
-        if (fabs(crs.x) < 1e-4f)
-        { crs.x = 1.0f; }
-
-        asdx::Vector3 tan0;
-        asdx::Vector3 tan1;
-        asdx::Vector3 tan2;
-
-        auto tanX = -crs.y / crs.x;
-
-        tan0.x = tanX;
-        tan1.x = tanX;
-        tan2.x = tanX;
-
-        e0.x = p1.y - p0.y;
-        e1.x = p2.y - p0.y;
-        crs = asdx::Vector3::Cross(e0, e1);
-        crs = asdx::Vector3::SafeNormalize(crs, crs);
-        if (fabs(crs.x) < 1e-4f) 
-        { crs.x = 1.0f; }
-
-        auto tanY = -crs.y / crs.x;
-        tan0.y = tanY;
-        tan1.y = tanY;
-        tan2.y = tanY;
-
-        e0.x = p1.z - p0.z;
-        e1.x = p2.z - p0.z;
-        crs = asdx::Vector3::Cross(e0, e1);
-        crs = asdx::Vector3::SafeNormalize(crs, crs);
-        if (fabs(crs.x) < 1e-4f) 
-        { crs.x = 1.0f; }
-
-        auto tanZ = -crs.y / crs.x;
-        tan0.z = tanZ;
-        tan1.z = tanZ;
-        tan2.z = tanZ;
-
-        const auto& n0 = mesh.Vertices[i0].Normal;
-        const auto& n1 = mesh.Vertices[i1].Normal;
-        const auto& n2 = mesh.Vertices[i2].Normal;
-
-        auto dp0 = asdx::Vector3::Dot(tan0, n0);
-        auto dp1 = asdx::Vector3::Dot(tan1, n1);
-        auto dp2 = asdx::Vector3::Dot(tan2, n2);
-
-        tan0 -= n0 * dp0;
-        tan1 -= n1 * dp1;
-        tan2 -= n2 * dp2;
-
-        asdx::Vector3 T0, T1, T2;
-        asdx::Vector3 B0, B1, B2;
-
-        asdx::CalcONB(n0, T0, B1);
-        asdx::CalcONB(n1, T1, B1);
-        asdx::CalcONB(n2, T2, B2);
-
-        tan0 = asdx::Vector3::SafeNormalize(tan0, T0);
-        tan1 = asdx::Vector3::SafeNormalize(tan1, T1);
-        tan2 = asdx::Vector3::SafeNormalize(tan2, T2);
-
-        mesh.Vertices[i0].Tangent = tan0;
-        mesh.Vertices[i1].Tangent = tan1;
-        mesh.Vertices[i2].Tangent = tan2;
-    }
+    genTangSpaceDefault(&context);
 }
 
 //-----------------------------------------------------------------------------
@@ -418,7 +409,6 @@ bool OBJLoader::LoadOBJ(const char* path, ModelOBJ& model)
 
     stream.close();
 
-    //model.Meshes.resize(subsets.size());
     std::stable_sort(subsets.begin(), subsets.end(),
         [](const SubsetOBJ& lhs, const SubsetOBJ& rhs)
         {

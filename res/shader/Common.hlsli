@@ -17,7 +17,7 @@
 #define INVALID_ID          (-1)
 #define STANDARD_RAY_INDEX  (0)
 #define SHADOW_RAY_INDEX    (1)
-#define USE_GGX             (1)
+#define USE_GGX             (0)
 
 //-----------------------------------------------------------------------------
 // Type Definitions
@@ -568,7 +568,7 @@ float3 SampleDir(float3 V, float3 N, float3 u, Material material)
         { return reflection; }
 
         // 屈折ベクトル.
-        float3 refraction = normalize(-V * eta - Nm * (DoN * eta + sqrt(cos2Theta2)));
+        float3 refraction = normalize(refract(-V, Nm, eta));
 
         float a = n2 - n1;
         float b = n2 + n1;
@@ -677,7 +677,7 @@ float3 SampleMaterial
         { return material.BaseColor.rgb; }
 
         // 屈折ベクトル.
-        float3 refraction = normalize(-V * eta - Nm * (DoN * eta + sqrt(cos2Theta2)));
+        float3 refraction = normalize(refract(-V, Nm, eta));
 
         float a = n2 - n1;
         float b = n2 + n1;
@@ -713,7 +713,7 @@ float3 SampleMaterial
 
         // Diffuse
         if (u < p)
-        { return diffuseColor / p * (1.0f.xxx - specularColor); }
+        { return (diffuseColor / p) * (1.0f.xxx - specularColor); }
 
         float a = max(Pow2(material.Roughness), 0.01f);
 
@@ -734,7 +734,7 @@ float3 SampleMaterial
         float3 R = normalize(reflect(-V, N));
     
         float shininess = ToSpecularPower(a);
-        float LoR = abs(dot(L, R));
+        float LoR = dot(L, R);
 
         return specularColor * pow(LoR, shininess) / (1.0f - p);
 #endif
@@ -770,7 +770,7 @@ float3 EvaluateMaterial
         // 相対屈折率.
         float eta = (into) ? (n1 / n2) : (n2 / n1);
 
-        float DoN = dot(-V, Nm);
+        float DoN = dot(V, Nm);
         float cos2Theta2 = 1.0f - Pow2(eta) * (1.0f - Pow2(DoN));
 
         // 反射ベクトル.
@@ -790,7 +790,7 @@ float3 EvaluateMaterial
         float a = n2 - n1;
         float b = n2 + n1;
         float F0 = Pow2(a) / Pow2(b);
-        float cosTheta1 = abs(DoN);
+        float cosTheta1 = DoN;
 
         // Schlickの近似によるフレネル項.
         float Fr = F_Schlick(F0, cosTheta1);
@@ -819,13 +819,12 @@ float3 EvaluateMaterial
         float3 s = SampleLambert(u.xy);
         float3 L = normalize(T * s.x + B * s.y + Nm * s.z);
 
-        float NoL = saturate(dot(Nm, L));
+        float NoL = dot(Nm, L);
 
         dir = L;
         pdf = NoL / F_PI;
 
         return (material.BaseColor.rgb / F_PI) * NoL;
-
     }
     // 完全鏡面反射.
     else if (IsPerfectSpecular(material))
@@ -852,13 +851,13 @@ float3 EvaluateMaterial
             float3 s = SampleLambert(u.xy);
             float3 L = normalize(T * s.x + B * s.y + Nm * s.z);
 
-            float NoL = abs(dot(Nm, L));
+            float NoL = dot(Nm, L);
 
             dir = L;
             pdf = (NoL / F_PI);
             pdf *= p;
 
-            return (diffuseColor / F_PI) * NoL;
+            return (diffuseColor / F_PI) * NoL * (1.0f.xxx - specularColor);
         }
 
         float a = max(Pow2(material.Roughness), 0.01f);
@@ -868,13 +867,13 @@ float3 EvaluateMaterial
         CalcONB(Nm, T, B);
 
         float3 s = SampleGGX(u.xy, a);
-        float3 H = normalize(T * s.x + B * s.y + N * s.z);
+        float3 H = normalize(T * s.x + B * s.y + Nm * s.z);
         float3 L = normalize(reflect(-V, H));
 
-        float NdotL = abs(dot(Nm, L));
-        float NdotH = abs(dot(Nm, H));
-        float VdotH = abs(dot(V, H));
-        float NdotV = abs(dot(Nm, V));
+        float NdotL = dot(Nm, L);
+        float NdotH = dot(Nm, H);
+        float VdotH = dot(V, H);
+        float NdotV = dot(Nm, V);
 
         float  D = D_GGX(NdotH, a);
         float  G = G_SmithGGX(NdotL, NdotV, a);
@@ -889,7 +888,7 @@ float3 EvaluateMaterial
         return ggxTerm;
 #else
         // Phong. 
-        float3 R = normalize(reflect(-V, N));
+        float3 R = normalize(reflect(-V, Nm));
     
         float3 T, B;
         CalcONB(R, T, B);
@@ -898,7 +897,7 @@ float3 EvaluateMaterial
         float3 s = SamplePhong(u.xy, shininess);
         float3 L = normalize(T * s.x + B * s.y + R * s.z);
 
-        float LoR = abs(dot(L, R));
+        float LoR = dot(L, R);
         float normalizeTerm = (shininess + 1.0f) / (2.0f * F_PI);
         float phongTerm = pow(LoR, shininess) * normalizeTerm;
 

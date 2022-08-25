@@ -25,6 +25,9 @@
     <Filter Include="ヘッダー ファイル\external\fpng">
       <UniqueIdentifier>{f4d85110-4cfa-4bd5-b450-763bccef2fad}</UniqueIdentifier>
     </Filter>
+    <Filter Include="ソース ファイル\external\mikktspace">
+      <UniqueIdentifier>{96562465-8d49-4982-b227-afd1011f5a9f}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\main.cpp">
@@ -54,6 +57,9 @@
     <ClCompile Include="..\src\denoiser.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
+    <ClCompile Include="..\external\mikktspace\mikktspace.c">
+      <Filter>ソース ファイル\external\mikktspace</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\include\renderer.h">
@@ -79,6 +85,9 @@
     </ClInclude>
     <ClInclude Include="..\include\denoiser.h">
       <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="..\external\mikktspace\mikktspace.h">
+      <Filter>ソース ファイル\external\mikktspace</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

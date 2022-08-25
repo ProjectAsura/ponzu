@@ -141,6 +141,7 @@ void OnGenerateRay()
     float3 W = float3(1.0f, 1.0f, 1.0f);  // 重み.
     float3 L = float3(0.0f, 0.0f, 0.0f);  // 放射輝度.
 
+#if 1
     [loop]
     for(int bounce=0; bounce<SceneParam.MaxBounce; ++bounce)
     {
@@ -187,8 +188,11 @@ void OnGenerateRay()
         // Next Event Estimation.
         {
             // BSDFがデルタ関数を持たない場合のみ.
-            //if (!HasDelta(material))
+            if (!HasDelta(material))
             {
+                // 物体からのレイの入出を考慮した法線.
+                float3 Nm = dot(N, V) > 0.0f ? N : -N;
+
                 // 光源をサンプリング.
                 float lightPdf;
                 float2 st = SampleMipMap(BackGround, float2(Random(seed), Random(seed)), lightPdf);
@@ -199,11 +203,11 @@ void OnGenerateRay()
                 if (!CastShadowRay(vertex.Position, geometryNormal, dir, FLT_MAX))
                 {
                     // シャドウレイを飛ばして，光源上のサンプリングとレイ原点の間に遮断が無い場合.
-                    float cosShadow = dot(N, dir);
+                    float cosShadow = dot(Nm, dir);
                     float cosLight  = 1.0f;
 
                     // BSDF.
-                    float3 fs = SampleMaterial(V, N, dir, Random(seed), material);
+                    float3 fs = SampleMaterial(V, Nm, dir, Random(seed), material);
 
                     // 幾何項.
                     float G = (cosShadow * cosLight);
@@ -221,11 +225,15 @@ void OnGenerateRay()
         }
 #else
         // Next Event Estimation.
-        //if (!HasDelta(material))
+        if (!HasDelta(material))
         {
+            // 物体からのレイの入出を考慮した法線.
+            float3 Nm = dot(N, -V) < 0.0f ? N : -N;
+
+
             Light light;
             float lightWeight;
-            if (SampleLightRIS(seed, vertex.Position, N, light, lightWeight))
+            if (SampleLightRIS(seed, vertex.Position, geometryNormal, light, lightWeight))
             {
                 float3 lightVector;
                 float  lightDistance;
@@ -236,7 +244,7 @@ void OnGenerateRay()
                 if (!CastShadowRay(vertex.Position, geometryNormal, dir, lightDistance))
                 {
                     // BSDF.
-                    float3 fs = SampleMaterial(V, N, dir, Random(seed), material);
+                    float3 fs = SampleMaterial(V, Nm, dir, Random(seed), material);
 
                     // Light
                     float3 Le = GetLightIntensity(light, lightDistance);
@@ -277,13 +285,53 @@ void OnGenerateRay()
         ray.Origin    = OffsetRay(vertex.Position, geometryNormal);
         ray.Direction = dir;
     }
+#else
+        //// 交差判定.
+        //TraceRay(
+        //    SceneAS,
+        //    RAY_FLAG_NONE,
+        //    0xFF,
+        //    STANDARD_RAY_INDEX,
+        //    0,
+        //    STANDARD_RAY_INDEX,
+        //    ray,
+        //    payload);
+
+        //if (!payload.HasHit())
+        //{
+        //#if FURNANCE_TEST
+        //    L += W * kFurnaceColor;
+        //#else
+        //    L += W * SampleIBL(ray.Direction);
+        //#endif
+        //}
+        //else
+        //{
+        //// 頂点データ取得.
+        //SurfaceHit vertex = GetSurfaceHit(payload.InstanceId, payload.PrimitiveId, payload.Barycentrics);
+
+        //// マテリアル取得.
+        //Material material = GetMaterial(payload.InstanceId, vertex.TexCoord, 0.0f);
+
+        //float3 B = normalize(cross(vertex.Tangent, vertex.Normal));
+        //float3 N = FromTangentSpaceToWorld(material.Normal, vertex.Tangent, B, vertex.Normal);
+
+        //float3 geometryNormal = vertex.GeometryNormal;
+        //float3 V = -ray.Direction;
+
+        //if (dot(geometryNormal, V) < 0.0f)
+        //{ geometryNormal = -geometryNormal; }
+
+        //L = geometryNormal * 0.5f + 0.5f;
+        //}
+#endif
 
     uint2 launchId = DispatchRaysIndex().xy;
 
     float3 prevL = Canvas[launchId].rgb;
     float3 color = (SceneParam.EnableAccumulation) ? (prevL + L) : L;
 
-    Canvas[launchId] = float4(color, 1.0f);
+    Canvas[launchId] = float4(SaturateFloat(color), 1.0f);
 }
 
 //-----------------------------------------------------------------------------
