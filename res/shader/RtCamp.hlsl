@@ -460,10 +460,13 @@ void OnGenerateRay()
 
     uint2 launchId = DispatchRaysIndex().xy;
 
+    // NaNをつぶしておく.
+    Lo = SaturateFloat(Lo);
+
     float3 prevLo = Canvas[launchId].rgb;
     float3 color  = (SceneParam.EnableAccumulation) ? (prevLo + Lo) : Lo;
 
-    Canvas[launchId] = float4(SaturateFloat(color), 1.0f);
+    Canvas[launchId] = float4(color, 1.0f);
 }
 #endif
 

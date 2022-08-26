@@ -182,6 +182,10 @@ private:
     asdx::Texture       m_DefaultNormal;
     asdx::Texture       m_DefaultORM;
 
+    asdx::RootSignature m_DenoiseRootSig;
+    asdx::PipelineState m_DenoisePSO;
+    asdx::ComputeTarget m_DenoiseTarget[2];
+
     asdx::RootSignature m_TonemapRootSig;
     asdx::PipelineState m_TonemapPSO;
 

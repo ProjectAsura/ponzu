@@ -34,10 +34,14 @@ namespace {
 #include "../res/shader/Compile/RtCamp.inc"
 #include "../res/shader/Compile/ModelVS.inc"
 #include "../res/shader/Compile/ModelPS.inc"
+#include "../res/shader/Compile/CopyPS.inc"
+#include "../res/shader/Compile/DenoiserCS.inc"
+
+#if ENABLE_RESTIR
 #include "../res/shader/Compile/InitialSampling.inc"
 #include "../res/shader/Compile/SpatialResampling.inc"
 #include "../res/shader/Compile/ShadePixel.inc"
-#include "../res/shader/Compile/CopyPS.inc"
+#endif
 
 static const D3D12_INPUT_ELEMENT_DESC kModelElements[] = {
     { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
@@ -434,10 +438,13 @@ bool Renderer::SystemSetup()
         desc.MipLevels          = 1;
         desc.SampleDesc.Count   = 1;
         desc.SampleDesc.Quality = 0;
-        desc.InitState          = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        desc.InitState          = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 
         for(auto i=0; i<2; ++i)
         {
+            if (i == 1)
+            { desc.InitState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE; }
+
             if (!m_HistoryTarget[i].Init(&desc))
             {
                 ELOGA("Error : HistoryTarget Init Failed.");
@@ -588,7 +595,7 @@ bool Renderer::SystemSetup()
 
         if (!m_TonemapRootSig.Init(pDevice, layout.GetDesc()))
         {
-            ELOGA("Error : Tonemap RootSignature Failed.");
+            ELOGA("Error : Tonemap RootSignature Init Failed.");
             return false;
         }
     }
@@ -601,8 +608,62 @@ bool Renderer::SystemSetup()
 
         if (!m_TonemapPSO.Init(pDevice, &desc))
         {
-            ELOGA("Error : Tonemap PipelineState Failed.");
+            ELOGA("Error : Tonemap PipelineState Init Failed.");
             return false;
+        }
+    }
+
+    // デノイズ用ルートシグニチャ生成.
+    {
+        asdx::DescriptorSetLayout<5, 2> layout;
+        layout.SetTableUAV(0, asdx::SV_ALL, 0);
+        layout.SetTableSRV(1, asdx::SV_ALL, 0);
+        layout.SetTableSRV(2, asdx::SV_ALL, 1);
+        layout.SetTableSRV(3, asdx::SV_ALL, 2);
+        layout.SetContants(4, asdx::SV_ALL, 6, 0);
+        layout.SetStaticSampler(0, asdx::SV_ALL, asdx::STATIC_SAMPLER_POINT_CLAMP, 0);
+        layout.SetStaticSampler(1, asdx::SV_ALL, asdx::STATIC_SAMPLER_LINEAR_CLAMP, 1);
+
+        if (!m_DenoiseRootSig.Init(pDevice, layout.GetDesc()))
+        {
+            ELOGA("Error : Denoise RootSignature Init Failed.");
+            return false;
+        }
+    }
+
+    // デノイズ用パイプラインステート生成.
+    {
+        D3D12_COMPUTE_PIPELINE_STATE_DESC desc = {};
+        desc.pRootSignature = m_DenoiseRootSig.GetPtr();
+        desc.CS             = { DenoiserCS, sizeof(DenoiserCS) };
+
+        if (!m_DenoisePSO.Init(pDevice, &desc))
+        {
+            ELOGA("Error : Denoise PipelineState Failed.");
+            return false;
+        }
+    }
+
+    // デノイズ用バッファ.
+    {
+        asdx::TargetDesc desc;
+        desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        desc.Width              = m_SceneDesc.Width;
+        desc.Height             = m_SceneDesc.Height;
+        desc.DepthOrArraySize   = 1;
+        desc.Format             = DXGI_FORMAT_R8G8B8A8_UNORM;
+        desc.MipLevels          = 1;
+        desc.SampleDesc.Count   = 1;
+        desc.SampleDesc.Quality = 0;
+        desc.InitState          = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+
+        for(auto i=0; i<2; ++i)
+        {
+            if (!m_DenoiseTarget[i].Init(&desc))
+            {
+                ELOGA("Error : Denoise[%d] Init Failed.", i);
+                return false;
+            }
         }
     }
 
@@ -1244,7 +1305,7 @@ bool Renderer::BuildScene()
     for(size_t i=0; i<meshes.size(); ++i)
     {
         instances[i].MaterialId = 0;
-        instances[i].MeshId     = i;
+        instances[i].MeshId     = uint32_t(i);
         instances[i].Transform  = asdx::Transform3x4();
     }
 
@@ -1529,6 +1590,12 @@ void Renderer::OnTerm()
     m_ShadePixelRootSig .Term();
     m_ShadePixelPSO     .Term();
 #endif
+
+    for(auto i=0; i<2; ++i)
+    { m_DenoiseTarget[i].Term(); }
+
+    m_DenoisePSO    .Term();
+    m_DenoiseRootSig.Term();
 
     m_TonemapBuffer.Term();
 
@@ -1963,17 +2030,21 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         m_GfxCmdList.BarrierUAV(m_TonemapBuffer.GetResource());
     }
 
+    // デノイズ Horizontal-Pass
+    {
+
+
+    }
+
+    // デノイズ Vertical-Pass
+    {
+    }
+
     // テンポラルアンチエイリアシング実行.
     {
         auto jitter = asdx::TaaRenderer::CalcJitter(m_JitterIndex, m_SceneDesc.Width, m_SceneDesc.Height);
 
         m_JitterIndex++;
-
-        asdx::ScopedBarrier barrier0(
-            m_GfxCmdList,
-            m_HistoryTarget[m_PrevHistoryBufferIndex].GetResource(),
-            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
-            D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
         m_TaaRenderer.RenderCS(
             m_GfxCmdList.GetCommandList(),
@@ -1987,6 +2058,12 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
             jitter);
 
         m_GfxCmdList.BarrierUAV(m_HistoryTarget[m_CurrHistoryBufferIndex].GetResource());
+
+        // 次のフレームの書き込みの為に遷移.
+        m_GfxCmdList.BarrierTransition(
+            m_HistoryTarget[m_PrevHistoryBufferIndex].GetResource(), 0,
+            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     }
 
     // リードバック実行.
@@ -2032,11 +2109,11 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
             D3D12_RESOURCE_STATE_PRESENT,
             D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-        asdx::ScopedBarrier barrier0(
-            m_GfxCmdList,
-            m_HistoryTarget[m_CurrHistoryBufferIndex].GetResource(),
+        // ピクセルシェーダアクセスのため遷移.
+        m_GfxCmdList.BarrierTransition(
+            m_HistoryTarget[m_CurrHistoryBufferIndex].GetResource(), 0,
             D3D12_RESOURCE_STATE_COPY_SOURCE,
-            D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
     #if !(CAMP_RELEASE)
         const asdx::IShaderResourceView* pSRV = nullptr;
@@ -2092,6 +2169,12 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
             m_ColorTarget[idx].GetResource(), 0,
             D3D12_RESOURCE_STATE_RENDER_TARGET,
             D3D12_RESOURCE_STATE_PRESENT);
+
+        // 次のフレームのTAAの入力のために遷移.
+        m_GfxCmdList.BarrierTransition(
+            m_HistoryTarget[m_CurrHistoryBufferIndex].GetResource(), 0,
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     }
 
     m_PrevHistoryBufferIndex = m_CurrHistoryBufferIndex;
