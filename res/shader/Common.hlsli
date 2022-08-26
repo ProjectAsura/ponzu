@@ -389,7 +389,7 @@ RayDesc GeneratePinholeCameraRay(float2 pixel)
     RayDesc ray;
     ray.Origin      = GetPosition(SceneParam.View);
     ray.Direction   = CalcRayDir(pixel, SceneParam.View, SceneParam.Proj);
-    ray.TMin        = 0.0f;
+    ray.TMin        = 0.01f;
     ray.TMax        = FLT_MAX;
 
     return ray;
@@ -403,7 +403,7 @@ bool CastShadowRay(float3 pos, float3 normal, float3 dir, float tmax)
     RayDesc ray;
     ray.Origin      = OffsetRay(pos, normal);
     ray.Direction   = dir;
-    ray.TMin        = 0.0f;
+    ray.TMin        = 0.01f;
     ray.TMax        = tmax;
 
     ShadowPayload payload;
@@ -542,7 +542,7 @@ float3 SampleGGXVNDF(float3 Ve, float alpha_x, float alpha_y, float2 u)
 float3 SampleDir(float3 V, float3 N, float3 u, Material material)
 {
     // 物体からのレイの入出を考慮した法線.
-    float3 Nm = dot(N, V) > 0.0f ? N : -N;
+    float3 Nm = dot(N, -V) < 0.0f ? N : -N;
 
     // レイがオブジェクトから出射するか入射するか?
     bool into = dot(N, Nm) > 0.0f;
@@ -551,21 +551,26 @@ float3 SampleDir(float3 V, float3 N, float3 u, Material material)
     if (IsDielectric(material))
     {
         // Snellの法則.
-        float n1 = material.ExtIor;
-        float n2 = material.IntIor;
+        float n1 = (into) ? material.ExtIor : material.IntIor;
+        float n2 = (into) ? material.IntIor : material.ExtIor;
 
         // 相対屈折率.
-        float eta = (into) ? (n1 / n2) : (n2 / n1);
+        float eta = n1 /n2;
 
-        float DoN = dot(-V, Nm);
-        float cos2Theta2 = 1.0f - Pow2(eta) * (1.0f - Pow2(DoN));
+        // cos(θ_1).
+        float cosT1 = dot(V, Nm);
+
+        // cos^2(θ_2).
+        float cos2T2 = 1.0f - Pow2(eta) * (1.0f - Pow2(cosT1));
 
         // 反射ベクトル.
         float3 reflection = normalize(reflect(-V, Nm));
 
         // 全反射チェック.
-        if (cos2Theta2 < 0.0f)
-        { return reflection; }
+        if (cos2T2 <= 0.0f)
+        {
+            return reflection;
+        }
 
         // 屈折ベクトル.
         float3 refraction = normalize(refract(-V, Nm, eta));
@@ -573,16 +578,23 @@ float3 SampleDir(float3 V, float3 N, float3 u, Material material)
         float a = n2 - n1;
         float b = n2 + n1;
         float F0 = Pow2(a) / Pow2(b);
-        float cosTheta1 = abs(DoN);
 
         // Schlickの近似によるフレネル項.
-        float Fr = F_Schlick(F0, cosTheta1);
+        float c  = saturate((n1 > n2) ? dot(-Nm, refraction) : cosT1); // n1 > n2 なら cos(θ_2).
+        float Fr = F_Schlick(F0, c);
 
-        float p = 0.25f + 0.5f * Fr; // フレネルのグラフを参照.
+        // 屈折光による放射輝度.
+        float Tr = (1.0f - Fr) * Pow2(eta);
+
+        float p = 0.25f + 0.5f * Fr;
         if (u.z < p)
-        { return reflection; }
+        {
+            return reflection;
+        }
         else
-        { return refraction; }
+        {
+            return refraction;
+        }
     }
     // 完全拡散反射.
     else if (IsPerfectDiffuse(material))
@@ -651,7 +663,7 @@ float3 SampleMaterial
 )
 {
     // 物体からのレイの入出を考慮した法線.
-    float3 Nm = dot(N, V) > 0.0f ? N : -N;
+    float3 Nm = dot(N, -V) < 0.0f ? N : -N;
 
     // レイがオブジェクトから出射するか入射するか?
     bool into = dot(N, Nm) > 0.0f;
@@ -660,21 +672,26 @@ float3 SampleMaterial
     if (IsDielectric(material))
     {
         // Snellの法則.
-        float n1 = material.ExtIor;
-        float n2 = material.IntIor;
+        float n1 = (into) ? material.ExtIor : material.IntIor;
+        float n2 = (into) ? material.IntIor : material.ExtIor;
 
         // 相対屈折率.
-        float eta = (into) ? (n1 / n2) : (n2 / n1);
+        float eta = n1 /n2;
 
-        float DoN = dot(-V, Nm);
-        float cos2Theta2 = 1.0f - Pow2(eta) * (1.0f - Pow2(DoN));
+        // cos(θ_1).
+        float cosT1 = dot(V, Nm);
+
+        // cos^2(θ_2).
+        float cos2T2 = 1.0f - Pow2(eta) * (1.0f - Pow2(cosT1));
 
         // 反射ベクトル.
         float3 reflection = normalize(reflect(-V, Nm));
 
         // 全反射チェック.
-        if (cos2Theta2 < 0.0f)
-        { return material.BaseColor.rgb; }
+        if (cos2T2 <= 0.0f)
+        {
+            return material.BaseColor.rgb;
+        }
 
         // 屈折ベクトル.
         float3 refraction = normalize(refract(-V, Nm, eta));
@@ -682,17 +699,23 @@ float3 SampleMaterial
         float a = n2 - n1;
         float b = n2 + n1;
         float F0 = Pow2(a) / Pow2(b);
-        float cosTheta1 = abs(DoN);
 
         // Schlickの近似によるフレネル項.
-        float Fr = F_Schlick(F0, cosTheta1);
+        float c  = saturate((n1 > n2) ? dot(-Nm, refraction) : cosT1); // n1 > n2 なら cos(θ_2).
+        float Fr = F_Schlick(F0, c);
+
+        // 屈折光による放射輝度.
         float Tr = (1.0f - Fr) * Pow2(eta);
 
-        float p = 0.25f + 0.5f * Fr; // フレネルのグラフを参照.
+        float p = 0.25f + 0.5f * Fr;
         if (u < p)
-        { return material.BaseColor.rgb * Fr / p; }
+        {
+            return material.BaseColor.rgb * Fr / p;
+        }
         else
-        { return material.BaseColor.rgb * Tr / (1.0f - p); }
+        {
+            return material.BaseColor.rgb * Tr / (1.0f - p);
+        }
     }
     // 完全拡散反射.
     else if (IsPerfectDiffuse(material))
@@ -755,7 +778,7 @@ float3 EvaluateMaterial
 )
 {
     // 物体からのレイの入出を考慮した法線.
-    float3 Nm = dot(N, V) > 0.0f ? N : -N;
+    float3 Nm = dot(N, -V) < 0.0f ? N : -N;
 
     // レイがオブジェクトから出射するか入射するか?
     bool into = dot(N, Nm) > 0.0f;
@@ -764,20 +787,23 @@ float3 EvaluateMaterial
     if (IsDielectric(material))
     {
         // Snellの法則.
-        float n1 = material.ExtIor;
-        float n2 = material.IntIor;
+        float n1 = (into) ? material.ExtIor : material.IntIor;
+        float n2 = (into) ? material.IntIor : material.ExtIor;
 
         // 相対屈折率.
-        float eta = (into) ? (n1 / n2) : (n2 / n1);
+        float eta = n1 /n2;
 
-        float DoN = dot(V, Nm);
-        float cos2Theta2 = 1.0f - Pow2(eta) * (1.0f - Pow2(DoN));
+        // cos(θ_1).
+        float cosT1 = dot(V, Nm);
+
+        // cos^2(θ_2).
+        float cos2T2 = 1.0f - Pow2(eta) * (1.0f - Pow2(cosT1));
 
         // 反射ベクトル.
         float3 reflection = normalize(reflect(-V, Nm));
 
         // 全反射チェック.
-        if (cos2Theta2 <= 0.0f)
+        if (cos2T2 <= 0.0f)
         {
             dir = reflection;
             pdf = 1.0f;
@@ -790,13 +816,15 @@ float3 EvaluateMaterial
         float a = n2 - n1;
         float b = n2 + n1;
         float F0 = Pow2(a) / Pow2(b);
-        float cosTheta1 = DoN;
 
         // Schlickの近似によるフレネル項.
-        float Fr = F_Schlick(F0, cosTheta1);
+        float c  = saturate((n1 > n2) ? dot(-Nm, refraction) : cosT1); // n1 > n2 なら cos(θ_2).
+        float Fr = F_Schlick(F0, c);
+
+        // 屈折光による放射輝度.
         float Tr = (1.0f - Fr) * Pow2(eta);
 
-        float p = 0.25f + 0.5f * Fr; // フレネルのグラフを参照.
+        float p = 0.25f + 0.5f * Fr;
         if (u.z < p)
         {
             dir = reflection;

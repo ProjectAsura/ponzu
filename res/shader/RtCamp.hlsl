@@ -11,6 +11,7 @@
 
 #define FURNANCE_TEST           (0)
 #define RIS_CANDIDATES_LIGHTS   (8)
+#define DEBUG_RAY               (0)
 
 #if FURNANCE_TEST
 static const float3 kFurnaceColor = float3(0.5f, 0.5f, 0.5f);
@@ -111,7 +112,127 @@ bool SampleLightRIS
     return true;
 }
 
+#if DEBUG_RAY
+//-----------------------------------------------------------------------------
+//      デバッグ用レイ生成シェーダです.
+//-----------------------------------------------------------------------------
+[shader("raygeneration")]
+void OnGenerateRay()
+{
+    // 乱数初期化.
+    uint4 seed = SetSeed(DispatchRaysIndex().xy, SceneParam.FrameIndex);
 
+    float2 pixel = float2(DispatchRaysIndex().xy);
+    const float2 resolution = float2(DispatchRaysDimensions().xy);
+
+    // アンリエイリアシング.
+    float2 offset = float2(Random(seed), Random(seed));
+    pixel += lerp(-0.5f.xx, 0.5f.xx, offset);
+
+    float2 uv = (pixel + 0.5f) / resolution;
+    uv.y = 1.0f - uv.y;
+    pixel = uv * 2.0f - 1.0f;
+
+    // ペイロード初期化.
+    Payload payload = (Payload)0;
+
+    // レイを設定.
+    RayDesc ray = GeneratePinholeCameraRay(pixel);
+
+    float3 W = float3(1.0f, 1.0f, 1.0f);  // 重み.
+    float3 L = float3(0.0f, 0.0f, 0.0f);  // 放射輝度.
+    float  Alpha = 0.0f;
+
+    {
+        // 交差判定.
+        TraceRay(
+            SceneAS,
+            RAY_FLAG_NONE,
+            0xFF,
+            STANDARD_RAY_INDEX,
+            0,
+            STANDARD_RAY_INDEX,
+            ray,
+            payload);
+
+        if (!payload.HasHit())
+        {
+        #if FURNANCE_TEST
+            L += W * kFurnaceColor;
+        #else
+            L += W * SampleIBL(ray.Direction);
+        #endif
+        }
+        else
+        {
+            // 頂点データ取得.
+            SurfaceHit vertex0 = GetSurfaceHit(payload.InstanceId, payload.PrimitiveId, payload.Barycentrics);
+
+            // マテリアル取得.
+            Material material0 = GetMaterial(payload.InstanceId, vertex0.TexCoord, 0.0f);
+
+            float3 B = normalize(cross(vertex0.Tangent, vertex0.Normal));
+            float3 N = FromTangentSpaceToWorld(material0.Normal, vertex0.Tangent, B, vertex0.Normal);
+
+            float3 geometryNormal = vertex0.GeometryNormal;
+            float3 V = -ray.Direction;
+
+            if (dot(geometryNormal, V) < 0.0f)
+            { geometryNormal = -geometryNormal; }
+
+            // シェーディング処理.
+            float3 u = float3(Random(seed), Random(seed), Random(seed));
+            float3 dir;
+            float  pdf;
+            float3 brdf = EvaluateMaterial(V, N, u, material0, dir, pdf);
+
+            // レイを更新.
+            ray.Origin    = OffsetRay(vertex0.Position, geometryNormal);
+            ray.Direction = dir;
+
+            payload = (Payload)0;
+
+            // 交差判定.
+            TraceRay(
+                SceneAS,
+                RAY_FLAG_NONE,
+                0xFF,
+                STANDARD_RAY_INDEX,
+                0,
+                STANDARD_RAY_INDEX,
+                ray,
+                payload);
+
+            if (!payload.HasHit())
+            {
+            #if FURNANCE_TEST
+                L = W * kFurnaceColor;
+            #else
+                L = W * SampleIBL(ray.Direction);
+            #endif
+                Alpha = -1.0f;
+            }
+            else
+            {
+                // 頂点データ取得.
+                SurfaceHit vertex1 = GetSurfaceHit(payload.InstanceId, payload.PrimitiveId, payload.Barycentrics);
+
+                // マテリアル取得.
+                Material material1 = GetMaterial(payload.InstanceId, vertex1.TexCoord, 0.0f);
+
+                L = (vertex1.Position - vertex0.Position);
+            }
+        }
+    }
+
+    uint2 launchId = DispatchRaysIndex().xy;
+
+    float3 prevL = Canvas[launchId].rgb;
+    float3 color = L;
+
+    Canvas[launchId] = float4(color, Alpha);
+}
+#else
 //-----------------------------------------------------------------------------
 //      レイ生成シェーダです.
 //-----------------------------------------------------------------------------
@@ -141,7 +262,6 @@ void OnGenerateRay()
     float3 W = float3(1.0f, 1.0f, 1.0f);  // 重み.
     float3 L = float3(0.0f, 0.0f, 0.0f);  // 放射輝度.
 
-#if 1
     [loop]
     for(int bounce=0; bounce<SceneParam.MaxBounce; ++bounce)
     {
@@ -285,46 +405,6 @@ void OnGenerateRay()
         ray.Origin    = OffsetRay(vertex.Position, geometryNormal);
         ray.Direction = dir;
     }
-#else
-        //// 交差判定.
-        //TraceRay(
-        //    SceneAS,
-        //    RAY_FLAG_NONE,
-        //    0xFF,
-        //    STANDARD_RAY_INDEX,
-        //    0,
-        //    STANDARD_RAY_INDEX,
-        //    ray,
-        //    payload);
-
-        //if (!payload.HasHit())
-        //{
-        //#if FURNANCE_TEST
-        //    L += W * kFurnaceColor;
-        //#else
-        //    L += W * SampleIBL(ray.Direction);
-        //#endif
-        //}
-        //else
-        //{
-        //// 頂点データ取得.
-        //SurfaceHit vertex = GetSurfaceHit(payload.InstanceId, payload.PrimitiveId, payload.Barycentrics);
-
-        //// マテリアル取得.
-        //Material material = GetMaterial(payload.InstanceId, vertex.TexCoord, 0.0f);
-
-        //float3 B = normalize(cross(vertex.Tangent, vertex.Normal));
-        //float3 N = FromTangentSpaceToWorld(material.Normal, vertex.Tangent, B, vertex.Normal);
-
-        //float3 geometryNormal = vertex.GeometryNormal;
-        //float3 V = -ray.Direction;
-
-        //if (dot(geometryNormal, V) < 0.0f)
-        //{ geometryNormal = -geometryNormal; }
-
-        //L = geometryNormal * 0.5f + 0.5f;
-        //}
-#endif
 
     uint2 launchId = DispatchRaysIndex().xy;
 
@@ -333,6 +413,7 @@ void OnGenerateRay()
 
     Canvas[launchId] = float4(SaturateFloat(color), 1.0f);
 }
+#endif
 
 //-----------------------------------------------------------------------------
 //      ヒット時のシェーダ.
