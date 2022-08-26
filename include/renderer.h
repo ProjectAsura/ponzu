@@ -178,10 +178,6 @@ private:
     asdx::Matrix        m_PrevInvProj;
     asdx::Matrix        m_PrevInvViewProj;
 
-    asdx::Texture       m_DefaultBaseColor;
-    asdx::Texture       m_DefaultNormal;
-    asdx::Texture       m_DefaultORM;
-
     asdx::RootSignature m_DenoiseRootSig;
     asdx::PipelineState m_DenoisePSO;
     asdx::ComputeTarget m_DenoiseTarget[2];
