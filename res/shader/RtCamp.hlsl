@@ -13,6 +13,27 @@
 #define RIS_CANDIDATES_LIGHTS   (8)
 #define DEBUG_RAY               (0)
 
+#if DEBUG_RAY
+#define OUT_DEFAULT     (0)     // 放射輝度 Lo
+#define OUT_POSITION    (1)     // 位置座標.
+#define OUT_NORMAL      (2)     // 法線ベクトル.
+#define OUT_TANGENT     (3)     // 接線ベクトル.
+#define OUT_TEXCOORD    (4)     // テクスチャ座標.
+#define OUT_RAY_DIR     (5)     // レイの方向ベクトル.
+#define OUT_BRDF        (6)     // BRDF
+#define OUT_PDF         (7)     // 確率密度.
+#define OUT_WEIGHT      (8)     // 重み W (throughput).
+
+//------------------------------------------------
+// ここを書き換えて，HotReloadする.
+#define DEBUG_DEPTH_INDEX   SceneParam.MaxBounce
+//#define DEBUG_DEPTH_INDEX   1
+#define DEBUG_OUT_FLAG      OUT_DEFAULT
+//#define DEBUG_OUT_FLAG      OUT_RAY_DIR
+//------------------------------------------------
+#endif
+
+
 #if FURNANCE_TEST
 static const float3 kFurnaceColor = float3(0.5f, 0.5f, 0.5f);
 #endif
@@ -139,10 +160,12 @@ void OnGenerateRay()
     // レイを設定.
     RayDesc ray = GeneratePinholeCameraRay(pixel);
 
-    float3 W = float3(1.0f, 1.0f, 1.0f);  // 重み.
-    float3 L = float3(0.0f, 0.0f, 0.0f);  // 放射輝度.
-    float  Alpha = 0.0f;
+    float3 W  = float3(1.0f, 1.0f, 1.0f);
+    float3 Lo = float3(0.0f, 0.0f, 0.0f);
+    float4 output = float4(0.0f, 0.0f, 0.0f, 0.0f);
 
+    [loop]
+    for(int bounce=0; bounce<SceneParam.MaxBounce; ++bounce)
     {
         // 交差判定.
         TraceRay(
@@ -158,79 +181,108 @@ void OnGenerateRay()
         if (!payload.HasHit())
         {
         #if FURNANCE_TEST
-            L += W * kFurnaceColor;
+            Lo += W * kFurnaceColor;
         #else
-            L += W * SampleIBL(ray.Direction);
+            Lo += W * SampleIBL(ray.Direction);
         #endif
+            break;
         }
-        else
+
+        // 頂点データ取得.
+        SurfaceHit vertex = GetSurfaceHit(payload.InstanceId, payload.PrimitiveId, payload.Barycentrics);
+
+        // マテリアル取得.
+        Material material = GetMaterial(payload.InstanceId, vertex.TexCoord, 0.0f);
+
+        float3 B = normalize(cross(vertex.Tangent, vertex.Normal));
+        float3 N = FromTangentSpaceToWorld(material.Normal, vertex.Tangent, B, vertex.Normal);
+
+        float3 geometryNormal = vertex.GeometryNormal;
+        float3 V = -ray.Direction;
+
+        if (dot(geometryNormal, V) < 0.0f)
+        { geometryNormal = -geometryNormal; }
+
+        // 自己発光による放射輝度.
+        Lo += W * material.Emissive;
+
+        // シェーディング処理.
+        float3 u = float3(Random(seed), Random(seed), Random(seed));
+        float3 dir;
+        float  pdf;
+        float3 brdf = EvaluateMaterial(V, N, u, material, dir, pdf);
+
+        bool endLoop = false;
+
+        // ロシアンルーレット.
+        if (bounce > SceneParam.MinBounce)
         {
-            // 頂点データ取得.
-            SurfaceHit vertex0 = GetSurfaceHit(payload.InstanceId, payload.PrimitiveId, payload.Barycentrics);
+            float p = min(0.95f, Luminance(brdf));
+            if (p < Random(seed))
+            { endLoop = true; }
 
-            // マテリアル取得.
-            Material material0 = GetMaterial(payload.InstanceId, vertex0.TexCoord, 0.0f);
-
-            float3 B = normalize(cross(vertex0.Tangent, vertex0.Normal));
-            float3 N = FromTangentSpaceToWorld(material0.Normal, vertex0.Tangent, B, vertex0.Normal);
-
-            float3 geometryNormal = vertex0.GeometryNormal;
-            float3 V = -ray.Direction;
-
-            if (dot(geometryNormal, V) < 0.0f)
-            { geometryNormal = -geometryNormal; }
-
-            // シェーディング処理.
-            float3 u = float3(Random(seed), Random(seed), Random(seed));
-            float3 dir;
-            float  pdf;
-            float3 brdf = EvaluateMaterial(V, N, u, material0, dir, pdf);
-
-            // レイを更新.
-            ray.Origin    = OffsetRay(vertex0.Position, geometryNormal);
-            ray.Direction = dir;
-
-            payload = (Payload)0;
-
-            // 交差判定.
-            TraceRay(
-                SceneAS,
-                RAY_FLAG_NONE,
-                0xFF,
-                STANDARD_RAY_INDEX,
-                0,
-                STANDARD_RAY_INDEX,
-                ray,
-                payload);
-
-            if (!payload.HasHit())
-            {
-            #if FURNANCE_TEST
-                L = W * kFurnaceColor;
-            #else
-                L = W * SampleIBL(ray.Direction);
-            #endif
-                Alpha = -1.0f;
-            }
-            else
-            {
-                // 頂点データ取得.
-                SurfaceHit vertex1 = GetSurfaceHit(payload.InstanceId, payload.PrimitiveId, payload.Barycentrics);
-
-                // マテリアル取得.
-                Material material1 = GetMaterial(payload.InstanceId, vertex1.TexCoord, 0.0f);
-
-                L = (vertex1.Position - vertex0.Position);
-            }
+            brdf /= p;
         }
+
+        W *= brdf / pdf;
+
+        // 重みがゼロに成ったら以降の更新は無駄なので打ち切りにする.
+        if (all(W <= (0.0f).xxx))
+        { endLoop = true; }
+
+        // レイを更新.
+        ray.Origin    = OffsetRay(vertex.Position, geometryNormal);
+        ray.Direction = dir;
+
+        if (bounce == DEBUG_DEPTH_INDEX)
+        {
+            switch(DEBUG_OUT_FLAG)
+            {
+            case OUT_POSITION:
+                output = float4(vertex.Position, 0.0f);
+                break;
+
+            case OUT_NORMAL:
+                output = float4(vertex.Normal, 0.0f);
+                break;
+
+            case OUT_TANGENT:
+                output = float4(vertex.Tangent, 0.0f);
+                break;
+
+            case OUT_TEXCOORD:
+                output = float4(vertex.TexCoord.xy, 0.0f, 0.0f);
+                break;
+
+            case OUT_RAY_DIR:
+                output = float4(ray.Direction, 0.0f);
+                break;
+
+            case OUT_BRDF:
+                output = float4(brdf, 0.0f);
+                break;
+
+            case OUT_PDF:
+                output = float4(pdf, 0.0f, 0.0f, 0.0f);
+                break;
+
+            case OUT_WEIGHT:
+                output = float4(W, 0.0f);
+                break;
+            }
+
+            endLoop = true;
+        }
+
+        if (endLoop)
+        { break; }
     }
 
+    if (DEBUG_OUT_FLAG == OUT_DEFAULT)
+    { output = float4(Lo, 0.0f); }
+
     uint2 launchId = DispatchRaysIndex().xy;
-
-    float3 prevL = Canvas[launchId].rgb;
-    float3 color = L;
-
-    Canvas[launchId] = float4(color, Alpha);
+    Canvas[launchId] = float4(output);
 }
 #else
 //-----------------------------------------------------------------------------
@@ -259,8 +311,8 @@ void OnGenerateRay()
     // レイを設定.
     RayDesc ray = GeneratePinholeCameraRay(pixel);
 
-    float3 W = float3(1.0f, 1.0f, 1.0f);  // 重み.
-    float3 L = float3(0.0f, 0.0f, 0.0f);  // 放射輝度.
+    float3 W  = float3(1.0f, 1.0f, 1.0f);  // 重み.
+    float3 Lo = float3(0.0f, 0.0f, 0.0f);  // 放射輝度.
 
     [loop]
     for(int bounce=0; bounce<SceneParam.MaxBounce; ++bounce)
@@ -279,9 +331,9 @@ void OnGenerateRay()
         if (!payload.HasHit())
         {
         #if FURNANCE_TEST
-            L += W * kFurnaceColor;
+            Lo += W * kFurnaceColor;
         #else
-            L += W * SampleIBL(ray.Direction);
+            Lo += W * SampleIBL(ray.Direction);
         #endif
             break;
         }
@@ -302,20 +354,20 @@ void OnGenerateRay()
         { geometryNormal = -geometryNormal; }
 
         // 自己発光による放射輝度.
-        L += W * material.Emissive;
+        Lo += W * material.Emissive;
 
 #if 1
         // Next Event Estimation.
         {
             // BSDFがデルタ関数を持たない場合のみ.
-            if (!HasDelta(material))
+            //if (!HasDelta(material))
             {
                 // 物体からのレイの入出を考慮した法線.
                 float3 Nm = dot(N, V) > 0.0f ? N : -N;
 
                 // 光源をサンプリング.
-                float lightPdf;
-                float2 st = SampleMipMap(BackGround, float2(Random(seed), Random(seed)), lightPdf);
+                float lightWeight;
+                float2 st = SampleMipMap(BackGround, float2(Random(seed), Random(seed)), lightWeight);
 
                 // 方向ベクトルに変換.
                 float3 dir = FromSphereMapCoord(st);
@@ -339,7 +391,7 @@ void OnGenerateRay()
                     float3 Le = SampleIBL(dir);
                 #endif
 
-                    L += W * (fs * Le * G) / lightPdf;
+                    Lo += W * (fs * Le * G) * lightWeight;
                 }
             }
         }
@@ -369,7 +421,7 @@ void OnGenerateRay()
                     // Light
                     float3 Le = GetLightIntensity(light, lightDistance);
 
-                    L += W * fs * Le * lightWeight;
+                    Lo += W * fs * Le * lightWeight;
                 }
             }
         }
@@ -408,8 +460,8 @@ void OnGenerateRay()
 
     uint2 launchId = DispatchRaysIndex().xy;
 
-    float3 prevL = Canvas[launchId].rgb;
-    float3 color = (SceneParam.EnableAccumulation) ? (prevL + L) : L;
+    float3 prevLo = Canvas[launchId].rgb;
+    float3 color  = (SceneParam.EnableAccumulation) ? (prevLo + Lo) : Lo;
 
     Canvas[launchId] = float4(SaturateFloat(color), 1.0f);
 }

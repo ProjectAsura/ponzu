@@ -201,9 +201,10 @@ private:
     //+++++++++++++++++++
     //      開発用.
     //+++++++++++++++++++
-    bool                            m_DebugSetting = true;
-    bool                            m_ReloadShader = false;
-    bool                            m_RequestReload = false;
+    bool                            m_DebugSetting          = true;
+    bool                            m_ReloadShader          = false;
+    bool                            m_RequestReload         = false;
+    bool                            m_ForceAccumulationOff  = false;
     asdx::RayTracingPipelineState   m_DevRayTracingPSO;
     asdx::ShaderTable               m_DevRayGenTable;
     asdx::ShaderTable               m_DevMissTable;

@@ -944,7 +944,7 @@ float Load(Texture2D T, int x, int y, int mip)
     return Luminance(color);
 }
 
-float2 SampleMipMap(Texture2D T, float2 u, out float pdf)
+float2 SampleMipMap(Texture2D T, float2 u, out float weight) // weight = 1.0f / lightPDF.
 {
     uint width, height, mipLevels;
     T.GetDimensions(0, width, height, mipLevels);
@@ -997,7 +997,8 @@ float2 SampleMipMap(Texture2D T, float2 u, out float pdf)
 
     // We have found a texel (x, y) with probability  proportional to 
     // its normalized value. Compute the PDF and return the coordinates.
-    pdf = Load(T, x, y, 0) / Load(T, 0, 0, mipLevels - 1);
+    float pdf = Load(T, x, y, 0) / Load(T, 0, 0, mipLevels - 1);
+    weight = SaturateFloat(1.0f / pdf);
     return float2((float)x / (float)width, (float)y / (float)height);
 }
 

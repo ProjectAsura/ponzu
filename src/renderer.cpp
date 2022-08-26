@@ -1680,6 +1680,9 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
     #if !(CAMP_RELEASE)
         if (m_RequestReload)
         { changed = true; }
+
+        if (m_ForceAccumulationOff)
+        { changed = true; }
     #endif
 
         // カメラ変更があったかどうか?
@@ -2232,10 +2235,12 @@ void Renderer::Draw2D()
         }
         ImGui::End();
 
+        ImGui::SetNextWindowPos(ImVec2(10, 130), ImGuiCond_Once);
         if (ImGui::Begin(u8"デバッグ設定", &m_DebugSetting))
         {
             int count = _countof(kBufferKindItems);
             ImGui::Combo(u8"表示バッファ", &m_BufferKind, kBufferKindItems, count);
+            ImGui::Checkbox(u8"Accumulation 強制OFF", &m_ForceAccumulationOff);
         }
         ImGui::End();
 
