@@ -167,6 +167,19 @@ struct ShadeParam
     uint32_t    AccumulationFrame;
 };
 
+///////////////////////////////////////////////////////////////////////////////
+// DenoiseParam structure
+///////////////////////////////////////////////////////////////////////////////
+struct DenoiseParam
+{
+    uint32_t DispathArgsX;
+    uint32_t DispathArgsY;
+    float    InvTargetSizeX;
+    float    InvTargetSizeY;
+    float    OffsetX;
+    float    OffsetY;
+};
+
 //-----------------------------------------------------------------------------
 //      画像に出力します.
 //-----------------------------------------------------------------------------
@@ -2009,6 +2022,9 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
     }
 #endif
 
+    auto threadX = (m_SceneDesc.Width  + 7) / 8;
+    auto threadY = (m_SceneDesc.Height + 7) / 8;
+
     // トーンマップ実行.
     {
         asdx::ScopedBarrier barrier0(
@@ -2016,9 +2032,6 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
             m_Canvas.GetResource(),
             D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
             D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-
-        auto threadX = (m_SceneDesc.Width + 7) / 8;
-        auto threadY = (m_SceneDesc.Height + 7) / 8;
 
         m_GfxCmdList.SetRootSignature(m_TonemapRootSig.GetPtr(), true);
         m_GfxCmdList.SetPipelineState(m_TonemapPSO.GetPtr());
@@ -2032,16 +2045,66 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
 
     // デノイズ Horizontal-Pass
     {
+        DenoiseParam param = {};
+        param.DispathArgsX      = threadX;
+        param.DispathArgsY      = threadY;
+        param.InvTargetSizeX    = 1.0f / float(m_SceneDesc.Width);
+        param.InvTargetSizeY    = 1.0f / float(m_SceneDesc.Height);
+        param.OffsetX           = 1.0f / float(m_SceneDesc.Width);
+        param.OffsetY           = 0.0f;
 
+        m_GfxCmdList.SetRootSignature(m_DenoiseRootSig.GetPtr(), true);
+        m_GfxCmdList.SetPipelineState(m_DenoisePSO.GetPtr());
 
+        m_GfxCmdList.SetTable(0, m_DenoiseTarget[0].GetUAV(), true);
+        m_GfxCmdList.SetTable(1, m_TonemapBuffer.GetSRV(), true);
+        m_GfxCmdList.SetTable(2, m_ModelDepthTarget.GetSRV(), true);
+        m_GfxCmdList.SetTable(3, m_NormalTarget.GetSRV(), true);
+        m_GfxCmdList.SetConstants(4, 6, &param, 0, true);
+
+        m_GfxCmdList.Dispatch(threadX, threadY, 1);
+
+        m_GfxCmdList.BarrierUAV(m_DenoiseTarget[0].GetResource());
     }
 
     // デノイズ Vertical-Pass
     {
+        DenoiseParam param = {};
+        param.DispathArgsX      = threadX;
+        param.DispathArgsY      = threadY;
+        param.InvTargetSizeX    = 1.0f / float(m_SceneDesc.Width);
+        param.InvTargetSizeY    = 1.0f / float(m_SceneDesc.Height);
+        param.OffsetX           = 0.0f;
+        param.OffsetY           = 1.0f / float(m_SceneDesc.Height);
+
+        asdx::ScopedBarrier barrier0(
+            m_GfxCmdList,
+            m_DenoiseTarget[0].GetResource(),
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+
+        m_GfxCmdList.SetRootSignature(m_DenoiseRootSig.GetPtr(), true);
+        m_GfxCmdList.SetPipelineState(m_DenoisePSO.GetPtr());
+
+        m_GfxCmdList.SetTable(0, m_DenoiseTarget[1].GetUAV(), true);
+        m_GfxCmdList.SetTable(1, m_DenoiseTarget[0].GetSRV(), true);
+        m_GfxCmdList.SetTable(2, m_ModelDepthTarget.GetSRV(), true);
+        m_GfxCmdList.SetTable(3, m_NormalTarget.GetSRV(), true);
+        m_GfxCmdList.SetConstants(4, 6, &param, 0, true);
+
+        m_GfxCmdList.Dispatch(threadX, threadY, 1);
+
+        m_GfxCmdList.BarrierUAV(m_DenoiseTarget[1].GetResource());
     }
 
     // テンポラルアンチエイリアシング実行.
     {
+        asdx::ScopedBarrier barrier0(
+            m_GfxCmdList,
+            m_DenoiseTarget[1].GetResource(),
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
         auto jitter = asdx::TaaRenderer::CalcJitter(m_JitterIndex, m_SceneDesc.Width, m_SceneDesc.Height);
 
         m_JitterIndex++;
@@ -2049,7 +2112,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         m_TaaRenderer.RenderCS(
             m_GfxCmdList.GetCommandList(),
             m_HistoryTarget[m_CurrHistoryBufferIndex].GetUAV(),
-            m_TonemapBuffer.GetSRV(),
+            m_DenoiseTarget[1].GetSRV(),
             m_HistoryTarget[m_PrevHistoryBufferIndex].GetSRV(),
             m_VelocityTarget.GetSRV(),
             m_DepthTarget.GetSRV(),

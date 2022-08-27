@@ -10,7 +10,7 @@
 #include <Math.hlsli>
 
 #define THREAD_SIZE     (8)
-#define KERNEL_RADIUS   (8)
+#define KERNEL_RADIUS   (2)
 
 //-----------------------------------------------------------------------------
 // Constant Values.
@@ -70,25 +70,27 @@ float4 BilateralFilter(float2 uv, float2 offset, float sqrtVarL)
 
     float4 c0 = InputColor .SampleLevel(PointClamp, uv, 0.0f);
     float  d0 = InputDepth .SampleLevel(PointClamp, uv, 0.0f);
-    float3 n0 = InputNormal.SampleLevel(PointClamp, uv, 0.0f);
+    float3 n0 = InputNormal.SampleLevel(PointClamp, uv, 0.0f) * 2.0f - 1.0f;
+    n0 = normalize(n0);
 
     float4 totalColor  = c0;
     float  totalWeight = 1.0f;
 
     const float eps = 1e-5f;
     const float sn  = 128.0f;
-    const float sz  = 1.0f;
-    const float sl  = 4.0f;
+    const float sz  = 0.5f;
+    const float sl  = 2.0f;
 
     float r = 1;
     [unroll]
     for(; r <= KERNEL_RADIUS/2; r+=1)
     {
-        float2 st = r * offset + uv;
+        float2 st = uv + r * offset;
 
         float4 c = InputColor .SampleLevel(PointClamp, st, 0.0f);
         float  d = InputDepth .SampleLevel(PointClamp, st, 0.0f);
-        float3 n = InputNormal.SampleLevel(PointClamp, st, 0.0f);
+        float3 n = InputNormal.SampleLevel(PointClamp, st, 0.0f) * 2.0f - 1.0f;
+        n = normalize(n);
 
         // Edge-Stopping Function.
         float wn = pow(max(0.0f, dot(n0, n)), sn);
@@ -103,11 +105,12 @@ float4 BilateralFilter(float2 uv, float2 offset, float sqrtVarL)
 
     for(; r <= KERNEL_RADIUS; r+=2)
     {
-        float2 st = r * offset + uv;
+        float2 st = uv + r * offset;
 
-        float4 c = InputColor .SampleLevel(PointClamp, st, 0.0f);
-        float  d = InputDepth .SampleLevel(PointClamp, st, 0.0f);
-        float3 n = InputNormal.SampleLevel(PointClamp, st, 0.0f);
+        float4 c = InputColor .SampleLevel(LinearClamp, st, 0.0f);
+        float  d = InputDepth .SampleLevel(LinearClamp, st, 0.0f);
+        float3 n = InputNormal.SampleLevel(LinearClamp, st, 0.0f) * 2.0f - 1.0f;
+        n = normalize(n);
 
         // Edge-Stopping Function.
         float wn = pow(max(0.0f, dot(n0, n)), sn);
@@ -120,7 +123,49 @@ float4 BilateralFilter(float2 uv, float2 offset, float sqrtVarL)
         totalWeight += w;
     }
 
-    output.rgb = totalColor.rgb / totalWeight;
+    r = 1;
+    [unroll]
+    for(; r <= KERNEL_RADIUS/2; r+=1)
+    {
+        float2 st = uv - r * offset;
+
+        float4 c = InputColor .SampleLevel(PointClamp, st, 0.0f);
+        float  d = InputDepth .SampleLevel(PointClamp, st, 0.0f);
+        float3 n = InputNormal.SampleLevel(PointClamp, st, 0.0f) * 2.0f - 1.0f;
+        n = normalize(n);
+
+        // Edge-Stopping Function.
+        float wn = pow(max(0.0f, dot(n0, n)), sn);
+        float wz = exp(-abs(d0 - d) / (sz + eps));
+        float wl = exp(-abs(c0.a - c.a) / (sl * sqrtVarL + eps));
+
+        float w = wn * wz * wl;
+
+        totalColor  += w * c;
+        totalWeight += w;
+    }
+
+    for(; r <= KERNEL_RADIUS; r+=2)
+    {
+        float2 st = uv - r * offset;
+
+        float4 c = InputColor .SampleLevel(LinearClamp, st, 0.0f);
+        float  d = InputDepth .SampleLevel(LinearClamp, st, 0.0f);
+        float3 n = InputNormal.SampleLevel(LinearClamp, st, 0.0f) * 2.0f - 1.0f;
+        n = normalize(n);
+
+        // Edge-Stopping Function.
+        float wn = pow(max(0.0f, dot(n0, n)), sn);
+        float wz = exp(-abs(d0 - d) / (sz + eps));
+        float wl = exp(-abs(c0.a - c.a) / (sl * sqrtVarL + eps));
+
+        float w = wn * wz * wl;
+
+        totalColor  += w * c;
+        totalWeight += w;
+    }
+
+    output.rgb = saturate(totalColor.rgb / totalWeight);
     output.a   = c0.a;
 
     return output;
@@ -139,15 +184,13 @@ void main
     uint2 dispatchId = RemapThreadId(kThreadSize, DispatchArgs, 8, groupId.xy, groupThreadId.xy);
 
     // テクスチャ座標を求める.
-    float2 uv = dispatchId * InvTargetSize;
+    float2 uv = (dispatchId.xy + 0.5f) * InvTargetSize;
 
     // 3x3 のガウスの分散を求める.
     float var = ComputeVarianceCenter((int2)dispatchId);
     var = sqrt(var);
 
-    float4 result = (float4)0;
-    result += BilateralFilter(uv,  Offset, var);    // 左方向(上方向).
-    result += BilateralFilter(uv, -Offset, var);    // 右方向(下方向).
+    float4 result = BilateralFilter(uv, Offset, var);
 
-    Output[dispatchId] = result;
+    Output[dispatchId.xy] = result;
 }

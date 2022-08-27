@@ -8,6 +8,7 @@
 // Includes
 //-----------------------------------------------------------------------------
 #include <SceneParam.hlsli>
+#include <Math.hlsli>
 
 //-----------------------------------------------------------------------------
 // Resources
@@ -45,6 +46,7 @@ void main(uint3 dispatchId : SV_DispatchThreadID)
     float4 color = ColorBuffer.Load(int3(dispatchId.xy, 0));
     float3 output = (color.rgb / SceneParam.AccumulatedFrames) * SceneParam.ExposureAdjustment;
     output = ACESFilm(output);
+    output = Linear_To_SRGB(output);
 
-    OutputBuffer[dispatchId.xy] = float4(output, 1.0f);
+    OutputBuffer[dispatchId.xy] = float4(output, LuminanceBT709(output));
 }
