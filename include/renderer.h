@@ -30,7 +30,6 @@
 #include <gfx/asdxCommandQueue.h>
 #include <gfx/asdxQuad.h>
 #include <edit/asdxGuiMgr.h>
-#include <renderer/asdxTaaRenderer.h>
 #include <model_mgr.h>
 #include <scene.h>
 
@@ -234,7 +233,7 @@ private:
     bool InitSpatialSamplingPipeline(RtPipeline& value, D3D12_SHADER_BYTECODE shader);
 
     void ChangeFrame(uint32_t index);
-    void CaptureScreen(ID3D12Resource* pResource, D3D12_RESOURCE_STATES state);
+    void CaptureScreen(ID3D12Resource* pResource, D3D12_RESOURCE_STATES state, bool forceSync = false);
 
 #if (!CAMP_RELEASE)
     void ReloadShader();

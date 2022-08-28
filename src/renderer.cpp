@@ -206,7 +206,7 @@ unsigned Export(void* args)
     {
         FILE* pFile = nullptr;
         auto err = fopen_s(&pFile, path, "wb");
-        if (pFile != nullptr)
+        if (err == 0)
         {
             fwrite(data->Converted.data(), 1, data->Converted.size(), pFile);
             fclose(pFile);
@@ -1669,19 +1669,23 @@ void Renderer::OnFrameMove(asdx::FrameEventArgs& args)
     // 制限時間を超えた
     if (args.Time >= m_SceneDesc.RenderTimeSec)
     {
+        // キャプチャー実行.
+        uint32_t totalFrame = uint32_t(m_SceneDesc.FPS * m_SceneDesc.AnimationSec);
+        if (m_CaptureIndex <= totalFrame)
+        {
+            auto idx = (m_CaptureTargetIndex + 2) % 3; // 2フレーム前のインデックス.
+            CaptureScreen(m_CaptureTexture[idx].GetPtr(), D3D12_RESOURCE_STATE_COPY_DEST, true);
+        }
+
         PostQuitMessage(0);
         m_EndRequest = true;
-
-        // キャプチャー実行.
-        auto idx = (m_CaptureTargetIndex + 2) % 3; // 2フレーム前のインデックス.
-        CaptureScreen(m_CaptureTexture[idx].GetPtr(), D3D12_RESOURCE_STATE_COPY_DEST);
 
         return;
     }
 
     // CPUで読み取り.
     m_AnimationElapsedTime += args.ElapsedTime;
-    if (m_AnimationElapsedTime >= m_AnimationOneFrameTime)
+    if (m_AnimationElapsedTime >= m_AnimationOneFrameTime && GetFrameCount() > 0)
     {
         // キャプチャー実行.
         auto idx = (m_CaptureTargetIndex + 2) % 3; // 2フレーム前のインデックス.
@@ -2316,9 +2320,9 @@ void Renderer::Draw2D()
             ImGui::Text(u8"FPS   : %.3lf", GetFPS());
             ImGui::Text(u8"Frame : %ld", GetFrameCount());
             ImGui::Text(u8"Accum : %ld", m_AccumulatedFrames);
-            ImGui::Text(u8"Camera : %f", m_CameraController.GetPosition().x);
-            ImGui::Text(u8"       : %f", m_CameraController.GetPosition().y);
-            ImGui::Text(u8"       : %f", m_CameraController.GetPosition().z);
+            ImGui::Text(u8"Camera : %.3f", m_CameraController.GetPosition().x);
+            ImGui::Text(u8"       : %.3f", m_CameraController.GetPosition().y);
+            ImGui::Text(u8"       : %.3f", m_CameraController.GetPosition().z);
         }
         ImGui::End();
 
@@ -2340,7 +2344,7 @@ void Renderer::Draw2D()
 //-----------------------------------------------------------------------------
 //      スクリーンキャプチャーを行います.
 //-----------------------------------------------------------------------------
-void Renderer::CaptureScreen(ID3D12Resource* pResource, D3D12_RESOURCE_STATES state)
+void Renderer::CaptureScreen(ID3D12Resource* pResource, D3D12_RESOURCE_STATES state, bool forceSync)
 {
     if (pResource == nullptr)
     { return; }
@@ -2410,7 +2414,7 @@ void Renderer::CaptureScreen(ID3D12Resource* pResource, D3D12_RESOURCE_STATES st
         auto hr  = m_ReadBackTexture->Map(0, nullptr, reinterpret_cast<void**>(&ptr));
 
         // 処理に空きがあるかどうかチェック.
-        if (!m_ExportData[idx].Processed)
+        if (!m_ExportData[idx].Processed && !forceSync)
         {
             // 処理中フラグを立てる.
             m_ExportData[idx].Processed = true;
