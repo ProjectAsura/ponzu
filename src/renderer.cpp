@@ -213,6 +213,8 @@ unsigned Export(void* args)
         }
     }
 
+    data->Processed = false;
+
     //timer.End();
     //ILOGA("timer = %lf", timer.GetElapsedMsec());
 
@@ -276,9 +278,7 @@ bool Renderer::OnInit()
         auto renderTime = m_SceneDesc.RenderTimeSec - setupTime;
         auto totalFrame = double(m_SceneDesc.FPS * m_SceneDesc.AnimationTimeSec);
         m_AnimationOneFrameTime = renderTime / totalFrame;
-        m_AnimationElapsedTime = 0.0f;
-        m_ReadBackIndex = 2;
-        m_MapIndex      = 0;
+        m_AnimationElapsedTime  = 0.0f;
 
         ChangeFrame(0);
     }
@@ -324,6 +324,45 @@ bool Renderer::SystemSetup()
     // PNGライブラリ初期化.
     fpng::fpng_init();
 
+    // キャプチャー用ダブルバッファ.
+    {
+        D3D12_RESOURCE_DESC desc = {};
+        desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        desc.Width              = m_SceneDesc.Width;
+        desc.Height             = m_SceneDesc.Height;
+        desc.DepthOrArraySize   = 1;
+        desc.MipLevels          = 1;
+        desc.Format             = DXGI_FORMAT_R8G8B8A8_UNORM;
+        desc.SampleDesc.Count   = 1;
+        desc.SampleDesc.Quality = 0;
+        desc.Layout             = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+        desc.Flags              = D3D12_RESOURCE_FLAG_NONE;
+
+        D3D12_HEAP_PROPERTIES props = {};
+        props.Type = D3D12_HEAP_TYPE_DEFAULT;
+
+        for(auto i=0; i<3; ++i)
+        {
+            auto hr = pDevice->CreateCommittedResource(
+                &props,
+                D3D12_HEAP_FLAG_NONE,
+                &desc,
+                D3D12_RESOURCE_STATE_COPY_DEST,
+                nullptr,
+                IID_PPV_ARGS(m_CaptureTexture[i].GetAddress()));
+
+            if (FAILED(hr))
+            {
+                ELOGA("Error : ID3D12Device::CreateCommittedResource() Failed. errcode = 0x%x", hr);
+                return false;
+            }
+        }
+
+        m_CaptureTexture[0]->SetName(L"CaptureTexture0");
+        m_CaptureTexture[1]->SetName(L"CaptureTexture1");
+        m_CaptureTexture[2]->SetName(L"CaptureTexture1");
+    }
+
     // リードバックテクスチャ生成.
     {
         D3D12_RESOURCE_DESC desc = {};
@@ -342,31 +381,21 @@ bool Renderer::SystemSetup()
         D3D12_HEAP_PROPERTIES props = {};
         props.Type = D3D12_HEAP_TYPE_READBACK;
 
-        for(auto i=0; i<3; ++i)
+        auto hr = pDevice->CreateCommittedResource(
+            &props,
+            D3D12_HEAP_FLAG_NONE,
+            &desc,
+            D3D12_RESOURCE_STATE_COPY_DEST,
+            nullptr,
+            IID_PPV_ARGS(m_ReadBackTexture.GetAddress()));
+
+        if (FAILED(hr))
         {
-            auto hr = pDevice->CreateCommittedResource(
-                &props,
-                D3D12_HEAP_FLAG_NONE,
-                &desc,
-                D3D12_RESOURCE_STATE_COPY_DEST,
-                nullptr,
-                IID_PPV_ARGS(m_ReadBackTexture[i].GetAddress()));
-
-            if (FAILED(hr))
-            {
-                ELOGA("Error : ID3D12Device::CreateCommittedResource() Failed. errcode = 0x%x", hr);
-                return false;
-            }
-
-            m_ExportData[i].Pixels.resize(m_SceneDesc.Width * m_SceneDesc.Height * 4);
-            m_ExportData[i].FrameIndex  = 0;
-            m_ExportData[i].Width       = m_SceneDesc.Width;
-            m_ExportData[i].Height      = m_SceneDesc.Height;
+            ELOGA("Error : ID3D12Device::CreateCommittedResource() Failed. errcode = 0x%x", hr);
+            return false;
         }
 
-        m_ReadBackTexture[0]->SetName(L"ReadBackTexture0");
-        m_ReadBackTexture[1]->SetName(L"ReadBackTexture1");
-        m_ReadBackTexture[2]->SetName(L"ReadBackTexture2");
+        m_ReadBackTexture->SetName(L"ReadBackTexture");
 
         UINT   rowCount     = 0;
         UINT64 pitchSize    = 0;
@@ -396,7 +425,14 @@ bool Renderer::SystemSetup()
 
         m_ReadBackPitch = static_cast<uint32_t>((pitchSize + 255) & ~0xFFu);
 
-        m_ReadBackIndex = 0;
+        m_ExportData.resize(2);
+        for(auto i=0; i<m_ExportData.size(); ++i)
+        {
+            m_ExportData[i].Pixels.resize(m_SceneDesc.Width * m_SceneDesc.Height * 4);
+            m_ExportData[i].FrameIndex  = 0;
+            m_ExportData[i].Width       = m_SceneDesc.Width;
+            m_ExportData[i].Height      = m_SceneDesc.Height;
+        }
     }
 
     // フル矩形用頂点バッファの初期化.
@@ -440,34 +476,34 @@ bool Renderer::SystemSetup()
         m_Canvas.SetName(L"Canvas");
     }
 
-    // ヒストリーバッファ.
-    {
-        asdx::TargetDesc desc;
-        desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-        desc.Width              = m_SceneDesc.Width;
-        desc.Height             = m_SceneDesc.Height;
-        desc.DepthOrArraySize   = 1;
-        desc.Format             = DXGI_FORMAT_R8G8B8A8_UNORM;
-        desc.MipLevels          = 1;
-        desc.SampleDesc.Count   = 1;
-        desc.SampleDesc.Quality = 0;
-        desc.InitState          = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    //// ヒストリーバッファ.
+    //{
+    //    asdx::TargetDesc desc;
+    //    desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    //    desc.Width              = m_SceneDesc.Width;
+    //    desc.Height             = m_SceneDesc.Height;
+    //    desc.DepthOrArraySize   = 1;
+    //    desc.Format             = DXGI_FORMAT_R8G8B8A8_UNORM;
+    //    desc.MipLevels          = 1;
+    //    desc.SampleDesc.Count   = 1;
+    //    desc.SampleDesc.Quality = 0;
+    //    desc.InitState          = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 
-        for(auto i=0; i<2; ++i)
-        {
-            if (i == 1)
-            { desc.InitState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE; }
+    //    for(auto i=0; i<2; ++i)
+    //    {
+    //        if (i == 1)
+    //        { desc.InitState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE; }
 
-            if (!m_HistoryTarget[i].Init(&desc))
-            {
-                ELOGA("Error : HistoryTarget Init Failed.");
-                return false;
-            }
-        }
+    //        if (!m_HistoryTarget[i].Init(&desc))
+    //        {
+    //            ELOGA("Error : HistoryTarget Init Failed.");
+    //            return false;
+    //        }
+    //    }
 
-        m_HistoryTarget[0].SetName(L"HistoryTarget0");
-        m_HistoryTarget[1].SetName(L"HistoryTarget1");
-    }
+    //    m_HistoryTarget[0].SetName(L"HistoryTarget0");
+    //    m_HistoryTarget[1].SetName(L"HistoryTarget1");
+    //}
 
     // トーンマップターゲット.
     {
@@ -678,6 +714,9 @@ bool Renderer::SystemSetup()
                 return false;
             }
         }
+
+        m_DenoiseTarget[0].SetName(L"DenoiseTarget0");
+        m_DenoiseTarget[1].SetName(L"DenoiseTarget1");
     }
 
     // 定数バッファ初期化.
@@ -967,12 +1006,12 @@ bool Renderer::SystemSetup()
         }
     }
 
-    // TAAレンダラー初期化.
-    if (!m_TaaRenderer.InitCS())
-    {
-        ELOGA("Error : TaaRenderer::InitCS() Failed");
-        return false;
-    }
+    //// TAAレンダラー初期化.
+    //if (!m_TaaRenderer.InitCS())
+    //{
+    //    ELOGA("Error : TaaRenderer::InitCS() Failed");
+    //    return false;
+    //}
 
 #if !(CAMP_RELEASE)
     // カメラ初期化.
@@ -1004,7 +1043,7 @@ bool Renderer::SystemSetup()
 #else
     // カメラ初期化.
     {
-        m_Camera.SetPosition(asdx::Vector3(0.0f, 0.0f, 2.5f));
+        m_Camera.SetPosition(asdx::Vector3(0.0f, 0.0f, 550.5f));
         m_Camera.SetTarget(asdx::Vector3(0.0f, 0.0f, 0.0f));
         m_Camera.SetUpward(asdx::Vector3(0.0f, 1.0f, 0.0f));
         m_Camera.Update();
@@ -1278,7 +1317,7 @@ bool Renderer::BuildScene()
     timer.Start();
     printf_s("Build scene  ... ");
 
-#if 1
+#if !(CAMP_RELEASE)
     auto pDevice = asdx::GetD3D12Device();
 
     Material dummy0 = {};
@@ -1591,10 +1630,6 @@ void Renderer::OnTerm()
 
     m_Scene.Term();
 
-    m_TaaRenderer.Term();
-    for(auto i=0; i<2; ++i)
-    { m_HistoryTarget[i].Term(); }
-
 #if ENABLE_RESTIR
     m_SpatialReservoirBuffer .Term();
     m_TemporalReservoirBuffer.Term();
@@ -1603,6 +1638,11 @@ void Renderer::OnTerm()
     m_ShadePixelRootSig .Term();
     m_ShadePixelPSO     .Term();
 #endif
+
+    for(auto i=0; i<2; ++i)
+    { m_CaptureTexture[i].Reset(); }
+
+    m_ReadBackTexture.Reset();
 
     for(auto i=0; i<2; ++i)
     { m_DenoiseTarget[i].Term(); }
@@ -1629,11 +1669,13 @@ void Renderer::OnTerm()
     m_MissTable     .Term();
     m_HitGroupTable .Term();
 
-    for(auto i=0; i<3; ++i)
+    for(auto i=0; i<m_ExportData.size(); ++i)
     {
-        m_ReadBackTexture[i].Reset();
-        m_ExportData[i].Pixels.clear();
+        m_ExportData[i].Pixels   .clear();
+        m_ExportData[i].Temporary.clear();
+        m_ExportData[i].Converted.clear();
     }
+    m_ExportData.clear();
 
     m_AlbedoTarget    .Term();
     m_NormalTarget    .Term();
@@ -1659,18 +1701,9 @@ void Renderer::OnFrameMove(asdx::FrameEventArgs& args)
         PostQuitMessage(0);
         m_EndRequest = true;
 
-        uint8_t* ptr = nullptr;
-        auto idx = m_MapIndex;
-        auto hr  = m_ReadBackTexture[idx]->Map(0, nullptr, reinterpret_cast<void**>(&ptr));
-        if (SUCCEEDED(hr))
-        {
-            memcpy(m_ExportData[idx].Pixels.data(), ptr, m_ExportData[idx].Pixels.size());
-            m_ExportData[idx].FrameIndex = m_CaptureIndex;
-        }
-        m_ReadBackTexture[idx]->Unmap(0, nullptr);
-
-        // 画像に出力.
-        _beginthreadex(nullptr, 0, Export, &m_ExportData[idx], 0, nullptr);
+        // キャプチャー実行.
+        auto idx = (m_CaptureTargetIndex + 2) % 3; // 2フレーム前のインデックス.
+        CaptureScreen(m_CaptureTexture[idx].GetPtr(), D3D12_RESOURCE_STATE_COPY_DEST);
 
         return;
     }
@@ -1679,22 +1712,12 @@ void Renderer::OnFrameMove(asdx::FrameEventArgs& args)
     m_AnimationElapsedTime += args.ElapsedTime;
     if (m_AnimationElapsedTime >= m_AnimationOneFrameTime)
     {
-        uint8_t* ptr = nullptr;
-        auto idx = m_MapIndex;
-        auto hr  = m_ReadBackTexture[idx]->Map(0, nullptr, reinterpret_cast<void**>(&ptr));
-        if (SUCCEEDED(hr))
-        {
-            memcpy(m_ExportData[idx].Pixels.data(), ptr, m_ExportData[idx].Pixels.size());
-            m_ExportData[idx].FrameIndex = m_CaptureIndex;
-        }
-        m_ReadBackTexture[idx]->Unmap(0, nullptr);
+        // キャプチャー実行.
+        auto idx = (m_CaptureTargetIndex + 2) % 3; // 2フレーム前のインデックス.
+        CaptureScreen(m_CaptureTexture[idx].GetPtr(), D3D12_RESOURCE_STATE_COPY_DEST);
 
-        // 画像に出力.
-        _beginthreadex(nullptr, 0, Export, &m_ExportData[idx], 0, nullptr);
-
-        m_CaptureIndex++;
+        // 次のフレームに切り替え.
         m_AnimationElapsedTime = 0.0;
-
         ChangeFrame(m_CaptureIndex);
 
         // 適宜調整する.
@@ -1757,6 +1780,10 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
     // 定数バッファ更新.
     {
         auto changed = memcmp(&m_CurrView, &m_PrevView, sizeof(asdx::Matrix)) != 0;
+
+        if (GetFrameCount() == 0)
+        { changed = true; }
+
     #if !(CAMP_RELEASE)
         if (m_RequestReload)
         { changed = true; }
@@ -2097,72 +2124,17 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         m_GfxCmdList.BarrierUAV(m_DenoiseTarget[1].GetResource());
     }
 
-    // テンポラルアンチエイリアシング実行.
     {
-        asdx::ScopedBarrier barrier0(
-            m_GfxCmdList,
-            m_DenoiseTarget[1].GetResource(),
-            D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+        auto cap_idx = m_CaptureTargetIndex;
 
-        auto jitter = asdx::TaaRenderer::CalcJitter(m_JitterIndex, m_SceneDesc.Width, m_SceneDesc.Height);
-
-        m_JitterIndex++;
-
-        m_TaaRenderer.RenderCS(
-            m_GfxCmdList.GetCommandList(),
-            m_HistoryTarget[m_CurrHistoryBufferIndex].GetUAV(),
-            m_DenoiseTarget[1].GetSRV(),
-            m_HistoryTarget[m_PrevHistoryBufferIndex].GetSRV(),
-            m_VelocityTarget.GetSRV(),
-            m_DepthTarget.GetSRV(),
-            1.0f,
-            0.1f,
-            jitter);
-
-        m_GfxCmdList.BarrierUAV(m_HistoryTarget[m_CurrHistoryBufferIndex].GetResource());
-
-        // 次のフレームの書き込みの為に遷移.
         m_GfxCmdList.BarrierTransition(
-            m_HistoryTarget[m_PrevHistoryBufferIndex].GetResource(), 0,
-            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
-            D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-    }
-
-    // リードバック実行.
-    {
-        m_GfxCmdList.BarrierTransition(
-            m_HistoryTarget[m_CurrHistoryBufferIndex].GetResource(), 0,
+            m_DenoiseTarget[1].GetResource(), 0,
             D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
             D3D12_RESOURCE_STATE_COPY_SOURCE);
 
-        D3D12_TEXTURE_COPY_LOCATION dst = {};
-        dst.Type                                = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-        dst.pResource                           = m_ReadBackTexture[m_ReadBackIndex].GetPtr();
-        dst.PlacedFootprint.Footprint.Width     = static_cast<UINT>(m_SceneDesc.Width);
-        dst.PlacedFootprint.Footprint.Height    = m_SceneDesc.Height;
-        dst.PlacedFootprint.Footprint.Depth     = 1;
-        dst.PlacedFootprint.Footprint.RowPitch  = m_ReadBackPitch;
-        dst.PlacedFootprint.Footprint.Format    = DXGI_FORMAT_R8G8B8A8_UNORM;
-
-        D3D12_TEXTURE_COPY_LOCATION src = {};
-        src.Type                = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-        src.pResource           = m_HistoryTarget[m_CurrHistoryBufferIndex].GetResource();
-        src.SubresourceIndex    = 0;
-
-        D3D12_BOX box = {};
-        box.left    = 0;
-        box.right   = m_SceneDesc.Width;
-        box.top     = 0;
-        box.bottom  = m_SceneDesc.Height;
-        box.front   = 0;
-        box.back    = 1;
-
-        // 読み戻し用ターゲットにコピー.
-        m_GfxCmdList.CopyTextureRegion(&dst, 0, 0, 0, &src, &box);
-
-        m_ReadBackIndex = (m_ReadBackIndex + 1) % 3;
-        m_MapIndex      = (m_MapIndex + 1) % 3;
+        m_GfxCmdList.CopyResource(
+            m_CaptureTexture[cap_idx].GetPtr(),
+            m_DenoiseTarget[1].GetResource());
     }
 
     // スワップチェインに描画.
@@ -2174,7 +2146,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
 
         // ピクセルシェーダアクセスのため遷移.
         m_GfxCmdList.BarrierTransition(
-            m_HistoryTarget[m_CurrHistoryBufferIndex].GetResource(), 0,
+            m_DenoiseTarget[1].GetResource(), 0,
             D3D12_RESOURCE_STATE_COPY_SOURCE,
             D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
@@ -2183,7 +2155,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         switch(m_BufferKind)
         {
         case BUFFER_KIND_CANVAS:
-            pSRV = m_HistoryTarget[m_CurrHistoryBufferIndex].GetSRV();
+            pSRV = m_DenoiseTarget[1].GetSRV();
             break;
 
         #if ENABLE_RESTIR
@@ -2221,7 +2193,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         m_GfxCmdList.SetViewport(m_ColorTarget[idx].GetResource());
         m_GfxCmdList.SetRootSignature(m_CopyRootSig.GetPtr(), false);
         m_GfxCmdList.SetPipelineState(m_CopyPSO.GetPtr());
-        m_GfxCmdList.SetTable(0, m_HistoryTarget[m_CurrHistoryBufferIndex].GetSRV());
+        m_GfxCmdList.SetTable(0, m_DenoiseTarget[1].GetSRV());
         asdx::Quad::Instance().Draw(m_GfxCmdList.GetCommandList());
     #endif
 
@@ -2233,15 +2205,11 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
             D3D12_RESOURCE_STATE_RENDER_TARGET,
             D3D12_RESOURCE_STATE_PRESENT);
 
-        // 次のフレームのTAAの入力のために遷移.
         m_GfxCmdList.BarrierTransition(
-            m_HistoryTarget[m_CurrHistoryBufferIndex].GetResource(), 0,
+            m_DenoiseTarget[1].GetResource(), 0,
             D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
-            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     }
-
-    m_PrevHistoryBufferIndex = m_CurrHistoryBufferIndex;
-    m_CurrHistoryBufferIndex = (m_CurrHistoryBufferIndex + 1) & 0x1;
 
     // コマンド記録終了.
     m_GfxCmdList.Close();
@@ -2268,6 +2236,9 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
     // フレーム同期.
     asdx::FrameSync();
 
+    if (m_Capture)
+    { CaptureScreen(m_CaptureTexture[idx].GetPtr(), D3D12_RESOURCE_STATE_COPY_DEST); }
+
 #if (!CAMP_RELEASE)
     // シェーダリロード.
     if (m_RequestReload)
@@ -2276,6 +2247,8 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         m_RequestReload = false;
     }
 #endif
+
+    m_CaptureTargetIndex = (m_CaptureTargetIndex + 1) % 3;
 }
 
 //-----------------------------------------------------------------------------
@@ -2394,6 +2367,117 @@ void Renderer::Draw2D()
         asdx::GuiMgr::Instance().Draw(m_GfxCmdList.GetCommandList());
     #endif
 #endif
+}
+
+//-----------------------------------------------------------------------------
+//      スクリーンキャプチャーを行います.
+//-----------------------------------------------------------------------------
+void Renderer::CaptureScreen(ID3D12Resource* pResource, D3D12_RESOURCE_STATES state)
+{
+    if (pResource == nullptr)
+    { return; }
+
+    auto pQueue = asdx::GetGraphicsQueue();
+    if (pQueue == nullptr)
+    { return; }
+
+    m_GfxCmdList.Reset();
+
+    // 読み戻し実行.
+    {
+        asdx::ScopedBarrier b0(
+            m_GfxCmdList,
+            pResource,
+            state,
+            D3D12_RESOURCE_STATE_COPY_SOURCE);
+
+        D3D12_TEXTURE_COPY_LOCATION dst = {};
+        dst.Type                                = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+        dst.pResource                           = m_ReadBackTexture.GetPtr();
+        dst.PlacedFootprint.Footprint.Width     = static_cast<UINT>(m_SceneDesc.Width);
+        dst.PlacedFootprint.Footprint.Height    = m_SceneDesc.Height;
+        dst.PlacedFootprint.Footprint.Depth     = 1;
+        dst.PlacedFootprint.Footprint.RowPitch  = m_ReadBackPitch;
+        dst.PlacedFootprint.Footprint.Format    = DXGI_FORMAT_R8G8B8A8_UNORM;
+
+        D3D12_TEXTURE_COPY_LOCATION src = {};
+        src.Type                = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+        src.pResource           = pResource;
+        src.SubresourceIndex    = 0;
+
+        D3D12_BOX box = {};
+        box.left    = 0;
+        box.right   = m_SceneDesc.Width;
+        box.top     = 0;
+        box.bottom  = m_SceneDesc.Height;
+        box.front   = 0;
+        box.back    = 1;
+
+        m_GfxCmdList.CopyTextureRegion(&dst, 0, 0, 0, &src, &box);
+    }
+
+    m_GfxCmdList.Close();
+
+    ID3D12CommandList* pCmds[] = {
+        m_GfxCmdList.GetCommandList()
+    };
+
+    // コマンドを実行.
+    pQueue->Execute(_countof(pCmds), pCmds);
+
+    // 待機点を発行.
+    auto waitPoint = pQueue->Signal();
+
+    // コピーコマンドの完了を待機.
+    if (waitPoint.IsValid())
+    { pQueue->Sync(waitPoint); }
+
+    // ファイルに出力.
+    {
+        uint8_t* ptr = nullptr;
+        auto idx = m_ExportIndex;
+        auto hr  = m_ReadBackTexture->Map(0, nullptr, reinterpret_cast<void**>(&ptr));
+
+        // 処理に空きがあるかどうかチェック.
+        if (!m_ExportData[idx].Processed)
+        {
+            // 処理中フラグを立てる.
+            m_ExportData[idx].Processed = true;
+
+            if (SUCCEEDED(hr))
+            {
+                memcpy(m_ExportData[idx].Pixels.data(), ptr, m_ExportData[idx].Pixels.size());
+                m_ExportData[idx].FrameIndex = m_CaptureIndex;
+            }
+            m_ReadBackTexture->Unmap(0, nullptr);
+
+            // 画像に出力.
+            _beginthreadex(nullptr, 0, Export, &m_ExportData[idx], 0, nullptr);
+        }
+        else
+        {
+            // 空きが無いので同期処理.
+            ExportData exportData;
+            exportData.Pixels.resize(m_SceneDesc.Width * m_SceneDesc.Height * 4);
+            exportData.FrameIndex  = 0;
+            exportData.Width       = m_SceneDesc.Width;
+            exportData.Height      = m_SceneDesc.Height;
+            exportData.Processed   = true;
+
+            if (SUCCEEDED(hr))
+            {
+                memcpy(exportData.Pixels.data(), ptr, exportData.Pixels.size());
+                exportData.FrameIndex = m_CaptureIndex;
+            }
+            m_ReadBackTexture->Unmap(0, nullptr);
+
+            // 同期でファイルを出力.
+            Export(&exportData);
+        }
+
+        m_CaptureIndex++;
+        m_ExportIndex = (m_ExportIndex + 1) % m_ExportData.size();
+    }
 }
 
 #if (!CAMP_RELEASE)

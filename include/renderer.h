@@ -89,6 +89,7 @@ public:
         uint32_t                FrameIndex;
         uint32_t                Width;
         uint32_t                Height;
+        bool                    Processed;
     };
 
     ///////////////////////////////////////////////////////////////////////////
@@ -155,16 +156,17 @@ private:
     asdx::PipelineState             m_ShadePixelPSO;
 #endif
 
-    uint8_t                         m_ReadBackIndex = 0;
-    uint8_t                         m_MapIndex      = 0;
-    asdx::RefPtr<ID3D12Resource>    m_ReadBackTexture[3];
+    asdx::RefPtr<ID3D12Resource>    m_CaptureTexture[3];
+    asdx::RefPtr<ID3D12Resource>    m_ReadBackTexture;
     uint32_t                        m_ReadBackPitch = 0;
-    ExportData                      m_ExportData[3];
+    std::vector<ExportData>         m_ExportData;
+    size_t                          m_ExportIndex   = 0;
     uint32_t                        m_CaptureIndex  = 0;
+    uint32_t                        m_CaptureTargetIndex = 0;
     uint32_t                        m_AccumulatedFrames = 0;
 
     double                          m_AnimationOneFrameTime = 0;
-    double                          m_AnimationElapsedTime = 0;
+    double                          m_AnimationElapsedTime  = 0;
 
     asdx::Matrix        m_CurrView;
     asdx::Matrix        m_CurrProj;
@@ -188,14 +190,8 @@ private:
     asdx::RootSignature m_CopyRootSig;
     asdx::PipelineState m_CopyPSO;
 
-    asdx::ComputeTarget m_HistoryTarget[2];
-    uint8_t             m_CurrHistoryBufferIndex = 0;
-    uint8_t             m_PrevHistoryBufferIndex = 1;
-    asdx::TaaRenderer   m_TaaRenderer;
-    uint32_t            m_JitterIndex = 0;
-
     bool                m_EndRequest = false;
-
+    bool                m_Capture = false;
 
 #if (!CAMP_RELEASE)
     //+++++++++++++++++++
@@ -239,6 +235,7 @@ private:
     bool InitSpatialSamplingPipeline(RtPipeline& value, D3D12_SHADER_BYTECODE shader);
 
     void ChangeFrame(uint32_t index);
+    void CaptureScreen(ID3D12Resource* pResource, D3D12_RESOURCE_STATES state);
 
 #if (!CAMP_RELEASE)
     void ReloadShader();
