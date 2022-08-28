@@ -191,7 +191,6 @@ private:
     asdx::PipelineState m_CopyPSO;
 
     bool                m_EndRequest = false;
-    bool                m_Capture = false;
 
 #if (!CAMP_RELEASE)
     //+++++++++++++++++++

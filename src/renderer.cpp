@@ -476,35 +476,6 @@ bool Renderer::SystemSetup()
         m_Canvas.SetName(L"Canvas");
     }
 
-    //// ヒストリーバッファ.
-    //{
-    //    asdx::TargetDesc desc;
-    //    desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-    //    desc.Width              = m_SceneDesc.Width;
-    //    desc.Height             = m_SceneDesc.Height;
-    //    desc.DepthOrArraySize   = 1;
-    //    desc.Format             = DXGI_FORMAT_R8G8B8A8_UNORM;
-    //    desc.MipLevels          = 1;
-    //    desc.SampleDesc.Count   = 1;
-    //    desc.SampleDesc.Quality = 0;
-    //    desc.InitState          = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-
-    //    for(auto i=0; i<2; ++i)
-    //    {
-    //        if (i == 1)
-    //        { desc.InitState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE; }
-
-    //        if (!m_HistoryTarget[i].Init(&desc))
-    //        {
-    //            ELOGA("Error : HistoryTarget Init Failed.");
-    //            return false;
-    //        }
-    //    }
-
-    //    m_HistoryTarget[0].SetName(L"HistoryTarget0");
-    //    m_HistoryTarget[1].SetName(L"HistoryTarget1");
-    //}
-
     // トーンマップターゲット.
     {
         asdx::TargetDesc desc;
@@ -2236,9 +2207,6 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
     // フレーム同期.
     asdx::FrameSync();
 
-    if (m_Capture)
-    { CaptureScreen(m_CaptureTexture[idx].GetPtr(), D3D12_RESOURCE_STATE_COPY_DEST); }
-
 #if (!CAMP_RELEASE)
     // シェーダリロード.
     if (m_RequestReload)
@@ -2421,6 +2389,9 @@ void Renderer::CaptureScreen(ID3D12Resource* pResource, D3D12_RESOURCE_STATES st
     ID3D12CommandList* pCmds[] = {
         m_GfxCmdList.GetCommandList()
     };
+
+    // 基本的に2フレーム前のテクスチャを参照するため, 
+    // 実行前の同期は完了されていることが保証されているため必要ない.
 
     // コマンドを実行.
     pQueue->Execute(_countof(pCmds), pCmds);
