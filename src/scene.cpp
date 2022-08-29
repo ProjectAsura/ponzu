@@ -439,6 +439,8 @@ bool Scene::Init(const char* path, asdx::CommandList& cmdList)
         return false;
     }
 
+    ILOGA("path %s", path);
+
     // ファイル読み込み.
     {
         auto hFile = CreateFileA(
@@ -1179,7 +1181,7 @@ void SceneExporter::SetIBL(const char* path)
 //-----------------------------------------------------------------------------
 //      メッシュをロードします.
 //-----------------------------------------------------------------------------
-bool LoadMesh(const char* path, std::vector<Mesh>& result)
+bool LoadMesh(const char* path, std::vector<Mesh>& result, std::vector<MeshInfo>& infos)
 {
     std::string meshPath;
     if (!asdx::SearchFilePathA(path, meshPath))
@@ -1197,11 +1199,15 @@ bool LoadMesh(const char* path, std::vector<Mesh>& result)
     }
 
     result.resize(model.Meshes.size());
+    infos .resize(model.Meshes.size());
 
     for(size_t i=0; i<model.Meshes.size(); ++i)
     {
         auto& srcMesh = model.Meshes[i];
         auto& dstMesh = result[i];
+
+        infos[i].MeshName     = srcMesh.Name;
+        infos[i].MaterialName = srcMesh.MaterialName;
 
         dstMesh.VertexCount = uint32_t(srcMesh.Vertices.size());
         dstMesh.IndexCount  = uint32_t(srcMesh.Indices .size());

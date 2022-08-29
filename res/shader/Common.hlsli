@@ -406,7 +406,7 @@ RayDesc GeneratePinholeCameraRay(float2 pixel)
     RayDesc ray;
     ray.Origin      = GetPosition(SceneParam.View);
     ray.Direction   = CalcRayDir(pixel, SceneParam.View, SceneParam.Proj);
-    ray.TMin        = 0.01f;
+    ray.TMin        = 0.1f;
     ray.TMax        = FLT_MAX;
 
     return ray;
@@ -420,7 +420,7 @@ bool CastShadowRay(float3 pos, float3 normal, float3 dir, float tmax)
     RayDesc ray;
     ray.Origin      = OffsetRay(pos, normal);
     ray.Direction   = dir;
-    ray.TMin        = 0.01f;
+    ray.TMin        = 0.1f;
     ray.TMax        = tmax;
 
     ShadowPayload payload;

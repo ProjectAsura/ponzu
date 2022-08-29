@@ -237,7 +237,7 @@ namespace r3d {
 //      コンストラクタです.
 //-----------------------------------------------------------------------------
 Renderer::Renderer(const SceneDesc& desc)
-: asdx::Application(L"r3d alpha 0.0", 1920, 1080, nullptr, nullptr, nullptr)
+: asdx::Application(L"r3d alpha 1.0", 1920, 1080, nullptr, nullptr, nullptr)
 , m_SceneDesc(desc)
 {
     m_SwapChainFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -1308,11 +1308,12 @@ bool Renderer::BuildScene()
     Light dirLight = {};
     dirLight.Type       = LIGHT_TYPE_DIRECTIONAL;
     dirLight.Position   = asdx::Vector3(0.0f, -1.0f, 1.0f);
-    dirLight.Intensity  = asdx::Vector3(1.0f, 1.0f, 1.0f);
+    dirLight.Intensity  = asdx::Vector3(1.0f, 1.0f, 1.0f) * 2.0f;
     dirLight.Radius     = 1.0f;
 
+    std::vector<r3d::MeshInfo> infos;
     std::vector<r3d::Mesh> meshes;
-    if (!LoadMesh("../res/model/test.obj", meshes))
+    if (!LoadMesh("../res/model/rtcamp_2022_02.obj", meshes, infos))
     {
         ELOGA("Error : LoadMesh() Failed.");
         return false;
@@ -1329,27 +1330,38 @@ bool Renderer::BuildScene()
     }
 
     if (instances.size() >= 3)
-    { instances[2].MaterialId = 2; } // pole
+    { instances[2].MaterialId = 1; } // pole
 
-    if (instances.size() >= 4)
-    { instances[3].MaterialId = 1; } // wave
+    if (instances.size() >= 11)
+    { instances[10].MaterialId = 2; } // wave
 
-    if (instances.size() >= 4)
+    if (instances.size() >= 2)
     { instances[1].MaterialId = 0; } // bridge
 
-    if (instances.size() >= 4)
-    { instances[0].MaterialId = 2; } // bottom.
+    if (instances.size() >= 1)
+    { instances[0].MaterialId = 3; } // bottom.
 
+    instances[3].MaterialId = 4;
+    instances[4].MaterialId = 5;
+    instances[5].MaterialId = 6;
+    instances[6].MaterialId = 7;
+    instances[7].MaterialId = 8;
+    instances[8].MaterialId = 9;
+    instances[9].MaterialId = 10;
+
+    // mat0
     Material planks = Material::Default();
     planks.BaseColor0 = 0;
     planks.Normal0    = 1;
     planks.ORM0       = 2; 
 
+    // mat1
     Material poles = Material::Default();
     poles.BaseColor0 = 3;
     poles.Normal0    = 4;
     poles.ORM0       = 5;
 
+    // mat2
     Material wave = Material::Default();
     wave.BaseColor0 = INVALID_MATERIAL_MAP;
     wave.Normal0    = 9;
@@ -1364,6 +1376,7 @@ bool Renderer::BuildScene()
     wave.UvScroll1  = asdx::Vector2(-0.01f, 0.01f);
     wave.LayerCount = 2;
 
+    // mat3
     Material ground = Material::Default();
     ground.BaseColor0 = 6;
     ground.Normal0    = 7;
@@ -1371,10 +1384,52 @@ bool Renderer::BuildScene()
     ground.UvScale0   = asdx::Vector2(500.0f, 500.0f);
     //ground.UvScroll  = asdx::Vector2(0.1f, 0.0f);
 
-    instances[1].MaterialId = 0;
-    instances[2].MaterialId = 1;
-    instances[3].MaterialId = 2;
-    instances[0].MaterialId = 3;
+    // mat4
+    Material aft = Material::Default();
+    aft.BaseColor0 = 11;
+    aft.Normal0 = 12;
+    aft.ORM0 = 13;
+
+    // mat5
+    Material deck = Material::Default();
+    deck.BaseColor0 = 14;
+    deck.Normal0 = 15;
+    deck.ORM0 = 16;
+
+    // mat6
+    Material details = Material::Default();
+    details.BaseColor0 = 17;
+    details.Normal0 = 18;
+    details.ORM0 = 19;
+
+    // mat7
+    Material hull = Material::Default();
+    hull.BaseColor0 = 20;
+    hull.Normal0 = 21;
+    hull.ORM0 = 22;
+
+    // mat8
+    Material interior = Material::Default();
+    interior.BaseColor0 = 23;
+    interior.Normal0 = 24;
+    interior.ORM0 = 25;
+
+    // mat9
+    Material rigging = Material::Default();
+    rigging.BaseColor0 = 26;
+    rigging.Normal0 = 27;
+    rigging.ORM0 = 28;
+
+    // mat10
+    Material sails = Material::Default();
+    sails.BaseColor0 = 29;
+    //sails.Normal0 = 30;
+    sails.ORM0 = 31;
+
+    //instances[1].MaterialId = 0;
+    //instances[2].MaterialId = 1;
+    //instances[3].MaterialId = 2;
+    //instances[0].MaterialId = 3;
 
 
     SceneExporter exporter;
@@ -1390,11 +1445,39 @@ bool Renderer::BuildScene()
     exporter.AddTexture("../res/texture/coral_mud_01_rough_2k.dds"); // 8
     exporter.AddTexture("../res/texture/wave_normal.dds"); // 9
     exporter.AddTexture("../res/texture/wave_normal1.dds"); // 10
+    exporter.AddTexture("../res/texture/ship_pinnace_aft_diff_1k.dds"); // 11
+    exporter.AddTexture("../res/texture/ship_pinnace_aft_nor_gl_1k.dds"); // 12
+    exporter.AddTexture("../res/texture/ship_pinnace_aft_arm_1k.dds"); // 13
+    exporter.AddTexture("../res/texture/ship_pinnace_deck_diff_1k.dds"); // 14
+    exporter.AddTexture("../res/texture/ship_pinnace_deck_nor_gl_1k.dds"); // 15
+    exporter.AddTexture("../res/texture/ship_pinnace_deck_arm_1k.dds"); // 16
+    exporter.AddTexture("../res/texture/ship_pinnace_details_diff_1k.dds"); // 17
+    exporter.AddTexture("../res/texture/ship_pinnace_details_nor_gl_1k.dds"); // 18
+    exporter.AddTexture("../res/texture/ship_pinnace_details_arm_1k.dds"); // 19
+    exporter.AddTexture("../res/texture/ship_pinnace_hull_diff_1k.dds"); // 20
+    exporter.AddTexture("../res/texture/ship_pinnace_hull_nor_gl_1k.dds"); // 21
+    exporter.AddTexture("../res/texture/ship_pinnace_hull_arm_1k.dds"); // 22
+    exporter.AddTexture("../res/texture/ship_pinnace_interior_diff_1k.dds"); // 23
+    exporter.AddTexture("../res/texture/ship_pinnace_interior_nor_gl_1k.dds"); // 24
+    exporter.AddTexture("../res/texture/ship_pinnace_interior_arm_1k.dds"); // 25
+    exporter.AddTexture("../res/texture/ship_pinnace_rigging_diff_1k.dds"); // 26
+    exporter.AddTexture("../res/texture/ship_pinnace_rigging_nor_gl_1k.dds"); // 27
+    exporter.AddTexture("../res/texture/ship_pinnace_rigging_arm_1k.dds"); // 28
+    exporter.AddTexture("../res/texture/ship_pinnace_sails_diff_1k.dds"); // 29
+    exporter.AddTexture("../res/texture/ship_pinnace_sails_nor_gl_1k.dds"); // 30
+    exporter.AddTexture("../res/texture/ship_pinnace_sails_orm_1k.dds"); // 31
     exporter.AddMeshes(meshes);
-    exporter.AddMaterial(planks);
-    exporter.AddMaterial(poles);
-    exporter.AddMaterial(wave);
-    exporter.AddMaterial(ground);
+    exporter.AddMaterial(planks);   // 0
+    exporter.AddMaterial(poles);    // 1
+    exporter.AddMaterial(wave);     // 2
+    exporter.AddMaterial(ground);   // 3
+    exporter.AddMaterial(aft);      // 4
+    exporter.AddMaterial(deck);     // 5
+    exporter.AddMaterial(details);  // 6
+    exporter.AddMaterial(hull);     // 7
+    exporter.AddMaterial(interior); // 8
+    exporter.AddMaterial(rigging);  // 9
+    exporter.AddMaterial(sails);    // 10
     //exporter.AddMaterial(dummy0);
     //exporter.AddMaterial(dummy1);
     //exporter.AddMaterial(dummy2);
@@ -1600,11 +1683,20 @@ bool Renderer::BuildScene()
 #else
     // シーン構築.
     {
-        if (!m_Scene.Init(m_SceneDesc.Path, m_GfxCmdList))
+        std::string path;
+        if (!asdx::SearchFilePathA(m_SceneDesc.Path, path))
+        {
+            ELOGA("Error : File Not Found. path = %s", path);
+            return false;
+        }
+
+        if (!m_Scene.Init(path.c_str(), m_GfxCmdList))
         {
             ELOGA("Error : Scene::Init() Failed.");
             return false;
         }
+
+        ILOGA("Scene Binary Loaded.");
     }
 #endif
 
@@ -1775,6 +1867,38 @@ void Renderer::ChangeFrame(uint32_t index)
 
     //m_Camera.UpdateByEvent(camEvent);
 
+    if (m_MyFrameCount >= 200 && m_MyFrameCount < 400)
+    {
+        asdx::Camera::Param param;
+        param.Position = asdx::Vector3(-8698.803711, 166.165710, 13402.062500);
+        param.Target   = asdx::Vector3(-6625.559082, 825.442749, 11306.008789);
+        param.Upward   = asdx::Vector3(-0.153466, 0.975897, 0.155155);
+        param.Rotate   = asdx::Vector2(2.361665, 0.220002);
+        param.PanTilt  = asdx::Vector2(2.361665, 0.220002);
+        param.Twist    = 0.000000;
+        param.MinDist  = 0.100000;
+        param.MaxDist  = 10000.000000;
+
+        m_Camera.SetParam(param);
+        m_Camera.Update();
+    }
+    else if (m_MyFrameCount >= 400)
+    {
+        asdx::Camera::Param param;
+        param.Position = asdx::Vector3(-6236.219238, 643.296875, 12190.804688);
+        param.Target   = asdx::Vector3(-6761.750977, 363.141693, 11173.848633);
+        param.Upward   = asdx::Vector3(-0.109136, 0.971333, -0.211189);
+        param.Rotate   = asdx::Vector2(3.618566, -0.240019);
+        param.PanTilt  = asdx::Vector2(3.618566, -0.240019);
+        param.Twist    = 0.000000;
+        param.MinDist  = 0.100000;
+        param.MaxDist  = 10000.000000;
+
+        m_Camera.SetParam(param);
+        m_Camera.Update();
+    }
+
+
     m_CurrView = m_Camera.GetView();
     m_CurrProj = asdx::Matrix::CreatePerspectiveFieldOfView(
         asdx::ToRadian(37.5f),
@@ -1783,8 +1907,13 @@ void Renderer::ChangeFrame(uint32_t index)
         10000.0f);
     m_CameraZAxis = m_Camera.GetAxisZ();
 
-    m_AnimationTime += 1.0f / 30.0f;
-    m_ForceChanged = true;
+    if (m_MyFrameCount < 400)
+    {
+        m_AnimationTime += 1.0f / 30.0f;
+        m_ForceChanged = true;
+    }
+
+    m_MyFrameCount++;
 #else
     m_CurrView = m_CameraController.GetView();
     m_CurrProj = asdx::Matrix::CreatePerspectiveFieldOfView(
@@ -1794,7 +1923,10 @@ void Renderer::ChangeFrame(uint32_t index)
         m_CameraController.GetFarClip());
     m_CameraZAxis = m_CameraController.GetAxisZ();
 
-    m_AnimationTime = float(m_Timer.GetRelativeSec());
+    if (!m_ForceAccumulationOff)
+    {
+        m_AnimationTime = float(m_Timer.GetRelativeSec());
+    }
 #endif
 
     m_CurrInvView = asdx::Matrix::Invert(m_CurrView);
@@ -1827,8 +1959,6 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         if (m_RequestReload)
         { changed = true; }
 
-        if (m_ForceAccumulationOff)
-        { changed = true; }
     #endif
 
     #if CAMP_RELEASE
@@ -1859,7 +1989,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         param.MaxBounce             = MAX_RECURSION_DEPTH;
         param.MinBounce             = 3;
         param.FrameIndex            = GetFrameCount();
-        param.SkyIntensity          = 1.0f;
+        param.SkyIntensity          = 5.0f;
         param.EnableAccumulation    = enableAccumulation;
         param.AccumulatedFrames     = m_AccumulatedFrames;
         param.ExposureAdjustment    = 1.0f;

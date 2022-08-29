@@ -26,10 +26,10 @@
 
 //------------------------------------------------
 // ここを書き換えて，HotReloadする.
-#define DEBUG_DEPTH_INDEX   SceneParam.MaxBounce
-//#define DEBUG_DEPTH_INDEX   1
-#define DEBUG_OUT_FLAG      OUT_DEFAULT
-//#define DEBUG_OUT_FLAG      OUT_RAY_DIR
+//#define DEBUG_DEPTH_INDEX   SceneParam.MaxBounce
+#define DEBUG_DEPTH_INDEX   1
+//#define DEBUG_OUT_FLAG      OUT_DEFAULT
+#define DEBUG_OUT_FLAG      OUT_NORMAL
 //------------------------------------------------
 #endif
 

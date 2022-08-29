@@ -192,6 +192,7 @@ private:
 
     bool                m_EndRequest = false;
     bool                m_ForceChanged = false;
+    uint64_t            m_MyFrameCount = 0;
 
 #if (!CAMP_RELEASE)
     //+++++++++++++++++++

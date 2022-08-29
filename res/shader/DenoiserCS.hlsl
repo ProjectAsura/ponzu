@@ -72,7 +72,6 @@ float4 BilateralFilter(float2 uv, float2 offset, float sqrtVarL)
     float  d0 = InputDepth .SampleLevel(PointClamp, uv, 0.0f);
     float3 n0 = InputNormal.SampleLevel(PointClamp, uv, 0.0f) * 2.0f - 1.0f;
     n0 = normalize(n0);
-    float l0 = LuminanceBT709(c0.xyz);
 
     float4 totalColor  = c0;
     float  totalWeight = 1.0f;
@@ -92,12 +91,11 @@ float4 BilateralFilter(float2 uv, float2 offset, float sqrtVarL)
         float  d = InputDepth .SampleLevel(PointClamp, st, 0.0f);
         float3 n = InputNormal.SampleLevel(PointClamp, st, 0.0f) * 2.0f - 1.0f;
         n = normalize(n);
-        float  l = LuminanceBT709(c.xyz);
 
         // Edge-Stopping Function.
         float wn = pow(max(0.0f, dot(n0, n)), sn);
         float wz = exp(-abs(d0 - d) / (sz + eps));
-        float wl = exp(-abs(l0 - l) / (sl * sqrtVarL + eps));
+        float wl = exp(-abs(c0.a - c.a) / (sl * sqrtVarL + eps));
 
         float w = wn * wz * wl;
 
@@ -113,12 +111,11 @@ float4 BilateralFilter(float2 uv, float2 offset, float sqrtVarL)
         float  d = InputDepth .SampleLevel(LinearClamp, st, 0.0f);
         float3 n = InputNormal.SampleLevel(LinearClamp, st, 0.0f) * 2.0f - 1.0f;
         n = normalize(n);
-        float  l = LuminanceBT709(c.xyz);
 
         // Edge-Stopping Function.
         float wn = pow(max(0.0f, dot(n0, n)), sn);
         float wz = exp(-abs(d0 - d) / (sz + eps));
-        float wl = exp(-abs(l0 - l) / (sl * sqrtVarL + eps));
+        float wl = exp(-abs(c0.a - c.a) / (sl * sqrtVarL + eps));
 
         float w = wn * wz * wl;
 
@@ -136,12 +133,11 @@ float4 BilateralFilter(float2 uv, float2 offset, float sqrtVarL)
         float  d = InputDepth .SampleLevel(PointClamp, st, 0.0f);
         float3 n = InputNormal.SampleLevel(PointClamp, st, 0.0f) * 2.0f - 1.0f;
         n = normalize(n);
-        float  l = LuminanceBT709(c.xyz);
 
         // Edge-Stopping Function.
         float wn = pow(max(0.0f, dot(n0, n)), sn);
         float wz = exp(-abs(d0 - d) / (sz + eps));
-        float wl = exp(-abs(l0 - l) / (sl * sqrtVarL + eps));
+        float wl = exp(-abs(c0.a - c.a) / (sl * sqrtVarL + eps));
 
         float w = wn * wz * wl;
 
@@ -157,12 +153,11 @@ float4 BilateralFilter(float2 uv, float2 offset, float sqrtVarL)
         float  d = InputDepth .SampleLevel(LinearClamp, st, 0.0f);
         float3 n = InputNormal.SampleLevel(LinearClamp, st, 0.0f) * 2.0f - 1.0f;
         n = normalize(n);
-        float  l = LuminanceBT709(c.xyz);
 
         // Edge-Stopping Function.
         float wn = pow(max(0.0f, dot(n0, n)), sn);
         float wz = exp(-abs(d0 - d) / (sz + eps));
-        float wl = exp(-abs(l0 - l) / (sl * sqrtVarL + eps));
+        float wl = exp(-abs(c0.a - c.a) / (sl * sqrtVarL + eps));
 
         float w = wn * wz * wl;
 
@@ -171,7 +166,7 @@ float4 BilateralFilter(float2 uv, float2 offset, float sqrtVarL)
     }
 
     output.rgb = saturate(totalColor.rgb / totalWeight);
-    output.a   = 1.0f;
+    output.a   = c0.a;
 
     return output;
 }
@@ -196,6 +191,10 @@ void main
     var = sqrt(var);
 
     float4 result = BilateralFilter(uv, Offset, var);
+
+    // fpngがアルファ1.0で出力しないとバグるためデノイズ結果は1.0で出力.
+    if (Offset.y > 0.0f)
+    { result.a = 1.0f; }
 
     Output[dispatchId.xy] = result;
 }

@@ -48,5 +48,5 @@ void main(uint3 dispatchId : SV_DispatchThreadID)
     output = ACESFilm(output);
     output = Linear_To_SRGB(output);
 
-    OutputBuffer[dispatchId.xy] = float4(output, 1.0f);
+    OutputBuffer[dispatchId.xy] = float4(output, LuminanceBT709(output));
 }

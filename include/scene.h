@@ -222,6 +222,15 @@ private:
     std::string                 m_IBL;
 };
 
+///////////////////////////////////////////////////////////////////////////////
+// MeshInfo structure
+///////////////////////////////////////////////////////////////////////////////
+struct MeshInfo
+{
+    std::string     MeshName;
+    std::string     MaterialName;
+};
+
 //-----------------------------------------------------------------------------
 //! @brief      メッシュをロードします.
 //! 
@@ -230,7 +239,7 @@ private:
 //! @retval true    ロードに成功.
 //! @retval false   ロードに失敗.
 //-----------------------------------------------------------------------------
-bool LoadMesh(const char* path, std::vector<Mesh>& result);
+bool LoadMesh(const char* path, std::vector<Mesh>& result, std::vector<MeshInfo>& infos);
 #endif
 
 } // namespace r3d
