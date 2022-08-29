@@ -1305,37 +1305,10 @@ bool Renderer::BuildScene()
 #if !(CAMP_RELEASE)
     auto pDevice = asdx::GetD3D12Device();
 
-    Material dummy0 = {};
-    dummy0.Normal    = INVALID_MATERIAL_MAP;
-    dummy0.BaseColor = INVALID_MATERIAL_MAP;
-    dummy0.ORM       = INVALID_MATERIAL_MAP;
-    dummy0.Emissive  = INVALID_MATERIAL_MAP;
-    //dummy0.IntIor    = 1.42f;
-    //dummy0.ExtIor    = 1.0f;
-    dummy0.UvScale   = asdx::Vector2(1.0f, 1.0f);
-
-    Material dummy1 = {};
-    dummy1.Normal    = INVALID_MATERIAL_MAP;
-    dummy1.BaseColor = INVALID_MATERIAL_MAP;
-    dummy1.ORM       = INVALID_MATERIAL_MAP;
-    dummy1.Emissive  = INVALID_MATERIAL_MAP;
-    dummy1.IntIor    = 1.4f;
-    dummy1.ExtIor    = 1.0f;
-    dummy1.UvScale   = asdx::Vector2(50.0f, 50.0f);
-
-    Material dummy2 = {};
-    dummy2.Normal    = INVALID_MATERIAL_MAP;
-    dummy2.BaseColor = 0;
-    dummy2.ORM       = INVALID_MATERIAL_MAP;
-    dummy2.Emissive  = INVALID_MATERIAL_MAP;
-    //dummy2.IntIor    = 1.4f;
-    //dummy2.ExtIor    = 1.0f;
-    dummy2.UvScale   = asdx::Vector2(1000.0f, 1000.0f);
-
     Light dirLight = {};
     dirLight.Type       = LIGHT_TYPE_DIRECTIONAL;
     dirLight.Position   = asdx::Vector3(0.0f, -1.0f, 1.0f);
-    dirLight.Intensity  = asdx::Vector3(1.0f, 1.0f, 1.0f) * 2.0f;
+    dirLight.Intensity  = asdx::Vector3(1.0f, 1.0f, 1.0f);
     dirLight.Radius     = 1.0f;
 
     std::vector<r3d::Mesh> meshes;
@@ -1367,36 +1340,35 @@ bool Renderer::BuildScene()
     if (instances.size() >= 4)
     { instances[0].MaterialId = 2; } // bottom.
 
-    Material planks = {};
-    planks.BaseColor = 0;
-    planks.Normal    = 1;
-    planks.ORM       = 2; 
-    planks.Emissive  = INVALID_MATERIAL_MAP;
-    planks.UvScale   = asdx::Vector2(1.0f, 1.0f);
+    Material planks = Material::Default();
+    planks.BaseColor0 = 0;
+    planks.Normal0    = 1;
+    planks.ORM0       = 2; 
 
-    Material poles = {};
-    poles.BaseColor = 3;
-    poles.Normal    = 4;
-    poles.ORM       = 5;
-    poles.Emissive  = INVALID_MATERIAL_MAP;
-    poles.UvScale   = asdx::Vector2(1.0f, 1.0f);
+    Material poles = Material::Default();
+    poles.BaseColor0 = 3;
+    poles.Normal0    = 4;
+    poles.ORM0       = 5;
 
-    Material wave = {};
-    wave.BaseColor = INVALID_MATERIAL_MAP;
-    wave.Normal    = 9;
-    wave.ORM       = INVALID_MATERIAL_MAP;
-    wave.Emissive  = INVALID_MATERIAL_MAP;
-    wave.ExtIor    = 1.0f;
-    wave.IntIor    = 1.2f;
-    wave.UvScale   = asdx::Vector2(50.0f, 50.0f);
-    wave.UvScroll  = asdx::Vector2(0.0f, -0.05f);
+    Material wave = Material::Default();
+    wave.BaseColor0 = INVALID_MATERIAL_MAP;
+    wave.Normal0    = 9;
+    wave.ORM0       = INVALID_MATERIAL_MAP;
+    wave.Emissive0  = INVALID_MATERIAL_MAP;
+    wave.ExtIor     = 1.0f;
+    wave.IntIor     = 1.2f;
+    wave.Normal1    = 10;
+    wave.UvScale0   = asdx::Vector2(50.0f, 50.0f);
+    wave.UvScroll0  = asdx::Vector2(0.005f, -0.02f);
+    wave.UvScale1   = asdx::Vector2(50.0f, 50.0f);
+    wave.UvScroll1  = asdx::Vector2(-0.01f, 0.01f);
+    wave.LayerCount = 2;
 
-    Material ground = {};
-    ground.BaseColor = 6;
-    ground.Normal    = 7;
-    ground.ORM       = 8;
-    ground.Emissive  = INVALID_MATERIAL_MAP;
-    ground.UvScale   = asdx::Vector2(500.0f, 500.0f);
+    Material ground = Material::Default();
+    ground.BaseColor0 = 6;
+    ground.Normal0    = 7;
+    ground.ORM0       = 8;
+    ground.UvScale0   = asdx::Vector2(500.0f, 500.0f);
     //ground.UvScroll  = asdx::Vector2(0.1f, 0.0f);
 
     instances[1].MaterialId = 0;
@@ -1417,6 +1389,7 @@ bool Renderer::BuildScene()
     exporter.AddTexture("../res/texture/coral_mud_01_nor_gl_2k.dds"); // 7
     exporter.AddTexture("../res/texture/coral_mud_01_rough_2k.dds"); // 8
     exporter.AddTexture("../res/texture/wave_normal.dds"); // 9
+    exporter.AddTexture("../res/texture/wave_normal1.dds"); // 10
     exporter.AddMeshes(meshes);
     exporter.AddMaterial(planks);
     exporter.AddMaterial(poles);
@@ -1810,7 +1783,7 @@ void Renderer::ChangeFrame(uint32_t index)
         10000.0f);
     m_CameraZAxis = m_Camera.GetAxisZ();
 
-    m_AnimationTime += 1.0f / 60.0f;
+    m_AnimationTime += 1.0f / 30.0f;
     m_ForceChanged = true;
 #else
     m_CurrView = m_CameraController.GetView();
@@ -1886,7 +1859,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         param.MaxBounce             = MAX_RECURSION_DEPTH;
         param.MinBounce             = 3;
         param.FrameIndex            = GetFrameCount();
-        param.SkyIntensity          = 2.0f;
+        param.SkyIntensity          = 1.0f;
         param.EnableAccumulation    = enableAccumulation;
         param.AccumulatedFrames     = m_AccumulatedFrames;
         param.ExposureAdjustment    = 1.0f;

@@ -32,19 +32,63 @@ struct Mesh
     uint32_t*     Indices;
 };
 
+
 ///////////////////////////////////////////////////////////////////////////////
 // Material structure
 ///////////////////////////////////////////////////////////////////////////////
 struct Material
 {
-    uint32_t        BaseColor;  //!< ベースカラー.
-    uint32_t        Normal;     //!< 法線マップ.
-    uint32_t        ORM;        //!< オクルージョン/ラフネス/メタリック.
-    uint32_t        Emissive;   //!< エミッシブ.
+    uint32_t        BaseColor0; //!< ベースカラー0.
+    uint32_t        Normal0;    //!< 法線マップ0.
+    uint32_t        ORM0;       //!< オクルージョン/ラフネス/メタリック 0.
+    uint32_t        Emissive0;  //!< エミッシブ0.
+
+    uint32_t        BaseColor1; //!< ベースカラー1.
+    uint32_t        Normal1;    //!< 法線マップ1.
+    uint32_t        ORM1;       //!< オクルージョン/ラフネス/メタリック 1.
+    uint32_t        Emissive1;  //!< エミッシブ1.
+
+    asdx::Vector2   UvScale0;   //!< UVスケール0.
+    asdx::Vector2   UvScroll0;  //!< UVスクロール0.
+
+    asdx::Vector2   UvScale1;   //!< UVスケール1.
+    asdx::Vector2   UvScroll1;  //!< UVスクロール1.
+
     float           IntIor;     //!< 内部屈折率(屈折処理しない場合は0.0を代入).
     float           ExtIor;     //!< 外部屈折率(屈折処理しない場合は0.0を代入).
-    asdx::Vector2   UvScale;    //!< UVスケール.
-    asdx::Vector2   UvScroll;   //!< UVスクロール.
+    uint32_t        LayerCount; //!< レイヤー数.
+    uint32_t        LayerMask;  //!< レイヤーマスクマップ.
+
+    //-------------------------------------------------------------------------
+    //! @brief      デフォルト値を取得します.
+    //-------------------------------------------------------------------------
+    static Material Default()
+    {
+        Material mat = {};
+        mat.BaseColor0  = INVALID_MATERIAL_MAP;
+        mat.Normal0     = INVALID_MATERIAL_MAP;
+        mat.ORM0        = INVALID_MATERIAL_MAP;
+        mat.Emissive0   = INVALID_MATERIAL_MAP;
+
+        mat.BaseColor1  = INVALID_MATERIAL_MAP;
+        mat.Normal1     = INVALID_MATERIAL_MAP;
+        mat.ORM1        = INVALID_MATERIAL_MAP;
+        mat.Emissive1   = INVALID_MATERIAL_MAP;
+
+        mat.UvScale0    = asdx::Vector2(1.0f, 1.0f);
+        mat.UvScroll0   = asdx::Vector2(0.0f, 0.0f);
+
+        mat.UvScale1    = asdx::Vector2(1.0f, 1.0f);
+        mat.UvScroll1   = asdx::Vector2(0.0f, 0.0f);
+
+        mat.IntIor      = 0.0f;
+        mat.ExtIor      = 0.0f;
+
+        mat.LayerCount  = 1;
+        mat.LayerMask   = INVALID_MATERIAL_MAP;
+
+        return mat;
+    }
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -294,7 +338,7 @@ private:
     asdx::Texture   m_DefaultBaseColor;
     asdx::Texture   m_DefaultNormal;
     asdx::Texture   m_DefaultORM;
-    asdx::Texture   m_DefaultEmissive;
+    asdx::Texture   m_Black;
 
     std::vector<GeometryHandle> m_GeometryHandles;
     std::vector<InstanceHandle> m_InstanceHandles;
@@ -307,6 +351,7 @@ private:
     uint32_t GetNormal      (uint32_t handle);
     uint32_t GetOrm         (uint32_t handle);
     uint32_t GetEmissive    (uint32_t handle);
+    uint32_t GetMask        (uint32_t handle);
 };
 
 } // namespace r3d

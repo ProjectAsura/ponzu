@@ -56,21 +56,23 @@ struct Instance
 ///////////////////////////////////////////////////////////////////////////////
 struct MeshMaterial
 {
-    uint4   Textures;       // x:BaseColorMap, y:NormalMap, z:OrmiMap, w:EmissiveMap.
+    uint4   Textures0;      // x:BaseColorMap, y:NormalMap, z:OrmiMap, w:EmissiveMap.
+    uint4   Textures1;      // x:BaseColorMap, y:NormalMap, z:OrmiMap, w:EmissiveMap
+    float4  UvControl0;     // xy:Scale, zw:Scroll;
+    float4  UvControl1;     // xy:Scale, zw:Scroll;
     float   IntIor;         // Interior Index Of Refraction.
     float   ExtIor;         // Exterior Index Of Refraction.
-    float2  UvScale;        // テクスチャ座標スケール.
-    float2  UvOffset;       // テクスチャ座標オフセット.
+    uint    LayerCount;     // Texture Layer Count.
+    uint    LayerMask;      // Texture Layer Mask Map.
 };
 
-#define MATERIAL_STRIDE (sizeof(MeshMaterial))
 #define INSTANCE_STRIDE (sizeof(Instance))
 
 //-----------------------------------------------------------------------------
 // Resources
 //-----------------------------------------------------------------------------
 ConstantBuffer<ObjectParameter> ObjectParam : register(b1);
-ByteAddressBuffer               Materials   : register(t1);
+StructuredBuffer<MeshMaterial>  Materials   : register(t1);
 ByteAddressBuffer               Instances   : register(t2);
 SamplerState                    LinearWrap  : register(s0);
 
@@ -87,17 +89,30 @@ PSOutput main(const VSOutput input)
 
     uint materialId = Instances.Load(ObjectParam.InstanceId * INSTANCE_STRIDE + 8);
 
-    uint   address = materialId * MATERIAL_STRIDE;
-    uint4  data    = Materials.Load4(address);
-    float4 prop    = asfloat(Materials.Load4(address + 16));
+    MeshMaterial material = Materials[materialId];
 
-    float2 uv = input.TexCoord * prop.zw;
+    float2 uv0 = input.TexCoord * material.UvControl0.xy + material.UvControl0.zw;
 
-    Texture2D<float4> baseColorMap = ResourceDescriptorHeap[data.x];
-    float4 bc = baseColorMap.Sample(LinearWrap, uv);
+    Texture2D<float4> baseColorMap = ResourceDescriptorHeap[material.Textures0.x];
+    float4 bc = baseColorMap.Sample(LinearWrap, uv0);
 
-    Texture2D<float4> normalMap = ResourceDescriptorHeap[data.y];
-    float3 n = normalMap.Sample(LinearWrap, input.TexCoord).xyz * 2.0f - 1.0f;
+    Texture2D<float4> normalMap = ResourceDescriptorHeap[material.Textures0.y];
+    float3 n = normalMap.Sample(LinearWrap, uv0).xyz;
+
+    if (material.LayerCount > 1)
+    {
+        float2 uv1 = input.TexCoord * material.UvControl1.xy + material.UvControl1.zw;
+
+        Texture2D<float4> normalMap1 = ResourceDescriptorHeap[material.Textures1.y];
+        float3 n1 = normalMap1.Sample(LinearWrap, uv1).xyz;
+        n = BlendNormal(n, n1);
+    }
+    else
+    {
+        n = n * 2.0f - 1.0f;
+    }
+
+
     float3 bitangent = normalize(cross(input.Tangent, input.Normal));
     float3 normal = FromTangentSpaceToWorld(n, input.Tangent, bitangent, input.Normal);
 

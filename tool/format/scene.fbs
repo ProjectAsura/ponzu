@@ -7,111 +7,123 @@ namespace r3d;
 
 struct Vector2
 {
-    x:float;
-    y:float;
+    x : float;
+    y : float;
 }
 
 struct Vector3
 {
-    x:float;
-    y:float;
-    z:float;
+    x : float;
+    y : float;
+    z : float;
 }
 
 struct Vector4
 {
-    x:float;
-    y:float;
-    z:float;
-    w:float;
+    x : float;
+    y : float;
+    z : float;
+    w : float;
 }
 
 struct Matrix3x4
 {
-    row0:Vector4;
-    row1:Vector4;
-    row2:Vector4;
+    row0 : Vector4;
+    row1 : Vector4;
+    row2 : Vector4;
 }
 
 struct ResVertex
 {
-    Position:Vector3;
-    Normal:Vector3;
-    Tangent:Vector3;
-    TexCoord:Vector2;
+    Position : Vector3;
+    Normal   : Vector3;
+    Tangent  : Vector3;
+    TexCoord : Vector2;
 }
 
 table SubResource
 {
-    Width:uint;
-    Height:uint;
-    MipIndex:uint;
-    Pitch:uint;
-    SlicePitch:uint;
-    Pixels:[ubyte];
+    Width      : uint;
+    Height     : uint;
+    MipIndex   : uint;
+    Pitch      : uint;
+    SlicePitch : uint;
+    Pixels     : [ubyte];
 }
 
 table ResTexture
 {
-    Dimension:uint;
-    Width:uint;
-    Height:uint;
-    Depth:uint;
-    Format:uint;
-    MipLevels:uint;
-    SurfaceCount:uint;
-    Option:uint;
-    Resources:[SubResource];
+    Dimension    : uint;
+    Width        : uint;
+    Height       : uint;
+    Depth        : uint;
+    Format       : uint;
+    MipLevels    : uint;
+    SurfaceCount : uint;
+    Option       : uint;
+    Resources    : [SubResource];
 }
 
 struct ResMaterial
 {
-    BaseColor:uint;
-    Normal:uint;
-    Orm:uint;
-    Emissive:uint;
-    IntIor:float;
-    ExtIor:float;
-    UvScale:Vector2;
-    UvScroll:Vector2;
+    BaseColor0 : uint;
+    Normal0    : uint;
+    Orm0       : uint;
+    Emissive0  : uint;
+
+    BaseColor1 : uint;
+    Normal1    : uint;
+    Orm1       : uint;
+    Emissive1  : uint;
+
+    UvScale0   : Vector2;
+    UvScroll0  : Vector2;
+
+    UvScale1   : Vector2;
+    UvScroll1  : Vector2;
+
+    IntIor     : float;
+    ExtIor     : float;
+    LayerCount : uint;
+    LayerMask  : uint;
 }
 
 table ResMesh
 {
-    VertexCount:uint;
-    IndexCount:uint;
-    Vertices:[ResVertex];
-    Indices:[uint];
+    VertexCount : uint;
+    IndexCount  : uint;
+    Vertices    : [ResVertex];
+    Indices     : [uint];
 }
 
 struct ResInstance
 {
-    MeshIndex:uint;
-    MaterialIndex:uint;
-    Transform:Matrix3x4;
+    MeshIndex     : uint;
+    MaterialIndex : uint;
+    Transform     : Matrix3x4;
 }
 
 struct ResLight
 {
-    Type:uint;
-    Color:Vector3;
-    Position:Vector3;
-    Radius:float;
+    Type     : uint;
+    Color    : Vector3;
+    Position : Vector3;
+    Radius   : float;
 }
 
 table ResScene
 {
-    MeshCount:uint;
-    InstanceCount:uint;
-    TextureCount:uint;
-    MaterialCount:uint;
-    LightCount:uint;
-    IblTexture:ResTexture;
-    Meshes:[ResMesh];
-    Instances:[ResInstance];
-    Textures:[ResTexture];
-    Materials:[ResMaterial];
-    Lights:[ResLight];
+    MeshCount     : uint;
+    InstanceCount : uint;
+    TextureCount  : uint;
+    MaterialCount : uint;
+    LightCount    : uint;
+    IblTexture    : ResTexture;
+    Meshes        : [ResMesh];
+    Instances     : [ResInstance];
+    Textures      : [ResTexture];
+    Materials     : [ResMaterial];
+    Lights        : [ResLight];
 }
 
 root_type ResScene;

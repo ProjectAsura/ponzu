@@ -44,7 +44,6 @@ struct Payload
 ///////////////////////////////////////////////////////////////////////////////
 struct ShadowPayload
 {
-    //float2 Barycentrics;
     bool   Visible;
 };
 
@@ -64,11 +63,14 @@ struct MeshVertex
 ///////////////////////////////////////////////////////////////////////////////
 struct MeshMaterial
 {
-    uint4   Textures;       // x:BaseColorMap, y:NormalMap, z:OrmiMap, w:EmissiveMap.
+    uint4   Textures0;      // x:BaseColorMap, y:NormalMap, z:OrmiMap, w:EmissiveMap.
+    uint4   Textures1;      // x:BaseColorMap, y:NormalMap, z:OrmiMap, w:EmissiveMap
+    float4  UvControl0;     // xy:Scale, zw:Scroll;
+    float4  UvControl1;     // xy:Scale, zw:Scroll;
     float   IntIor;         // Interior Index Of Refraction.
     float   ExtIor;         // Exterior Index Of Refraction.
-    float2  UvScale;        // UVスケール.
-    float2  UvScroll;       // UVスクロール.
+    uint    LayerCount;     // Texture Layer Count.
+    uint    LayerMask;      // Texture Layer Mask Map.
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -149,7 +151,7 @@ struct Material
 ConstantBuffer<SceneParameter>  SceneParam  : register(b0);
 RayTracingAS                    SceneAS     : register(t0);
 ByteAddressBuffer               Instances   : register(t1);
-ByteAddressBuffer               Materials   : register(t2);
+StructuredBuffer<MeshMaterial>  Materials   : register(t2);
 ByteAddressBuffer               Transforms  : register(t3);
 SamplerState                    LinearWrap  : register(s0);
 
@@ -262,25 +264,36 @@ Material GetMaterial(uint instanceId, float2 uv, float mip)
 {
     uint  materialId = Instances.Load(instanceId * INSTANCE_STRIDE + 8);
 
-    uint  address = materialId * MATERIAL_STRIDE;
-    uint4 data    = Materials.Load4(address);
-    float4 data2  = asfloat(Materials.Load4(address + 16));
-    float2 data3  = asfloat(Materials.Load2(address + 32));
+    MeshMaterial mat = Materials[materialId];
 
-    float2 st = uv * data2.zw + data3 * SceneParam.AnimationTime;
+    float2 st0 = uv * mat.UvControl0.xy + mat.UvControl0.zw * SceneParam.AnimationTime;
 
-    Texture2D<float4> baseColorMap = ResourceDescriptorHeap[data.x];
-    float4 bc = baseColorMap.SampleLevel(LinearWrap, st, mip);
+    Texture2D<float4> baseColorMap0 = ResourceDescriptorHeap[mat.Textures0.x];
+    float4 bc = baseColorMap0.SampleLevel(LinearWrap, st0, mip);
 
-    Texture2D<float4> normalMap = ResourceDescriptorHeap[data.y];
-    float3 n = normalMap.SampleLevel(LinearWrap, st, mip).xyz * 2.0f - 1.0f;
-    n = normalize(n);
+    Texture2D<float4> normalMap0 = ResourceDescriptorHeap[mat.Textures0.y];
+    float3 n = normalMap0.SampleLevel(LinearWrap, st0, mip).xyz;
 
-    Texture2D<float4> ormMap = ResourceDescriptorHeap[data.z];
-    float3 orm = ormMap.SampleLevel(LinearWrap, st, mip).rgb;
+    // レイトレ合宿用処理.
+    if (mat.LayerCount > 1)
+    {
+        float2 st1 = uv * mat.UvControl1.xy + mat.UvControl1.zw * SceneParam.AnimationTime;
 
-    Texture2D<float4> emissiveMap = ResourceDescriptorHeap[data.w];
-    float3 e = emissiveMap.SampleLevel(LinearWrap, st, mip).rgb;
+        Texture2D<float4> normalMap1 = ResourceDescriptorHeap[mat.Textures1.y];
+        float3 n1 = normalMap1.SampleLevel(LinearWrap, st1, mip).xyz;
+
+        n = BlendNormal(n, n1);
+    }
+    else
+    {
+        n = normalize(n * 2.0f - 1.0f);
+    }
+
+    Texture2D<float4> ormMap0 = ResourceDescriptorHeap[mat.Textures0.z];
+    float3 orm = ormMap0.SampleLevel(LinearWrap, st0, mip).rgb;
+
+    Texture2D<float4> emissiveMap0 = ResourceDescriptorHeap[mat.Textures0.w];
+    float3 e = emissiveMap0.SampleLevel(LinearWrap, st0, mip).rgb;
 
     Material param;
     param.BaseColor = bc;
@@ -288,8 +301,8 @@ Material GetMaterial(uint instanceId, float2 uv, float mip)
     param.Roughness = orm.y;
     param.Metalness = orm.z;
     param.Emissive  = e;
-    param.IntIor    = data2.x;
-    param.ExtIor    = data2.y;
+    param.IntIor    = mat.IntIor;
+    param.ExtIor    = mat.ExtIor;
 
     return param;
 }
@@ -393,7 +406,7 @@ RayDesc GeneratePinholeCameraRay(float2 pixel)
     RayDesc ray;
     ray.Origin      = GetPosition(SceneParam.View);
     ray.Direction   = CalcRayDir(pixel, SceneParam.View, SceneParam.Proj);
-    ray.TMin        = 0.1f;
+    ray.TMin        = 0.01f;
     ray.TMax        = FLT_MAX;
 
     return ray;
@@ -407,7 +420,7 @@ bool CastShadowRay(float3 pos, float3 normal, float3 dir, float tmax)
     RayDesc ray;
     ray.Origin      = OffsetRay(pos, normal);
     ray.Direction   = dir;
-    ray.TMin        = 0.1f;
+    ray.TMin        = 0.01f;
     ray.TMax        = tmax;
 
     ShadowPayload payload;

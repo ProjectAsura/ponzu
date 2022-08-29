@@ -189,47 +189,95 @@ FLATBUFFERS_STRUCT_END(ResVertex, 44);
 
 FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(4) ResMaterial FLATBUFFERS_FINAL_CLASS {
  private:
-  uint32_t BaseColor_;
-  uint32_t Normal_;
-  uint32_t Orm_;
-  uint32_t Emissive_;
+  uint32_t BaseColor0_;
+  uint32_t Normal0_;
+  uint32_t Orm0_;
+  uint32_t Emissive0_;
+  uint32_t BaseColor1_;
+  uint32_t Normal1_;
+  uint32_t Orm1_;
+  uint32_t Emissive1_;
+  r3d::Vector2 UvScale0_;
+  r3d::Vector2 UvScroll0_;
+  r3d::Vector2 UvScale1_;
+  r3d::Vector2 UvScroll1_;
   float IntIor_;
   float ExtIor_;
-  r3d::Vector2 UvScale_;
-  r3d::Vector2 UvScroll_;
+  uint32_t LayerCount_;
+  uint32_t LayerMask_;
 
  public:
   ResMaterial()
-      : BaseColor_(0),
-        Normal_(0),
-        Orm_(0),
-        Emissive_(0),
+      : BaseColor0_(0),
+        Normal0_(0),
+        Orm0_(0),
+        Emissive0_(0),
+        BaseColor1_(0),
+        Normal1_(0),
+        Orm1_(0),
+        Emissive1_(0),
+        UvScale0_(),
+        UvScroll0_(),
+        UvScale1_(),
+        UvScroll1_(),
         IntIor_(0),
         ExtIor_(0),
-        UvScale_(),
-        UvScroll_() {
+        LayerCount_(0),
+        LayerMask_(0) {
   }
-  ResMaterial(uint32_t _BaseColor, uint32_t _Normal, uint32_t _Orm, uint32_t _Emissive, float _IntIor, float _ExtIor, const r3d::Vector2 &_UvScale, const r3d::Vector2 &_UvScroll)
-      : BaseColor_(flatbuffers::EndianScalar(_BaseColor)),
-        Normal_(flatbuffers::EndianScalar(_Normal)),
-        Orm_(flatbuffers::EndianScalar(_Orm)),
-        Emissive_(flatbuffers::EndianScalar(_Emissive)),
+  ResMaterial(uint32_t _BaseColor0, uint32_t _Normal0, uint32_t _Orm0, uint32_t _Emissive0, uint32_t _BaseColor1, uint32_t _Normal1, uint32_t _Orm1, uint32_t _Emissive1, const r3d::Vector2 &_UvScale0, const r3d::Vector2 &_UvScroll0, const r3d::Vector2 &_UvScale1, const r3d::Vector2 &_UvScroll1, float _IntIor, float _ExtIor, uint32_t _LayerCount, uint32_t _LayerMask)
+      : BaseColor0_(flatbuffers::EndianScalar(_BaseColor0)),
+        Normal0_(flatbuffers::EndianScalar(_Normal0)),
+        Orm0_(flatbuffers::EndianScalar(_Orm0)),
+        Emissive0_(flatbuffers::EndianScalar(_Emissive0)),
+        BaseColor1_(flatbuffers::EndianScalar(_BaseColor1)),
+        Normal1_(flatbuffers::EndianScalar(_Normal1)),
+        Orm1_(flatbuffers::EndianScalar(_Orm1)),
+        Emissive1_(flatbuffers::EndianScalar(_Emissive1)),
+        UvScale0_(_UvScale0),
+        UvScroll0_(_UvScroll0),
+        UvScale1_(_UvScale1),
+        UvScroll1_(_UvScroll1),
         IntIor_(flatbuffers::EndianScalar(_IntIor)),
         ExtIor_(flatbuffers::EndianScalar(_ExtIor)),
-        UvScale_(_UvScale),
-        UvScroll_(_UvScroll) {
+        LayerCount_(flatbuffers::EndianScalar(_LayerCount)),
+        LayerMask_(flatbuffers::EndianScalar(_LayerMask)) {
   }
-  uint32_t BaseColor() const {
-    return flatbuffers::EndianScalar(BaseColor_);
+  uint32_t BaseColor0() const {
+    return flatbuffers::EndianScalar(BaseColor0_);
   }
-  uint32_t Normal() const {
-    return flatbuffers::EndianScalar(Normal_);
+  uint32_t Normal0() const {
+    return flatbuffers::EndianScalar(Normal0_);
   }
-  uint32_t Orm() const {
-    return flatbuffers::EndianScalar(Orm_);
+  uint32_t Orm0() const {
+    return flatbuffers::EndianScalar(Orm0_);
   }
-  uint32_t Emissive() const {
-    return flatbuffers::EndianScalar(Emissive_);
+  uint32_t Emissive0() const {
+    return flatbuffers::EndianScalar(Emissive0_);
+  }
+  uint32_t BaseColor1() const {
+    return flatbuffers::EndianScalar(BaseColor1_);
+  }
+  uint32_t Normal1() const {
+    return flatbuffers::EndianScalar(Normal1_);
+  }
+  uint32_t Orm1() const {
+    return flatbuffers::EndianScalar(Orm1_);
+  }
+  uint32_t Emissive1() const {
+    return flatbuffers::EndianScalar(Emissive1_);
+  }
+  const r3d::Vector2 &UvScale0() const {
+    return UvScale0_;
+  }
+  const r3d::Vector2 &UvScroll0() const {
+    return UvScroll0_;
+  }
+  const r3d::Vector2 &UvScale1() const {
+    return UvScale1_;
+  }
+  const r3d::Vector2 &UvScroll1() const {
+    return UvScroll1_;
   }
   float IntIor() const {
     return flatbuffers::EndianScalar(IntIor_);
@@ -237,14 +285,14 @@ FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(4) ResMaterial FLATBUFFERS_FINAL_CLASS {
   float ExtIor() const {
     return flatbuffers::EndianScalar(ExtIor_);
   }
-  const r3d::Vector2 &UvScale() const {
-    return UvScale_;
+  uint32_t LayerCount() const {
+    return flatbuffers::EndianScalar(LayerCount_);
   }
-  const r3d::Vector2 &UvScroll() const {
-    return UvScroll_;
+  uint32_t LayerMask() const {
+    return flatbuffers::EndianScalar(LayerMask_);
   }
 };
-FLATBUFFERS_STRUCT_END(ResMaterial, 40);
+FLATBUFFERS_STRUCT_END(ResMaterial, 80);
 
 FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(4) ResInstance FLATBUFFERS_FINAL_CLASS {
  private:

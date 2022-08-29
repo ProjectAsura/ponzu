@@ -513,14 +513,27 @@ bool Scene::Init(const char* path, asdx::CommandList& cmdList)
             assert(srcMaterial != nullptr);
 
             r3d::Material material = {};
-            material.BaseColor = GetTextureHandle(srcMaterial->BaseColor());
-            material.Normal    = GetTextureHandle(srcMaterial->Normal());
-            material.ORM       = GetTextureHandle(srcMaterial->Orm());
-            material.Emissive  = GetTextureHandle(srcMaterial->Emissive());
-            material.ExtIor    = srcMaterial->ExtIor();
-            material.IntIor    = srcMaterial->IntIor();
-            material.UvScale   = asdx::Vector2(srcMaterial->UvScale().x(), srcMaterial->UvScale().y());
-            material.UvScroll  = asdx::Vector2(srcMaterial->UvScroll().x(), srcMaterial->UvScroll().y());
+            material.BaseColor0 = GetTextureHandle(srcMaterial->BaseColor0());
+            material.Normal0    = GetTextureHandle(srcMaterial->Normal0());
+            material.ORM0       = GetTextureHandle(srcMaterial->Orm0());
+            material.Emissive0  = GetTextureHandle(srcMaterial->Emissive0());
+
+            material.BaseColor1 = GetTextureHandle(srcMaterial->BaseColor1());
+            material.Normal1    = GetTextureHandle(srcMaterial->Normal1());
+            material.ORM1       = GetTextureHandle(srcMaterial->Orm1());
+            material.Emissive1  = GetTextureHandle(srcMaterial->Emissive1());
+
+            material.UvScale0   = asdx::Vector2(srcMaterial->UvScale0().x(), srcMaterial->UvScale0().y());
+            material.UvScroll0  = asdx::Vector2(srcMaterial->UvScroll0().x(), srcMaterial->UvScroll0().y());
+
+            material.UvScale1   = asdx::Vector2(srcMaterial->UvScale1().x(), srcMaterial->UvScale1().y());
+            material.UvScroll1  = asdx::Vector2(srcMaterial->UvScroll1().x(), srcMaterial->UvScroll1().y());
+
+            material.ExtIor     = srcMaterial->ExtIor();
+            material.IntIor     = srcMaterial->IntIor();
+
+            material.LayerCount = srcMaterial->LayerCount();
+            material.LayerMask  = srcMaterial->LayerMask();
 
             m_ModelMgr.AddMaterials(&material, 1);
         }
@@ -985,14 +998,28 @@ bool SceneExporter::Export(const char* path)
         for(size_t i=0; i<m_Materials.size(); ++i)
         {
             r3d::ResMaterial item(
-                m_Materials[i].BaseColor,
-                m_Materials[i].Normal,
-                m_Materials[i].ORM,
-                m_Materials[i].Emissive,
+                m_Materials[i].BaseColor0,
+                m_Materials[i].Normal0,
+                m_Materials[i].ORM0,
+                m_Materials[i].Emissive0,
+
+                m_Materials[i].BaseColor1,
+                m_Materials[i].Normal1,
+                m_Materials[i].ORM1,
+                m_Materials[i].Emissive1,
+
+                r3d::Vector2(m_Materials[i].UvScale0.x, m_Materials[i].UvScale0.y),
+                r3d::Vector2(m_Materials[i].UvScroll0.x, m_Materials[i].UvScroll0.y),
+
+                r3d::Vector2(m_Materials[i].UvScale1.x, m_Materials[i].UvScale1.y),
+                r3d::Vector2(m_Materials[i].UvScroll1.x, m_Materials[i].UvScroll1.y),
+
                 m_Materials[i].IntIor,
                 m_Materials[i].ExtIor,
-                r3d::Vector2(m_Materials[i].UvScale.x, m_Materials[i].UvScale.y),
-                r3d::Vector2(m_Materials[i].UvScroll.x, m_Materials[i].UvScroll.y));
+
+                m_Materials[i].LayerCount,
+                m_Materials[i].LayerMask
+            );
 
             dstMaterials.push_back(item);
         }

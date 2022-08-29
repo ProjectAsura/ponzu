@@ -211,7 +211,7 @@ bool ModelMgr::Init
             }
         }
 
-        if (!m_DefaultEmissive.Init(cmdList, res))
+        if (!m_Black.Init(cmdList, res))
         {
             ELOGA("Error : Default Emissive Init Failed.");
             res.Dispose();
@@ -282,7 +282,7 @@ bool ModelMgr::Init
         return false;
     }
 
-    if (!asdx::CreateBufferSRV(pDevice, m_MB.GetPtr(), UINT(sizeMB / 4), 0, m_MB_SRV.GetAddress()))
+    if (!asdx::CreateBufferSRV(pDevice, m_MB.GetPtr(), UINT(sizeMB / sizeof(Material)), sizeof(Material), m_MB_SRV.GetAddress()))
     {
         ELOGA("Error : Material SRV Create Failed.");
         return false;
@@ -338,7 +338,7 @@ void ModelMgr::Term()
     m_DefaultBaseColor  .Term();
     m_DefaultNormal     .Term();
     m_DefaultORM        .Term();
-    m_DefaultEmissive   .Term();
+    m_Black             .Term();
 
     m_GeometryHandles.clear();
     m_InstanceHandles.clear();
@@ -483,14 +483,28 @@ D3D12_GPU_VIRTUAL_ADDRESS ModelMgr::AddMaterials(const Material* ptr, uint32_t c
     {
         auto& src = ptr[i];
         auto& dst = m_pMaterials[m_OffsetMaterial + i];
-        dst.BaseColor = GetBaseColor(src.BaseColor);
-        dst.Normal    = GetNormal(src.Normal);
-        dst.ORM       = GetOrm(src.ORM);
-        dst.Emissive  = GetEmissive(src.Emissive);
-        dst.IntIor    = src.IntIor;
-        dst.ExtIor    = src.ExtIor;
-        dst.UvScale   = src.UvScale;
-        dst.UvScroll  = src.UvScroll;
+
+        dst.BaseColor0 = GetBaseColor(src.BaseColor0);
+        dst.Normal0    = GetNormal(src.Normal0);
+        dst.ORM0       = GetOrm(src.ORM0);
+        dst.Emissive0  = GetEmissive(src.Emissive0);
+
+        dst.BaseColor1 = GetBaseColor(src.BaseColor1);
+        dst.Normal1    = GetNormal(src.Normal1);
+        dst.ORM1       = GetOrm(src.ORM1);
+        dst.Emissive1  = GetEmissive(src.Emissive1);
+
+        dst.UvScale0   = src.UvScale0;
+        dst.UvScroll0  = src.UvScroll0;
+
+        dst.UvScale1   = src.UvScale1;
+        dst.UvScroll1  = src.UvScroll1;
+
+        dst.IntIor     = src.IntIor;
+        dst.ExtIor     = src.ExtIor;
+
+        dst.LayerCount = src.LayerCount;
+        dst.LayerMask  = GetMask(src.LayerMask);
     }
 
     m_OffsetMaterial += count;
@@ -588,7 +602,17 @@ uint32_t ModelMgr::GetOrm(uint32_t handle)
 uint32_t ModelMgr::GetEmissive(uint32_t handle)
 {
     return (handle == INVALID_MATERIAL_MAP)
-        ? m_DefaultEmissive.GetView()->GetDescriptorIndex()
+        ? m_Black.GetView()->GetDescriptorIndex()
+        : handle;
+}
+
+//-----------------------------------------------------------------------------
+//      マスクハンドルを取得します.
+//-----------------------------------------------------------------------------
+uint32_t ModelMgr::GetMask(uint32_t handle)
+{
+    return (handle == INVALID_MATERIAL_MAP)
+        ? m_Black.GetView()->GetDescriptorIndex()
         : handle;
 }
 
