@@ -67,7 +67,8 @@ struct MeshMaterial
     uint4   Textures;       // x:BaseColorMap, y:NormalMap, z:OrmiMap, w:EmissiveMap.
     float   IntIor;         // Interior Index Of Refraction.
     float   ExtIor;         // Exterior Index Of Refraction.
-    float2  UvScale;        // テクスチャ座標スケール.
+    float2  UvScale;        // UVスケール.
+    float2  UvScroll;       // UVスクロール.
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -264,19 +265,22 @@ Material GetMaterial(uint instanceId, float2 uv, float mip)
     uint  address = materialId * MATERIAL_STRIDE;
     uint4 data    = Materials.Load4(address);
     float4 data2  = asfloat(Materials.Load4(address + 16));
+    float2 data3  = asfloat(Materials.Load2(address + 32));
+
+    float2 st = uv * data2.zw + data3 * SceneParam.AnimationTime;
 
     Texture2D<float4> baseColorMap = ResourceDescriptorHeap[data.x];
-    float4 bc = baseColorMap.SampleLevel(LinearWrap, uv * data2.zw, mip);
+    float4 bc = baseColorMap.SampleLevel(LinearWrap, st, mip);
 
     Texture2D<float4> normalMap = ResourceDescriptorHeap[data.y];
-    float3 n = normalMap.SampleLevel(LinearWrap, uv * data2.zw, mip).xyz * 2.0f - 1.0f;
+    float3 n = normalMap.SampleLevel(LinearWrap, st, mip).xyz * 2.0f - 1.0f;
     n = normalize(n);
 
     Texture2D<float4> ormMap = ResourceDescriptorHeap[data.z];
-    float3 orm = ormMap.SampleLevel(LinearWrap, uv * data2.zw, mip).rgb;
+    float3 orm = ormMap.SampleLevel(LinearWrap, st, mip).rgb;
 
     Texture2D<float4> emissiveMap = ResourceDescriptorHeap[data.w];
-    float3 e = emissiveMap.SampleLevel(LinearWrap, uv * data2.zw, mip).rgb;
+    float3 e = emissiveMap.SampleLevel(LinearWrap, st, mip).rgb;
 
     Material param;
     param.BaseColor = bc;
@@ -389,7 +393,7 @@ RayDesc GeneratePinholeCameraRay(float2 pixel)
     RayDesc ray;
     ray.Origin      = GetPosition(SceneParam.View);
     ray.Direction   = CalcRayDir(pixel, SceneParam.View, SceneParam.Proj);
-    ray.TMin        = 0.01f;
+    ray.TMin        = 0.1f;
     ray.TMax        = FLT_MAX;
 
     return ray;
@@ -403,7 +407,7 @@ bool CastShadowRay(float3 pos, float3 normal, float3 dir, float tmax)
     RayDesc ray;
     ray.Origin      = OffsetRay(pos, normal);
     ray.Direction   = dir;
-    ray.TMin        = 0.01f;
+    ray.TMin        = 0.1f;
     ray.TMax        = tmax;
 
     ShadowPayload payload;

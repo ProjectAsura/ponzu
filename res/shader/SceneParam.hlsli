@@ -36,6 +36,9 @@ struct SceneParameter
     float4  Size;   // x:Width, y:Height, z:1.0f/Width, w:1.0f/Height.
     float3  CameraDir;
     uint    MaxIteration;
+
+    float   AnimationTime;
+    float3  Reserved;
 };
 
 #endif//SCENE_PARAM_HLSLI

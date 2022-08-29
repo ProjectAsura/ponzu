@@ -490,6 +490,7 @@ D3D12_GPU_VIRTUAL_ADDRESS ModelMgr::AddMaterials(const Material* ptr, uint32_t c
         dst.IntIor    = src.IntIor;
         dst.ExtIor    = src.ExtIor;
         dst.UvScale   = src.UvScale;
+        dst.UvScroll  = src.UvScroll;
     }
 
     m_OffsetMaterial += count;

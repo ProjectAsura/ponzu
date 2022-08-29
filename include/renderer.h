@@ -166,6 +166,7 @@ private:
 
     double                          m_AnimationOneFrameTime = 0;
     double                          m_AnimationElapsedTime  = 0;
+    float                           m_AnimationTime = 0.0f;
 
     asdx::Matrix        m_CurrView;
     asdx::Matrix        m_CurrProj;
@@ -190,6 +191,7 @@ private:
     asdx::PipelineState m_CopyPSO;
 
     bool                m_EndRequest = false;
+    bool                m_ForceChanged = false;
 
 #if (!CAMP_RELEASE)
     //+++++++++++++++++++

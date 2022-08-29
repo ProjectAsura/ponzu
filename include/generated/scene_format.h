@@ -196,6 +196,7 @@ FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(4) ResMaterial FLATBUFFERS_FINAL_CLASS {
   float IntIor_;
   float ExtIor_;
   r3d::Vector2 UvScale_;
+  r3d::Vector2 UvScroll_;
 
  public:
   ResMaterial()
@@ -205,16 +206,18 @@ FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(4) ResMaterial FLATBUFFERS_FINAL_CLASS {
         Emissive_(0),
         IntIor_(0),
         ExtIor_(0),
-        UvScale_() {
+        UvScale_(),
+        UvScroll_() {
   }
-  ResMaterial(uint32_t _BaseColor, uint32_t _Normal, uint32_t _Orm, uint32_t _Emissive, float _IntIor, float _ExtIor, const r3d::Vector2 &_UvScale)
+  ResMaterial(uint32_t _BaseColor, uint32_t _Normal, uint32_t _Orm, uint32_t _Emissive, float _IntIor, float _ExtIor, const r3d::Vector2 &_UvScale, const r3d::Vector2 &_UvScroll)
       : BaseColor_(flatbuffers::EndianScalar(_BaseColor)),
         Normal_(flatbuffers::EndianScalar(_Normal)),
         Orm_(flatbuffers::EndianScalar(_Orm)),
         Emissive_(flatbuffers::EndianScalar(_Emissive)),
         IntIor_(flatbuffers::EndianScalar(_IntIor)),
         ExtIor_(flatbuffers::EndianScalar(_ExtIor)),
-        UvScale_(_UvScale) {
+        UvScale_(_UvScale),
+        UvScroll_(_UvScroll) {
   }
   uint32_t BaseColor() const {
     return flatbuffers::EndianScalar(BaseColor_);
@@ -237,8 +240,11 @@ FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(4) ResMaterial FLATBUFFERS_FINAL_CLASS {
   const r3d::Vector2 &UvScale() const {
     return UvScale_;
   }
+  const r3d::Vector2 &UvScroll() const {
+    return UvScroll_;
+  }
 };
-FLATBUFFERS_STRUCT_END(ResMaterial, 32);
+FLATBUFFERS_STRUCT_END(ResMaterial, 40);
 
 FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(4) ResInstance FLATBUFFERS_FINAL_CLASS {
  private:

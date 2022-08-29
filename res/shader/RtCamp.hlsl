@@ -356,21 +356,21 @@ void OnGenerateRay()
         // 自己発光による放射輝度.
         Lo += W * material.Emissive;
 
-#if 1
+#if 0
         // Next Event Estimation.
         {
             // BSDFがデルタ関数を持たない場合のみ.
             //if (!HasDelta(material))
             {
                 // 物体からのレイの入出を考慮した法線.
-                float3 Nm = dot(N, V) > 0.0f ? N : -N;
+                float3 Nm = dot(N, -V) < 0.0f ? N : -N;
 
                 // 光源をサンプリング.
                 float lightWeight;
                 float2 st = SampleMipMap(BackGround, float2(Random(seed), Random(seed)), lightWeight);
 
                 // 方向ベクトルに変換.
-                float3 dir = FromSphereMapCoord(st);
+                float3 dir = -FromSphereMapCoord(st);
 
                 if (!CastShadowRay(vertex.Position, geometryNormal, dir, FLT_MAX))
                 {

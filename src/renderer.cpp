@@ -119,6 +119,9 @@ struct SceneParam
     asdx::Vector4   Size;
     asdx::Vector3   CameraDir;
     uint32_t        MaxIteration;
+
+    float           AnimationTime;
+    float           Reserved[3];
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1014,9 +1017,20 @@ bool Renderer::SystemSetup()
 #else
     // カメラ初期化.
     {
-        m_Camera.SetPosition(asdx::Vector3(0.0f, 0.0f, 550.5f));
-        m_Camera.SetTarget(asdx::Vector3(0.0f, 0.0f, 0.0f));
-        m_Camera.SetUpward(asdx::Vector3(0.0f, 1.0f, 0.0f));
+        //m_Camera.SetPosition(asdx::Vector3(-1425.195f, 1018.635f, 1710.176f));
+        //m_Camera.SetTarget(asdx::Vector3(-64.474f, 86.644f, 370.234f));
+        //m_Camera.SetUpward(asdx::Vector3(0.313f, 0.899f, -0.308f));
+        //m_Camera.Update();
+        asdx::Camera::Param param;
+        param.Position = asdx::Vector3(-1325.207520, 995.419373, 1612.109253);
+        param.Target   = asdx::Vector3(56.435787, -34.221855, 128.971191);
+        param.Upward   = asdx::Vector3(0.308701, 0.891568, -0.331378);
+        param.Rotate   = asdx::Vector2(2.391608, -0.470002);
+        param.PanTilt  = asdx::Vector2(2.391608, -0.470002);
+        param.Twist    = 0.000000;
+        param.MinDist  = 0.100000;
+        param.MaxDist  = 10000.000000;
+        m_Camera.SetParam(param);
         m_Camera.Update();
     }
 
@@ -1296,8 +1310,8 @@ bool Renderer::BuildScene()
     dummy0.BaseColor = INVALID_MATERIAL_MAP;
     dummy0.ORM       = INVALID_MATERIAL_MAP;
     dummy0.Emissive  = INVALID_MATERIAL_MAP;
-    dummy0.IntIor    = 2.42f;
-    dummy0.ExtIor    = 1.0f;
+    //dummy0.IntIor    = 1.42f;
+    //dummy0.ExtIor    = 1.0f;
     dummy0.UvScale   = asdx::Vector2(1.0f, 1.0f);
 
     Material dummy1 = {};
@@ -1305,18 +1319,27 @@ bool Renderer::BuildScene()
     dummy1.BaseColor = INVALID_MATERIAL_MAP;
     dummy1.ORM       = INVALID_MATERIAL_MAP;
     dummy1.Emissive  = INVALID_MATERIAL_MAP;
-    //dummy0.IntIor    = 1.4f;
-    //dummy0.ExtIor    = 1.0f;
-    dummy1.UvScale   = asdx::Vector2(10.0f, 10.0f);
+    dummy1.IntIor    = 1.4f;
+    dummy1.ExtIor    = 1.0f;
+    dummy1.UvScale   = asdx::Vector2(50.0f, 50.0f);
+
+    Material dummy2 = {};
+    dummy2.Normal    = INVALID_MATERIAL_MAP;
+    dummy2.BaseColor = 0;
+    dummy2.ORM       = INVALID_MATERIAL_MAP;
+    dummy2.Emissive  = INVALID_MATERIAL_MAP;
+    //dummy2.IntIor    = 1.4f;
+    //dummy2.ExtIor    = 1.0f;
+    dummy2.UvScale   = asdx::Vector2(1000.0f, 1000.0f);
 
     Light dirLight = {};
     dirLight.Type       = LIGHT_TYPE_DIRECTIONAL;
     dirLight.Position   = asdx::Vector3(0.0f, -1.0f, 1.0f);
-    dirLight.Intensity  = asdx::Vector3(1.0f, 1.0f, 1.0f) * 100.0f;
+    dirLight.Intensity  = asdx::Vector3(1.0f, 1.0f, 1.0f) * 2.0f;
     dirLight.Radius     = 1.0f;
 
     std::vector<r3d::Mesh> meshes;
-    if (!LoadMesh("../res/model/dosei_with_ground.obj", meshes))
+    if (!LoadMesh("../res/model/test.obj", meshes))
     {
         ELOGA("Error : LoadMesh() Failed.");
         return false;
@@ -1332,15 +1355,76 @@ bool Renderer::BuildScene()
         instances[i].Transform  = asdx::Transform3x4();
     }
 
-    if (instances.size() > 3)
-    { instances[3].MaterialId = 1; }
+    if (instances.size() >= 3)
+    { instances[2].MaterialId = 2; } // pole
+
+    if (instances.size() >= 4)
+    { instances[3].MaterialId = 1; } // wave
+
+    if (instances.size() >= 4)
+    { instances[1].MaterialId = 0; } // bridge
+
+    if (instances.size() >= 4)
+    { instances[0].MaterialId = 2; } // bottom.
+
+    Material planks = {};
+    planks.BaseColor = 0;
+    planks.Normal    = 1;
+    planks.ORM       = 2; 
+    planks.Emissive  = INVALID_MATERIAL_MAP;
+    planks.UvScale   = asdx::Vector2(1.0f, 1.0f);
+
+    Material poles = {};
+    poles.BaseColor = 3;
+    poles.Normal    = 4;
+    poles.ORM       = 5;
+    poles.Emissive  = INVALID_MATERIAL_MAP;
+    poles.UvScale   = asdx::Vector2(1.0f, 1.0f);
+
+    Material wave = {};
+    wave.BaseColor = INVALID_MATERIAL_MAP;
+    wave.Normal    = 9;
+    wave.ORM       = INVALID_MATERIAL_MAP;
+    wave.Emissive  = INVALID_MATERIAL_MAP;
+    wave.ExtIor    = 1.0f;
+    wave.IntIor    = 1.2f;
+    wave.UvScale   = asdx::Vector2(50.0f, 50.0f);
+    wave.UvScroll  = asdx::Vector2(0.0f, -0.05f);
+
+    Material ground = {};
+    ground.BaseColor = 6;
+    ground.Normal    = 7;
+    ground.ORM       = 8;
+    ground.Emissive  = INVALID_MATERIAL_MAP;
+    ground.UvScale   = asdx::Vector2(500.0f, 500.0f);
+    //ground.UvScroll  = asdx::Vector2(0.1f, 0.0f);
+
+    instances[1].MaterialId = 0;
+    instances[2].MaterialId = 1;
+    instances[3].MaterialId = 2;
+    instances[0].MaterialId = 3;
+
 
     SceneExporter exporter;
-    exporter.SetIBL("../res/ibl/10-Shiodome_Stairs_3k.dds");
-    exporter.AddTexture("../res/texture/floor_tiles_08_diff_2k.dds");
+    exporter.SetIBL("../res/ibl/lakeside_2k.dds");
+    exporter.AddTexture("../res/texture/modular_wooden_pier_planks_diff_2k.dds"); // 0
+    exporter.AddTexture("../res/texture/modular_wooden_pier_planks_nor_gl_2k.dds"); // 1
+    exporter.AddTexture("../res/texture/modular_wooden_pier_planks_arm_2k.dds"); // 2
+    exporter.AddTexture("../res/texture/modular_wooden_pier_poles_diff_2k.dds"); // 3
+    exporter.AddTexture("../res/texture/modular_wooden_pier_poles_nor_gl_2k.dds"); // 4
+    exporter.AddTexture("../res/texture/modular_wooden_pier_poles_arm_2k.dds"); // 5
+    exporter.AddTexture("../res/texture/coral_mud_01_diff_2k.dds"); // 6
+    exporter.AddTexture("../res/texture/coral_mud_01_nor_gl_2k.dds"); // 7
+    exporter.AddTexture("../res/texture/coral_mud_01_rough_2k.dds"); // 8
+    exporter.AddTexture("../res/texture/wave_normal.dds"); // 9
     exporter.AddMeshes(meshes);
-    exporter.AddMaterial(dummy0);
-    exporter.AddMaterial(dummy1);
+    exporter.AddMaterial(planks);
+    exporter.AddMaterial(poles);
+    exporter.AddMaterial(wave);
+    exporter.AddMaterial(ground);
+    //exporter.AddMaterial(dummy0);
+    //exporter.AddMaterial(dummy1);
+    //exporter.AddMaterial(dummy2);
     exporter.AddInstances(instances);
     exporter.AddLight(dirLight);
 
@@ -1670,7 +1754,7 @@ void Renderer::OnFrameMove(asdx::FrameEventArgs& args)
     if (args.Time >= m_SceneDesc.RenderTimeSec)
     {
         // キャプチャー実行.
-        uint32_t totalFrame = uint32_t(m_SceneDesc.FPS * m_SceneDesc.AnimationSec);
+        uint32_t totalFrame = uint32_t(m_SceneDesc.FPS * m_SceneDesc.AnimationTimeSec);
         if (m_CaptureIndex <= totalFrame)
         {
             auto idx = (m_CaptureTargetIndex + 2) % 3; // 2フレーム前のインデックス.
@@ -1682,6 +1766,8 @@ void Renderer::OnFrameMove(asdx::FrameEventArgs& args)
 
         return;
     }
+
+    m_ForceChanged = false;
 
     // CPUで読み取り.
     m_AnimationElapsedTime += args.ElapsedTime;
@@ -1710,11 +1796,11 @@ void Renderer::OnFrameMove(asdx::FrameEventArgs& args)
 void Renderer::ChangeFrame(uint32_t index)
 {
 #if (CAMP_RELEASE)
-    asdx::CameraEvent camEvent = {};
-    camEvent.Flags |= asdx::CameraEvent::EVENT_ROTATE;
-    camEvent.Rotate.x += 2.0f * asdx::F_PI / 600.0f; 
+    //asdx::CameraEvent camEvent = {};
+    //camEvent.Flags |= asdx::CameraEvent::EVENT_ROTATE;
+    //camEvent.Rotate.x += 2.0f * asdx::F_PI / 600.0f; 
 
-    m_Camera.UpdateByEvent(camEvent);
+    //m_Camera.UpdateByEvent(camEvent);
 
     m_CurrView = m_Camera.GetView();
     m_CurrProj = asdx::Matrix::CreatePerspectiveFieldOfView(
@@ -1723,6 +1809,9 @@ void Renderer::ChangeFrame(uint32_t index)
         0.1f,
         10000.0f);
     m_CameraZAxis = m_Camera.GetAxisZ();
+
+    m_AnimationTime += 1.0f / 60.0f;
+    m_ForceChanged = true;
 #else
     m_CurrView = m_CameraController.GetView();
     m_CurrProj = asdx::Matrix::CreatePerspectiveFieldOfView(
@@ -1731,6 +1820,8 @@ void Renderer::ChangeFrame(uint32_t index)
         m_CameraController.GetNearClip(),
         m_CameraController.GetFarClip());
     m_CameraZAxis = m_CameraController.GetAxisZ();
+
+    m_AnimationTime = float(m_Timer.GetRelativeSec());
 #endif
 
     m_CurrInvView = asdx::Matrix::Invert(m_CurrView);
@@ -1767,6 +1858,11 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         { changed = true; }
     #endif
 
+    #if CAMP_RELEASE
+        if (m_ForceChanged)
+        { changed = true; }
+    #endif
+
         // カメラ変更があったかどうか?
         if (changed)
         {
@@ -1790,7 +1886,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         param.MaxBounce             = MAX_RECURSION_DEPTH;
         param.MinBounce             = 3;
         param.FrameIndex            = GetFrameCount();
-        param.SkyIntensity          = 1.0f;
+        param.SkyIntensity          = 2.0f;
         param.EnableAccumulation    = enableAccumulation;
         param.AccumulatedFrames     = m_AccumulatedFrames;
         param.ExposureAdjustment    = 1.0f;
@@ -1801,6 +1897,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         param.Size.w                = 1.0f / param.Size.y;
         param.CameraDir             = m_CameraZAxis;
         param.MaxIteration          = MAX_RECURSION_DEPTH;
+        param.AnimationTime         = m_AnimationTime;
 
         m_SceneParam.SwapBuffer();
         m_SceneParam.Update(&param, sizeof(param));
@@ -2313,16 +2410,28 @@ void Renderer::Draw2D()
     #if ASDX_ENABLE_IMGUI
         asdx::GuiMgr::Instance().Update(m_Width, m_Height);
 
+        auto pos    = m_CameraController.GetPosition();
+        auto target = m_CameraController.GetTarget();
+        auto upward = m_CameraController.GetUpward();
+
         ImGui::SetNextWindowPos(ImVec2(10, 10));
         ImGui::SetNextWindowSize(ImVec2(140, 0));
         if (ImGui::Begin(u8"フレーム情報", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoTitleBar))
         {
+
             ImGui::Text(u8"FPS   : %.3lf", GetFPS());
             ImGui::Text(u8"Frame : %ld", GetFrameCount());
             ImGui::Text(u8"Accum : %ld", m_AccumulatedFrames);
-            ImGui::Text(u8"Camera : %.3f", m_CameraController.GetPosition().x);
-            ImGui::Text(u8"       : %.3f", m_CameraController.GetPosition().y);
-            ImGui::Text(u8"       : %.3f", m_CameraController.GetPosition().z);
+            ImGui::Text(u8"Camera : %.3f", pos.x);
+            ImGui::Text(u8"       : %.3f", pos.y);
+            ImGui::Text(u8"       : %.3f", pos.z);
+            ImGui::Text(u8"Target : %.3f", target.x);
+            ImGui::Text(u8"       : %.3f", target.y);
+            ImGui::Text(u8"       : %.3f", target.z);
+            ImGui::Text(u8"Upward : %.3f", upward.x);
+            ImGui::Text(u8"       : %.3f", upward.y);
+            ImGui::Text(u8"       : %.3f", upward.z);
+
         }
         ImGui::End();
 
@@ -2332,6 +2441,21 @@ void Renderer::Draw2D()
             int count = _countof(kBufferKindItems);
             ImGui::Combo(u8"表示バッファ", &m_BufferKind, kBufferKindItems, count);
             ImGui::Checkbox(u8"Accumulation 強制OFF", &m_ForceAccumulationOff);
+            if (ImGui::Button(u8"カメラ情報出力"))
+            {
+                auto& param = m_CameraController.GetParam();
+                printf_s("// Camera Parameter\n");
+                printf_s("asdx::Camera::Param param;\n");
+                printf_s("param.Position = asdx::Vector3(%f, %f, %f);\n", param.Position.x, param.Position.y, param.Position.z);
+                printf_s("param.Target   = asdx::Vector3(%f, %f, %f);\n", param.Target.x, param.Target.y, param.Target.z);
+                printf_s("param.Upward   = asdx::Vector3(%f, %f, %f);\n", param.Upward.x, param.Upward.y, param.Upward.z);
+                printf_s("param.Rotate   = asdx::Vector2(%f, %f);\n", param.Rotate.x, param.Rotate.y);
+                printf_s("param.PanTilt  = asdx::Vector2(%f, %f);\n", param.PanTilt.x, param.PanTilt.y);
+                printf_s("param.Twist    = %f;\n", param.Twist);
+                printf_s("param.MinDist  = %f;\n", param.MinDist);
+                printf_s("param.MaxDist  = %f;\n", param.MaxDist);
+                printf_s("\n");
+            }
         }
         ImGui::End();
 

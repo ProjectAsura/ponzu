@@ -73,6 +73,7 @@ struct ResMaterial
     IntIor:float;
     ExtIor:float;
     UvScale:Vector2;
+    UvScroll:Vector2;
 }
 
 table ResMesh

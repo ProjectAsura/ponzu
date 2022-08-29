@@ -520,6 +520,7 @@ bool Scene::Init(const char* path, asdx::CommandList& cmdList)
             material.ExtIor    = srcMaterial->ExtIor();
             material.IntIor    = srcMaterial->IntIor();
             material.UvScale   = asdx::Vector2(srcMaterial->UvScale().x(), srcMaterial->UvScale().y());
+            material.UvScroll  = asdx::Vector2(srcMaterial->UvScroll().x(), srcMaterial->UvScroll().y());
 
             m_ModelMgr.AddMaterials(&material, 1);
         }
@@ -990,7 +991,8 @@ bool SceneExporter::Export(const char* path)
                 m_Materials[i].Emissive,
                 m_Materials[i].IntIor,
                 m_Materials[i].ExtIor,
-                r3d::Vector2(m_Materials[i].UvScale.x, m_Materials[i].UvScale.y));
+                r3d::Vector2(m_Materials[i].UvScale.x, m_Materials[i].UvScale.y),
+                r3d::Vector2(m_Materials[i].UvScroll.x, m_Materials[i].UvScroll.y));
 
             dstMaterials.push_back(item);
         }
