@@ -329,41 +329,65 @@ bool Renderer::SystemSetup()
 
     // キャプチャー用ダブルバッファ.
     {
-        D3D12_RESOURCE_DESC desc = {};
+        asdx::TargetDesc desc;
         desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
         desc.Width              = m_SceneDesc.Width;
         desc.Height             = m_SceneDesc.Height;
         desc.DepthOrArraySize   = 1;
-        desc.MipLevels          = 1;
         desc.Format             = DXGI_FORMAT_R8G8B8A8_UNORM;
+        desc.MipLevels          = 1;
         desc.SampleDesc.Count   = 1;
         desc.SampleDesc.Quality = 0;
-        desc.Layout             = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-        desc.Flags              = D3D12_RESOURCE_FLAG_NONE;
-
-        D3D12_HEAP_PROPERTIES props = {};
-        props.Type = D3D12_HEAP_TYPE_DEFAULT;
+        desc.InitState          = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 
         for(auto i=0; i<3; ++i)
         {
-            auto hr = pDevice->CreateCommittedResource(
-                &props,
-                D3D12_HEAP_FLAG_NONE,
-                &desc,
-                D3D12_RESOURCE_STATE_COPY_DEST,
-                nullptr,
-                IID_PPV_ARGS(m_CaptureTexture[i].GetAddress()));
-
-            if (FAILED(hr))
+            if (!m_CaptureTarget[i].Init(&desc))
             {
-                ELOGA("Error : ID3D12Device::CreateCommittedResource() Failed. errcode = 0x%x", hr);
+                ELOGA("Error : CaptureTarget[%d] Init Failed.", i);
                 return false;
             }
         }
 
-        m_CaptureTexture[0]->SetName(L"CaptureTexture0");
-        m_CaptureTexture[1]->SetName(L"CaptureTexture1");
-        m_CaptureTexture[2]->SetName(L"CaptureTexture1");
+        m_CaptureTarget[0].SetName(L"CaptureTarget0");
+        m_CaptureTarget[1].SetName(L"CaptureTarget1");
+        m_CaptureTarget[2].SetName(L"CaptureTarget2");
+
+        //D3D12_RESOURCE_DESC desc = {};
+        //desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        //desc.Width              = m_SceneDesc.Width;
+        //desc.Height             = m_SceneDesc.Height;
+        //desc.DepthOrArraySize   = 1;
+        //desc.MipLevels          = 1;
+        //desc.Format             = DXGI_FORMAT_R8G8B8A8_UNORM;
+        //desc.SampleDesc.Count   = 1;
+        //desc.SampleDesc.Quality = 0;
+        //desc.Layout             = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+        //desc.Flags              = D3D12_RESOURCE_FLAG_NONE;
+
+        //D3D12_HEAP_PROPERTIES props = {};
+        //props.Type = D3D12_HEAP_TYPE_DEFAULT;
+
+        //for(auto i=0; i<3; ++i)
+        //{
+        //    auto hr = pDevice->CreateCommittedResource(
+        //        &props,
+        //        D3D12_HEAP_FLAG_NONE,
+        //        &desc,
+        //        D3D12_RESOURCE_STATE_COPY_DEST,
+        //        nullptr,
+        //        IID_PPV_ARGS(m_CaptureTexture[i].GetAddress()));
+
+        //    if (FAILED(hr))
+        //    {
+        //        ELOGA("Error : ID3D12Device::CreateCommittedResource() Failed. errcode = 0x%x", hr);
+        //        return false;
+        //    }
+        //}
+
+        //m_CaptureTexture[0]->SetName(L"CaptureTexture0");
+        //m_CaptureTexture[1]->SetName(L"CaptureTexture1");
+        //m_CaptureTexture[2]->SetName(L"CaptureTexture1");
     }
 
     // リードバックテクスチャ生成.
@@ -691,6 +715,38 @@ bool Renderer::SystemSetup()
 
         m_DenoiseTarget[0].SetName(L"DenoiseTarget0");
         m_DenoiseTarget[1].SetName(L"DenoiseTarget1");
+    }
+
+    if (!m_TaaRenerer.InitCS())
+    {
+        ELOGA("Error : TaaRenderer::InitCS() Failed.");
+        return false;
+    }
+
+    // ヒストリーバッファ生成.
+    {
+        asdx::TargetDesc desc;
+        desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        desc.Width              = m_SceneDesc.Width;
+        desc.Height             = m_SceneDesc.Height;
+        desc.DepthOrArraySize   = 1;
+        desc.Format             = DXGI_FORMAT_R8G8B8A8_UNORM;
+        desc.MipLevels          = 1;
+        desc.SampleDesc.Count   = 1;
+        desc.SampleDesc.Quality = 0;
+        desc.InitState          = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+
+        for(auto i=0; i<2; ++i)
+        {
+            if (!m_HistoryTarget[i].Init(&desc))
+            {
+                ELOGA("Error : History[%d] Init Failed.", i);
+                return false;
+            }
+        }
+
+        m_CurrHistoryIndex = 0;
+        m_PrevHistoryIndex = 1;
     }
 
     // 定数バッファ初期化.
@@ -1759,8 +1815,8 @@ void Renderer::OnTerm()
     m_ShadePixelPSO     .Term();
 #endif
 
-    for(auto i=0; i<2; ++i)
-    { m_CaptureTexture[i].Reset(); }
+    for(auto i=0; i<3; ++i)
+    { m_CaptureTarget[i].Term(); }
 
     m_ReadBackTexture.Reset();
 
@@ -1780,6 +1836,11 @@ void Renderer::OnTerm()
     
     m_CopyRootSig       .Term();
     m_CopyPSO           .Term();
+
+    for(auto i=0; i<2; ++i)
+    { m_HistoryTarget[i].Term(); }
+
+    m_TaaRenerer.Term();
 
     m_Canvas.Term();
 
@@ -1823,7 +1884,7 @@ void Renderer::OnFrameMove(asdx::FrameEventArgs& args)
         if (m_CaptureIndex <= totalFrame)
         {
             auto idx = (m_CaptureTargetIndex + 2) % 3; // 2フレーム前のインデックス.
-            CaptureScreen(m_CaptureTexture[idx].GetPtr(), D3D12_RESOURCE_STATE_COPY_DEST, true);
+            CaptureScreen(m_CaptureTarget[idx].GetResource(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, true);
         }
 
         PostQuitMessage(0);
@@ -1840,7 +1901,7 @@ void Renderer::OnFrameMove(asdx::FrameEventArgs& args)
     {
         // キャプチャー実行.
         auto idx = (m_CaptureTargetIndex + 2) % 3; // 2フレーム前のインデックス.
-        CaptureScreen(m_CaptureTexture[idx].GetPtr(), D3D12_RESOURCE_STATE_COPY_DEST);
+        CaptureScreen(m_CaptureTarget[idx].GetResource(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
         // 次のフレームに切り替え.
         m_AnimationElapsedTime = 0.0;
@@ -2299,21 +2360,55 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         m_GfxCmdList.BarrierUAV(m_DenoiseTarget[1].GetResource());
     }
 
+    // TemporalAA
     {
-        auto cap_idx = m_CaptureTargetIndex;
+        auto jitter = asdx::TaaRenderer::CalcJitter(GetFrameCount(), m_SceneDesc.Width, m_SceneDesc.Height);
 
-        m_GfxCmdList.BarrierTransition(
-            m_DenoiseTarget[1].GetResource(), 0,
+        asdx::ScopedBarrier b0(
+            m_GfxCmdList,
+            m_DenoiseTarget[1].GetResource(), 
             D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-            D3D12_RESOURCE_STATE_COPY_SOURCE);
+            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
-        m_GfxCmdList.CopyResource(
-            m_CaptureTexture[cap_idx].GetPtr(),
-            m_DenoiseTarget[1].GetResource());
+        asdx::ScopedBarrier b1(
+            m_GfxCmdList,
+            m_HistoryTarget[m_PrevHistoryIndex].GetResource(),
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+
+        m_TaaRenerer.RenderCS(
+            m_GfxCmdList.GetCommandList(),
+            m_CaptureTarget[m_CaptureTargetIndex].GetUAV(),
+            m_HistoryTarget[m_CurrHistoryIndex].GetUAV(),
+            m_DenoiseTarget[1].GetSRV(),
+            m_HistoryTarget[m_PrevHistoryIndex].GetSRV(),
+            m_VelocityTarget.GetSRV(),
+            m_ModelDepthTarget.GetSRV(),
+            1.0f,
+            0.1f,
+            jitter);
+
+        m_GfxCmdList.BarrierUAV(m_CaptureTarget[m_CaptureTargetIndex].GetUAV());
+        m_GfxCmdList.BarrierUAV(m_HistoryTarget[m_CurrHistoryIndex].GetUAV());
     }
+
+    //{
+    //    auto cap_idx = m_CaptureTargetIndex;
+
+    //    m_GfxCmdList.BarrierTransition(
+    //        m_DenoiseTarget[1].GetResource(), 0,
+    //        D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+    //        D3D12_RESOURCE_STATE_COPY_SOURCE);
+
+    //    m_GfxCmdList.CopyResource(
+    //        m_CaptureTexture[cap_idx].GetPtr(),
+    //        m_DenoiseTarget[1].GetResource());
+    //}
 
     // スワップチェインに描画.
     {
+        auto& target = m_CaptureTarget[m_CaptureTargetIndex];
+
         m_GfxCmdList.BarrierTransition(
             m_ColorTarget[idx].GetResource(), 0,
             D3D12_RESOURCE_STATE_PRESENT,
@@ -2321,8 +2416,8 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
 
         // ピクセルシェーダアクセスのため遷移.
         m_GfxCmdList.BarrierTransition(
-            m_DenoiseTarget[1].GetResource(), 0,
-            D3D12_RESOURCE_STATE_COPY_SOURCE,
+            target.GetResource(), 0,
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
             D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
     #if !(CAMP_RELEASE)
@@ -2330,7 +2425,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         switch(m_BufferKind)
         {
         case BUFFER_KIND_CANVAS:
-            pSRV = m_DenoiseTarget[1].GetSRV();
+            pSRV = target.GetSRV();
             break;
 
         #if ENABLE_RESTIR
@@ -2368,7 +2463,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         m_GfxCmdList.SetViewport(m_ColorTarget[idx].GetResource());
         m_GfxCmdList.SetRootSignature(m_CopyRootSig.GetPtr(), false);
         m_GfxCmdList.SetPipelineState(m_CopyPSO.GetPtr());
-        m_GfxCmdList.SetTable(0, m_DenoiseTarget[1].GetSRV());
+        m_GfxCmdList.SetTable(0, target.GetSRV());
         asdx::Quad::Instance().Draw(m_GfxCmdList.GetCommandList());
     #endif
 
@@ -2381,7 +2476,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
             D3D12_RESOURCE_STATE_PRESENT);
 
         m_GfxCmdList.BarrierTransition(
-            m_DenoiseTarget[1].GetResource(), 0,
+            target.GetResource(), 0,
             D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
             D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     }

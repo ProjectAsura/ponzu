@@ -29,6 +29,7 @@
 #include <gfx/asdxTarget.h>
 #include <gfx/asdxCommandQueue.h>
 #include <gfx/asdxQuad.h>
+#include <renderer/asdxTaaRenderer.h>
 #include <edit/asdxGuiMgr.h>
 #include <model_mgr.h>
 #include <scene.h>
@@ -155,7 +156,7 @@ private:
     asdx::PipelineState             m_ShadePixelPSO;
 #endif
 
-    asdx::RefPtr<ID3D12Resource>    m_CaptureTexture[3];
+    asdx::ComputeTarget             m_CaptureTarget[3];
     asdx::RefPtr<ID3D12Resource>    m_ReadBackTexture;
     uint32_t                        m_ReadBackPitch = 0;
     std::vector<ExportData>         m_ExportData;
@@ -186,6 +187,11 @@ private:
 
     asdx::RootSignature m_TonemapRootSig;
     asdx::PipelineState m_TonemapPSO;
+
+    asdx::TaaRenderer   m_TaaRenerer;
+    asdx::ComputeTarget m_HistoryTarget[2];
+    uint8_t             m_CurrHistoryIndex = 0;
+    uint8_t             m_PrevHistoryIndex = 1;
 
     asdx::RootSignature m_CopyRootSig;
     asdx::PipelineState m_CopyPSO;
