@@ -37,12 +37,6 @@ namespace {
 #include "../res/shader/Compile/CopyPS.inc"
 #include "../res/shader/Compile/DenoiserCS.inc"
 
-#if ENABLE_RESTIR
-#include "../res/shader/Compile/InitialSampling.inc"
-#include "../res/shader/Compile/SpatialResampling.inc"
-#include "../res/shader/Compile/ShadePixel.inc"
-#endif
-
 static const D3D12_INPUT_ELEMENT_DESC kModelElements[] = {
     { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
     { "NORMAL"  , 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
@@ -59,10 +53,6 @@ enum BUFFER_KIND
     BUFFER_KIND_ALBEDO,
     BUFFER_KIND_NORMAL,
     BUFFER_KIND_VELOCITY,
-    #if ENABLE_RESTIR
-    BUFFER_KIND_SPATIAL,
-    BUFFER_KIND_TEMPORAL,
-    #endif
 };
 
 static const char* kBufferKindItems[] = {
@@ -70,10 +60,6 @@ static const char* kBufferKindItems[] = {
     u8"Albedo",
     u8"Normal",
     u8"Velocity",
-    #if ENABLE_RESTIR
-    u8"Spatial",
-    u8"Temporal",
-    #endif
 };
 #endif
 
@@ -192,13 +178,9 @@ unsigned Export(void* args)
     if (data == nullptr)
     { return -1; }
 
-    //asdx::StopWatch timer;
-    //timer.Start();
-
     char path[256] = {};
     sprintf_s(path, "output_%03ld.png", data->FrameIndex);
 
-    // Releaseモードで 5-28[ms]程度の揺れ.
     if (fpng::fpng_encode_image_to_memory(
         data->Pixels.data(),
         data->Width,
@@ -216,9 +198,6 @@ unsigned Export(void* args)
     }
 
     data->Processed = false;
-
-    //timer.End();
-    //ILOGA("timer = %lf", timer.GetElapsedMsec());
 
     return 0;
 }
@@ -351,42 +330,6 @@ bool Renderer::SystemSetup()
         m_CaptureTarget[0].SetName(L"CaptureTarget0");
         m_CaptureTarget[1].SetName(L"CaptureTarget1");
         m_CaptureTarget[2].SetName(L"CaptureTarget2");
-
-        //D3D12_RESOURCE_DESC desc = {};
-        //desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-        //desc.Width              = m_SceneDesc.Width;
-        //desc.Height             = m_SceneDesc.Height;
-        //desc.DepthOrArraySize   = 1;
-        //desc.MipLevels          = 1;
-        //desc.Format             = DXGI_FORMAT_R8G8B8A8_UNORM;
-        //desc.SampleDesc.Count   = 1;
-        //desc.SampleDesc.Quality = 0;
-        //desc.Layout             = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-        //desc.Flags              = D3D12_RESOURCE_FLAG_NONE;
-
-        //D3D12_HEAP_PROPERTIES props = {};
-        //props.Type = D3D12_HEAP_TYPE_DEFAULT;
-
-        //for(auto i=0; i<3; ++i)
-        //{
-        //    auto hr = pDevice->CreateCommittedResource(
-        //        &props,
-        //        D3D12_HEAP_FLAG_NONE,
-        //        &desc,
-        //        D3D12_RESOURCE_STATE_COPY_DEST,
-        //        nullptr,
-        //        IID_PPV_ARGS(m_CaptureTexture[i].GetAddress()));
-
-        //    if (FAILED(hr))
-        //    {
-        //        ELOGA("Error : ID3D12Device::CreateCommittedResource() Failed. errcode = 0x%x", hr);
-        //        return false;
-        //    }
-        //}
-
-        //m_CaptureTexture[0]->SetName(L"CaptureTexture0");
-        //m_CaptureTexture[1]->SetName(L"CaptureTexture1");
-        //m_CaptureTexture[2]->SetName(L"CaptureTexture1");
     }
 
     // リードバックテクスチャ生成.
@@ -468,7 +411,7 @@ bool Renderer::SystemSetup()
         return false;
     }
 
-#if ASDX_ENABLE_IMGUI
+    #if ASDX_ENABLE_IMGUI
     // GUI初期化.
     {
         const auto path = "../res/font/07やさしさゴシック.ttf";
@@ -478,7 +421,7 @@ bool Renderer::SystemSetup()
             return false;
         }
     }
-#endif
+    #endif
 
     // コンピュートターゲット生成.
     {
@@ -545,91 +488,15 @@ bool Renderer::SystemSetup()
         }
     }
 
-    // レイトレ用パイプラインステート生成.
+    if (!CreateRayTracingPipeline(
+        RtCamp, sizeof(RtCamp),
+        m_RayTracingPSO,
+        m_RayGenTable,
+        m_MissTable,
+        m_HitGroupTable))
     {
-        D3D12_EXPORT_DESC exports[] = {
-            { L"OnGenerateRay"      , nullptr, D3D12_EXPORT_FLAG_NONE },
-            { L"OnClosestHit"       , nullptr, D3D12_EXPORT_FLAG_NONE },
-            { L"OnShadowAnyHit"     , nullptr, D3D12_EXPORT_FLAG_NONE },
-            { L"OnMiss"             , nullptr, D3D12_EXPORT_FLAG_NONE },
-            { L"OnShadowMiss"       , nullptr, D3D12_EXPORT_FLAG_NONE },
-        };
-
-        D3D12_HIT_GROUP_DESC groups[2] = {};
-        groups[0].ClosestHitShaderImport    = L"OnClosestHit";
-        groups[0].HitGroupExport            = L"StandardHit";
-        groups[0].Type                      = D3D12_HIT_GROUP_TYPE_TRIANGLES;
-
-        groups[1].AnyHitShaderImport        = L"OnShadowAnyHit";
-        groups[1].HitGroupExport            = L"ShadowHit";
-        groups[1].Type                      = D3D12_HIT_GROUP_TYPE_TRIANGLES;
-
-        asdx::RayTracingPipelineStateDesc desc = {};
-        desc.pGlobalRootSignature       = m_RayTracingRootSig.GetPtr();
-        desc.DXILLibrary                = { RtCamp, sizeof(RtCamp) };
-        desc.ExportCount                = _countof(exports);
-        desc.pExports                   = exports;
-        desc.HitGroupCount              = _countof(groups);
-        desc.pHitGroups                 = groups;
-        desc.MaxPayloadSize             = sizeof(Payload);
-        desc.MaxAttributeSize           = sizeof(asdx::Vector2);
-        desc.MaxTraceRecursionDepth     = MAX_RECURSION_DEPTH;
-
-        if (!m_RayTracingPSO.Init(pDevice, desc))
-        {
-            ELOGA("Error : RayTracing PSO Failed.");
-            return false;
-        }
-    }
-
-    // レイ生成テーブル.
-    {
-        asdx::ShaderRecord record = {};
-        record.ShaderIdentifier = m_RayTracingPSO.GetShaderIdentifier(L"OnGenerateRay");
-
-        asdx::ShaderTable::Desc desc = {};
-        desc.RecordCount    = 1;
-        desc.pRecords       = &record;
-
-        if (!m_RayGenTable.Init(pDevice, &desc))
-        {
-            ELOGA("Error : RayGenTable Init Failed.");
-            return false;
-        }
-    }
-
-    // ミステーブル.
-    {
-        asdx::ShaderRecord record[2] = {};
-        record[0].ShaderIdentifier = m_RayTracingPSO.GetShaderIdentifier(L"OnMiss");
-        record[1].ShaderIdentifier = m_RayTracingPSO.GetShaderIdentifier(L"OnShadowMiss");
-
-        asdx::ShaderTable::Desc desc = {};
-        desc.RecordCount = 2;
-        desc.pRecords    = record;
-
-        if (!m_MissTable.Init(pDevice, &desc))
-        {
-            ELOGA("Error : MissTable Init Failed.");
-            return false;
-        }
-    }
-
-    // ヒットグループ.
-    {
-        asdx::ShaderRecord record[2];
-        record[0].ShaderIdentifier = m_RayTracingPSO.GetShaderIdentifier(L"StandardHit");
-        record[1].ShaderIdentifier = m_RayTracingPSO.GetShaderIdentifier(L"ShadowHit");
-
-        asdx::ShaderTable::Desc desc = {};
-        desc.RecordCount = 2;
-        desc.pRecords    = record;
-
-        if (!m_HitGroupTable.Init(pDevice, &desc))
-        {
-            ELOGA("Error : HitGroupTable Init Failed.");
-            return false;
-        }
+        ELOGA("Error : CreateRayTracingPipeline() Failed.");
+        return false;
     }
 
     // トーンマップ用ルートシグニチャ生成.
@@ -757,85 +624,6 @@ bool Renderer::SystemSetup()
             return false;
         }
     }
-
-#if ENABLE_RESTIR
-    // テンポラルリザーバーバッファとスパシャルリザーバーバッファの初期化.
-    {
-        auto stride = sizeof(Reservoir);
-
-        asdx::TargetDesc desc;
-        desc.Dimension          = D3D12_RESOURCE_DIMENSION_BUFFER;
-        desc.Width              = stride * m_SceneDesc.Width * m_SceneDesc.Height;
-        desc.Height             = 1;
-        desc.DepthOrArraySize   = 1;
-        desc.Format             = DXGI_FORMAT_UNKNOWN;
-        desc.MipLevels          = 1;
-        desc.SampleDesc.Count   = 1;
-        desc.SampleDesc.Quality = 0;
-        desc.InitState          = D3D12_RESOURCE_STATE_COMMON;
-
-        if (!m_TemporalReservoirBuffer.Init(&desc, uint32_t(stride)))
-        {
-            ELOGA("Error : TemporalReservoirBuffer Init Failed.");
-            return false;
-        }
-
-        if (!m_SpatialReservoirBuffer.Init(&desc, uint32_t(stride)))
-        {
-            ELOGA("Error : SpatialReservoirBuffer Init Failed.");
-            return false;
-        }
-    }
-
-    // 初期サンプル & テンポラルリユース用パイプライン.
-    {
-        D3D12_SHADER_BYTECODE shader = { InitialSampling, sizeof(InitialSampling) };
-
-        if (!InitInitialSamplingPipeline(m_InitialSampling, shader))
-        {
-            ELOGA("Error : Init InitialSampling Pipeline Failed.");
-            return false;
-        }
-    }
-
-    // スパシャルリサンプリング用パイプライン.
-    {
-        D3D12_SHADER_BYTECODE shader = { SpatialResampling, sizeof(SpatialResampling) };
-
-        if (!InitSpatialSamplingPipeline(m_SpatialSampling, shader))
-        {
-            ELOGA("Error : Init SpatialSampling Pipeline Failed.");
-            return false;
-        }
-    }
-
-    // ピクセルシェード用ルートシグニチャ.
-    {
-        asdx::DescriptorSetLayout<3, 0> layout;
-        layout.SetContants(0, asdx::SV_ALL, 4, 0);
-        layout.SetSRV(1, asdx::SV_ALL, 0);
-        layout.SetTableUAV(2, asdx::SV_ALL, 0);
-
-        if (!m_ShadePixelRootSig.Init(pDevice, layout.GetDesc()))
-        {
-            ELOGA("Error : ShadePixel RootSignature Failed.");
-            return false;
-        }
-    }
-
-    // ピクセルシェード用パイプライン.
-    {
-        D3D12_COMPUTE_PIPELINE_STATE_DESC desc = {};
-        desc.pRootSignature = m_ShadePixelRootSig.GetPtr();
-        desc.CS             = { ShadePixel, sizeof(ShadePixel) };
-
-        if (!m_ShadePixelPSO.Init(pDevice, &desc))
-        {
-            ELOGA("Error : ShadePixel PipelineState Failed.");
-            return false;
-        }
-    }
-#endif
 
     // アルベドバッファ.
     {
@@ -1116,239 +904,6 @@ bool Renderer::SystemSetup()
 }
 
 //-----------------------------------------------------------------------------
-//      Initial Sampling / Temporal reuse 用パイプライン初期化.
-//-----------------------------------------------------------------------------
-bool Renderer::InitInitialSamplingPipeline(RtPipeline& value, D3D12_SHADER_BYTECODE shader)
-{
-    auto pDevice = asdx::GetD3D12Device();
-
-    // レイトレ用ルートシグニチャ生成.
-    {
-        asdx::DescriptorSetLayout<7, 1> layout;
-        // 共通.
-        layout.SetCBV(0, asdx::SV_ALL, 0);
-        layout.SetSRV(1, asdx::SV_ALL, 0);
-        layout.SetSRV(2, asdx::SV_ALL, 1);
-        layout.SetSRV(3, asdx::SV_ALL, 2);
-        layout.SetSRV(4, asdx::SV_ALL, 3);
-        layout.SetStaticSampler(0, asdx::SV_ALL, asdx::STATIC_SAMPLER_LINEAR_WRAP, 0);
-        layout.SetFlags(D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED);
-
-        // 個別.
-        layout.SetUAV     (5, asdx::SV_ALL, 0);  // TemporalReservoirBuffer.
-        layout.SetTableSRV(6, asdx::SV_ALL, 4);  // BackGround
-
-        if (!value.RootSig.Init(pDevice, layout.GetDesc()))
-        {
-            ELOGA("Error : RayTracing RootSignature Failed.");
-            return false;
-        }
-    }
-
-    // レイトレ用パイプラインステート生成.
-    {
-        D3D12_EXPORT_DESC exports[] = {
-            { L"OnGenerateRay"      , nullptr, D3D12_EXPORT_FLAG_NONE },
-            { L"OnClosestHit"       , nullptr, D3D12_EXPORT_FLAG_NONE },
-            { L"OnShadowClosestHit" , nullptr, D3D12_EXPORT_FLAG_NONE },
-            { L"OnMiss"             , nullptr, D3D12_EXPORT_FLAG_NONE },
-            { L"OnShadowMiss"       , nullptr, D3D12_EXPORT_FLAG_NONE },
-        };
-
-        D3D12_HIT_GROUP_DESC groups[2] = {};
-        groups[0].ClosestHitShaderImport    = L"OnClosestHit";
-        groups[0].HitGroupExport            = L"StandardHit";
-        groups[0].Type                      = D3D12_HIT_GROUP_TYPE_TRIANGLES;
-
-        groups[1].ClosestHitShaderImport    = L"OnShadowClosestHit";
-        groups[1].HitGroupExport            = L"ShadowHit";
-        groups[1].Type                      = D3D12_HIT_GROUP_TYPE_TRIANGLES;
-
-        asdx::RayTracingPipelineStateDesc desc = {};
-        desc.pGlobalRootSignature       = value.RootSig.GetPtr();
-        desc.DXILLibrary                = shader;
-        desc.ExportCount                = _countof(exports);
-        desc.pExports                   = exports;
-        desc.HitGroupCount              = _countof(groups);
-        desc.pHitGroups                 = groups;
-        desc.MaxPayloadSize             = sizeof(Payload);
-        desc.MaxAttributeSize           = sizeof(asdx::Vector2);
-        desc.MaxTraceRecursionDepth     = MAX_RECURSION_DEPTH;
-
-        if (!value.PSO.Init(pDevice, desc))
-        {
-            ELOGA("Error : RayTracing PSO Failed.");
-            return false;
-        }
-    }
-
-    // レイ生成テーブル.
-    {
-        asdx::ShaderRecord record = {};
-        record.ShaderIdentifier = value.PSO.GetShaderIdentifier(L"OnGenerateRay");
-
-        asdx::ShaderTable::Desc desc = {};
-        desc.RecordCount    = 1;
-        desc.pRecords       = &record;
-
-        if (!value.RayGenTable.Init(pDevice, &desc))
-        {
-            ELOGA("Error : RayGenTable Init Failed.");
-            return false;
-        }
-    }
-
-    // ミステーブル.
-    {
-        asdx::ShaderRecord record[2] = {};
-        record[0].ShaderIdentifier = value.PSO.GetShaderIdentifier(L"OnMiss");
-        record[1].ShaderIdentifier = value.PSO.GetShaderIdentifier(L"OnShadowMiss");
-
-        asdx::ShaderTable::Desc desc = {};
-        desc.RecordCount = 2;
-        desc.pRecords    = record;
-
-        if (!value.MissTable.Init(pDevice, &desc))
-        {
-            ELOGA("Error : MissTable Init Failed.");
-            return false;
-        }
-    }
-
-    // ヒットグループ.
-    {
-        asdx::ShaderRecord record[2];
-        record[0].ShaderIdentifier = value.PSO.GetShaderIdentifier(L"StandardHit");
-        record[1].ShaderIdentifier = value.PSO.GetShaderIdentifier(L"ShadowHit");
-
-        asdx::ShaderTable::Desc desc = {};
-        desc.RecordCount = 2;
-        desc.pRecords    = record;
-
-        if (!value.HitGroupTable.Init(pDevice, &desc))
-        {
-            ELOGA("Error : HitGroupTable Init Failed.");
-            return false;
-        }
-    }
-
-    return true;
-}
-
-//-----------------------------------------------------------------------------
-//      Spatial Sampling 用パイプライン初期化.
-//-----------------------------------------------------------------------------
-bool Renderer::InitSpatialSamplingPipeline(RtPipeline& value, D3D12_SHADER_BYTECODE shader)
-{
-    auto pDevice = asdx::GetD3D12Device();
-
-    // レイトレ用ルートシグニチャ生成.
-    {
-        asdx::DescriptorSetLayout<7, 1> layout;
-
-        // 共通.
-        layout.SetCBV(0, asdx::SV_ALL, 0);
-        layout.SetSRV(1, asdx::SV_ALL, 0);
-        layout.SetSRV(2, asdx::SV_ALL, 1);
-        layout.SetSRV(3, asdx::SV_ALL, 2);
-        layout.SetSRV(4, asdx::SV_ALL, 3);
-        layout.SetStaticSampler(0, asdx::SV_ALL, asdx::STATIC_SAMPLER_LINEAR_WRAP, 0);
-        layout.SetFlags(D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED);
-
-        // 個別.
-        layout.SetUAV(5, asdx::SV_ALL, 0);  // SpatialReservoirSample.
-        layout.SetSRV(6, asdx::SV_ALL, 4);  // TemporalReservoirBuffer
-
-        if (!value.RootSig.Init(pDevice, layout.GetDesc()))
-        {
-            ELOGA("Error : RayTracing RootSignature Failed.");
-            return false;
-        }
-    }
-
-    // レイトレ用パイプラインステート生成.
-    {
-        D3D12_EXPORT_DESC exports[] = {
-            { L"OnGenerateRay"      , nullptr, D3D12_EXPORT_FLAG_NONE },
-            { L"OnShadowClosestHit" , nullptr, D3D12_EXPORT_FLAG_NONE },
-            { L"OnShadowMiss"       , nullptr, D3D12_EXPORT_FLAG_NONE },
-        };
-
-        D3D12_HIT_GROUP_DESC groups = {};
-        groups.ClosestHitShaderImport    = L"OnShadowClosestHit";
-        groups.HitGroupExport            = L"ShadowHit";
-        groups.Type                      = D3D12_HIT_GROUP_TYPE_TRIANGLES;
-
-        asdx::RayTracingPipelineStateDesc desc = {};
-        desc.pGlobalRootSignature       = value.RootSig.GetPtr();
-        desc.DXILLibrary                = shader;
-        desc.ExportCount                = _countof(exports);
-        desc.pExports                   = exports;
-        desc.HitGroupCount              = 1;
-        desc.pHitGroups                 = &groups;
-        desc.MaxPayloadSize             = sizeof(Payload);
-        desc.MaxAttributeSize           = sizeof(asdx::Vector2);
-        desc.MaxTraceRecursionDepth     = MAX_RECURSION_DEPTH;
-
-        if (!value.PSO.Init(pDevice, desc))
-        {
-            ELOGA("Error : RayTracing PSO Failed.");
-            return false;
-        }
-    }
-
-    // レイ生成テーブル.
-    {
-        asdx::ShaderRecord record = {};
-        record.ShaderIdentifier = value.PSO.GetShaderIdentifier(L"OnGenerateRay");
-
-        asdx::ShaderTable::Desc desc = {};
-        desc.RecordCount    = 1;
-        desc.pRecords       = &record;
-
-        if (!value.RayGenTable.Init(pDevice, &desc))
-        {
-            ELOGA("Error : RayGenTable Init Failed.");
-            return false;
-        }
-    }
-
-    // ミステーブル.
-    {
-        asdx::ShaderRecord record = {};
-        record.ShaderIdentifier = value.PSO.GetShaderIdentifier(L"OnShadowMiss");
-
-        asdx::ShaderTable::Desc desc = {};
-        desc.RecordCount = 1;
-        desc.pRecords    = &record;
-
-        if (!value.MissTable.Init(pDevice, &desc))
-        {
-            ELOGA("Error : MissTable Init Failed.");
-            return false;
-        }
-    }
-
-    // ヒットグループ.
-    {
-        asdx::ShaderRecord record;
-        record.ShaderIdentifier = value.PSO.GetShaderIdentifier(L"ShadowHit");
-
-        asdx::ShaderTable::Desc desc = {};
-        desc.RecordCount = 1;
-        desc.pRecords    = &record;
-
-        if (!value.HitGroupTable.Init(pDevice, &desc))
-        {
-            ELOGA("Error : HitGroupTable Init Failed.");
-            return false;
-        }
-    }
-
-    return true;
-}
-
-//-----------------------------------------------------------------------------
 //      シーンを構築します.
 //-----------------------------------------------------------------------------
 bool Renderer::BuildScene()
@@ -1358,383 +913,10 @@ bool Renderer::BuildScene()
     printf_s("Build scene  ... ");
 
 #if !(CAMP_RELEASE)
-    auto pDevice = asdx::GetD3D12Device();
-
-    Light dirLight = {};
-    dirLight.Type       = LIGHT_TYPE_DIRECTIONAL;
-    dirLight.Position   = asdx::Vector3(0.0f, -1.0f, 1.0f);
-    dirLight.Intensity  = asdx::Vector3(1.0f, 1.0f, 1.0f) * 2.0f;
-    dirLight.Radius     = 1.0f;
-
-    std::vector<r3d::MeshInfo> infos;
-    std::vector<r3d::Mesh> meshes;
-    if (!LoadMesh("../res/model/rtcamp_2022_02.obj", meshes, infos))
+    if (!BuildTestScene())
     {
-        ELOGA("Error : LoadMesh() Failed.");
         return false;
     }
-
-    std::vector<r3d::CpuInstance> instances;
-    instances.resize(meshes.size());
-
-    for(size_t i=0; i<meshes.size(); ++i)
-    {
-        instances[i].MaterialId = 0;
-        instances[i].MeshId     = uint32_t(i);
-        instances[i].Transform  = asdx::Transform3x4();
-    }
-
-    if (instances.size() >= 3)
-    { instances[2].MaterialId = 1; } // pole
-
-    if (instances.size() >= 11)
-    { instances[10].MaterialId = 2; } // wave
-
-    if (instances.size() >= 2)
-    { instances[1].MaterialId = 0; } // bridge
-
-    if (instances.size() >= 1)
-    { instances[0].MaterialId = 3; } // bottom.
-
-    instances[3].MaterialId = 4;
-    instances[4].MaterialId = 5;
-    instances[5].MaterialId = 6;
-    instances[6].MaterialId = 7;
-    instances[7].MaterialId = 8;
-    instances[8].MaterialId = 9;
-    instances[9].MaterialId = 10;
-
-    // mat0
-    Material planks = Material::Default();
-    planks.BaseColor0 = 0;
-    planks.Normal0    = 1;
-    planks.ORM0       = 2; 
-
-    // mat1
-    Material poles = Material::Default();
-    poles.BaseColor0 = 3;
-    poles.Normal0    = 4;
-    poles.ORM0       = 5;
-
-    // mat2
-    Material wave = Material::Default();
-    wave.BaseColor0 = INVALID_MATERIAL_MAP;
-    wave.Normal0    = 9;
-    wave.ORM0       = INVALID_MATERIAL_MAP;
-    wave.Emissive0  = INVALID_MATERIAL_MAP;
-    wave.ExtIor     = 1.0f;
-    wave.IntIor     = 1.2f;
-    wave.Normal1    = 10;
-    wave.UvScale0   = asdx::Vector2(50.0f, 50.0f);
-    wave.UvScroll0  = asdx::Vector2(0.005f, -0.02f);
-    wave.UvScale1   = asdx::Vector2(50.0f, 50.0f);
-    wave.UvScroll1  = asdx::Vector2(-0.01f, 0.01f);
-    wave.LayerCount = 2;
-
-    // mat3
-    Material ground = Material::Default();
-    ground.BaseColor0 = 6;
-    ground.Normal0    = 7;
-    ground.ORM0       = 8;
-    ground.UvScale0   = asdx::Vector2(500.0f, 500.0f);
-    //ground.UvScroll  = asdx::Vector2(0.1f, 0.0f);
-
-    // mat4
-    Material aft = Material::Default();
-    aft.BaseColor0 = 11;
-    aft.Normal0 = 12;
-    aft.ORM0 = 13;
-
-    // mat5
-    Material deck = Material::Default();
-    deck.BaseColor0 = 14;
-    deck.Normal0 = 15;
-    deck.ORM0 = 16;
-
-    // mat6
-    Material details = Material::Default();
-    details.BaseColor0 = 17;
-    details.Normal0 = 18;
-    details.ORM0 = 19;
-
-    // mat7
-    Material hull = Material::Default();
-    hull.BaseColor0 = 20;
-    hull.Normal0 = 21;
-    hull.ORM0 = 22;
-
-    // mat8
-    Material interior = Material::Default();
-    interior.BaseColor0 = 23;
-    interior.Normal0 = 24;
-    interior.ORM0 = 25;
-
-    // mat9
-    Material rigging = Material::Default();
-    rigging.BaseColor0 = 26;
-    rigging.Normal0 = 27;
-    rigging.ORM0 = 28;
-
-    // mat10
-    Material sails = Material::Default();
-    sails.BaseColor0 = 29;
-    //sails.Normal0 = 30;
-    sails.ORM0 = 31;
-
-    //instances[1].MaterialId = 0;
-    //instances[2].MaterialId = 1;
-    //instances[3].MaterialId = 2;
-    //instances[0].MaterialId = 3;
-
-
-    SceneExporter exporter;
-    exporter.SetIBL("../res/ibl/lakeside_2k.dds");
-    exporter.AddTexture("../res/texture/modular_wooden_pier_planks_diff_2k.dds"); // 0
-    exporter.AddTexture("../res/texture/modular_wooden_pier_planks_nor_gl_2k.dds"); // 1
-    exporter.AddTexture("../res/texture/modular_wooden_pier_planks_arm_2k.dds"); // 2
-    exporter.AddTexture("../res/texture/modular_wooden_pier_poles_diff_2k.dds"); // 3
-    exporter.AddTexture("../res/texture/modular_wooden_pier_poles_nor_gl_2k.dds"); // 4
-    exporter.AddTexture("../res/texture/modular_wooden_pier_poles_arm_2k.dds"); // 5
-    exporter.AddTexture("../res/texture/coral_mud_01_diff_2k.dds"); // 6
-    exporter.AddTexture("../res/texture/coral_mud_01_nor_gl_2k.dds"); // 7
-    exporter.AddTexture("../res/texture/coral_mud_01_rough_2k.dds"); // 8
-    exporter.AddTexture("../res/texture/wave_normal.dds"); // 9
-    exporter.AddTexture("../res/texture/wave_normal1.dds"); // 10
-    exporter.AddTexture("../res/texture/ship_pinnace_aft_diff_1k.dds"); // 11
-    exporter.AddTexture("../res/texture/ship_pinnace_aft_nor_gl_1k.dds"); // 12
-    exporter.AddTexture("../res/texture/ship_pinnace_aft_arm_1k.dds"); // 13
-    exporter.AddTexture("../res/texture/ship_pinnace_deck_diff_1k.dds"); // 14
-    exporter.AddTexture("../res/texture/ship_pinnace_deck_nor_gl_1k.dds"); // 15
-    exporter.AddTexture("../res/texture/ship_pinnace_deck_arm_1k.dds"); // 16
-    exporter.AddTexture("../res/texture/ship_pinnace_details_diff_1k.dds"); // 17
-    exporter.AddTexture("../res/texture/ship_pinnace_details_nor_gl_1k.dds"); // 18
-    exporter.AddTexture("../res/texture/ship_pinnace_details_arm_1k.dds"); // 19
-    exporter.AddTexture("../res/texture/ship_pinnace_hull_diff_1k.dds"); // 20
-    exporter.AddTexture("../res/texture/ship_pinnace_hull_nor_gl_1k.dds"); // 21
-    exporter.AddTexture("../res/texture/ship_pinnace_hull_arm_1k.dds"); // 22
-    exporter.AddTexture("../res/texture/ship_pinnace_interior_diff_1k.dds"); // 23
-    exporter.AddTexture("../res/texture/ship_pinnace_interior_nor_gl_1k.dds"); // 24
-    exporter.AddTexture("../res/texture/ship_pinnace_interior_arm_1k.dds"); // 25
-    exporter.AddTexture("../res/texture/ship_pinnace_rigging_diff_1k.dds"); // 26
-    exporter.AddTexture("../res/texture/ship_pinnace_rigging_nor_gl_1k.dds"); // 27
-    exporter.AddTexture("../res/texture/ship_pinnace_rigging_arm_1k.dds"); // 28
-    exporter.AddTexture("../res/texture/ship_pinnace_sails_diff_1k.dds"); // 29
-    exporter.AddTexture("../res/texture/ship_pinnace_sails_nor_gl_1k.dds"); // 30
-    exporter.AddTexture("../res/texture/ship_pinnace_sails_orm_1k.dds"); // 31
-    exporter.AddMeshes(meshes);
-    exporter.AddMaterial(planks);   // 0
-    exporter.AddMaterial(poles);    // 1
-    exporter.AddMaterial(wave);     // 2
-    exporter.AddMaterial(ground);   // 3
-    exporter.AddMaterial(aft);      // 4
-    exporter.AddMaterial(deck);     // 5
-    exporter.AddMaterial(details);  // 6
-    exporter.AddMaterial(hull);     // 7
-    exporter.AddMaterial(interior); // 8
-    exporter.AddMaterial(rigging);  // 9
-    exporter.AddMaterial(sails);    // 10
-    //exporter.AddMaterial(dummy0);
-    //exporter.AddMaterial(dummy1);
-    //exporter.AddMaterial(dummy2);
-    exporter.AddInstances(instances);
-    exporter.AddLight(dirLight);
-
-    const char* exportPath = "../res/scene/rtcamp.scn";
-
-    if (!exporter.Export(exportPath))
-    {
-        ELOGA("Error : SceneExporter::Export() Failed.");
-        return false;
-    }
-
-    // シーン構築.
-    {
-        if (!m_Scene.Init(exportPath, m_GfxCmdList))
-        {
-            ELOGA("Error : Scene::Init() Failed.");
-            return false;
-        }
-    }
-
-    //// IBL読み込み.
-    //{
-    //    std::string path;
-    //    if (!asdx::SearchFilePathA("../res/ibl/studio_garden_2k.dds", path))
-    //    {
-    //        ELOGA("Error : IBL File Not Found.");
-    //        return false;
-    //    }
-
-    //    asdx::ResTexture res;
-    //    if (!res.LoadFromFileA(path.c_str()))
-    //    {
-    //        ELOGA("Error : IBL Load Failed.");
-    //        return false;
-    //    }
-
-    //    if (!m_IBL.Init(m_GfxCmdList, res))
-    //    {
-    //        ELOGA("Error : IBL Init Failed.");
-    //        return false;
-    //    }
-    //}
-
-    //// テクスチャ.
-    //{
-    //    std::string path;
-    //    if (!asdx::SearchFilePathA("../res/texture/floor_tiles_08_diff_2k.dds", path))
-    //    {
-    //        ELOGA("Error : Texture Not Found.");
-    //        return false;
-    //    }
-
-    //    asdx::ResTexture res;
-    //    if (!res.LoadFromFileA(path.c_str()))
-    //    {
-    //        ELOGA("Error : Texture Load Failed.");
-    //        return false;
-    //    }
-
-    //    if (!m_PlaneBC.Init(m_GfxCmdList, res))
-    //    {
-    //        ELOGA("Error : Texture Init Failed.");
-    //        return false;
-    //    }
-    //}
-
-    //// Test
-    //{
-    //    const char* rawPath = "../res/model/dosei_with_ground.obj";
-    //    ModelOBJ model;
-    //    OBJLoader loader;
-    //    std::string path;
-    //    if (!asdx::SearchFilePathA(rawPath, path))
-    //    {
-    //        ELOGA("Error : File Path Not Found. path = %s", rawPath);
-    //        return false;
-    //    }
-
-    //    if (!loader.Load(path.c_str(), model))
-    //    {
-    //        ELOGA("Error : Model Load Failed.");
-    //        return false;
-    //    }
-
-    //    Material dummy0 = {};
-    //    dummy0.Normal    = INVALID_MATERIAL_MAP;
-    //    dummy0.BaseColor = INVALID_MATERIAL_MAP;
-    //    dummy0.ORM       = INVALID_MATERIAL_MAP;
-    //    dummy0.Emissive  = INVALID_MATERIAL_MAP;
-    //    dummy0.IntIor    = 1.4f;
-    //    dummy0.ExtIor    = 1.0f;
-    //    dummy0.UvScale   = asdx::Vector2(1.0f, 1.0f);
-    //    m_ModelMgr.AddMaterials(&dummy0, 1);
-
-    //    Material dummy1 = {};
-    //    dummy1.Normal    = INVALID_MATERIAL_MAP;
-    //    dummy1.BaseColor = m_PlaneBC.GetView()->GetDescriptorIndex();
-    //    dummy1.ORM       = INVALID_MATERIAL_MAP;
-    //    dummy1.Emissive  = INVALID_MATERIAL_MAP;
-    //    //dummy0.IntIor    = 1.4f;
-    //    //dummy0.ExtIor    = 1.0f;
-    //    dummy1.UvScale   = asdx::Vector2(10.0f, 10.0f);
-    //    m_ModelMgr.AddMaterials(&dummy1, 1);
-
-    //    auto meshCount = model.Meshes.size();
-
-    //    m_BLAS.resize(meshCount);
-
-    //    std::vector<D3D12_RAYTRACING_INSTANCE_DESC> instanceDescs;
-    //    instanceDescs.resize(meshCount);
-
-    //    m_MeshDrawCalls.resize(meshCount);
- 
-    //    for(size_t i=0; i<meshCount; ++i)
-    //    {
-    //        r3d::Mesh mesh = {};
-    //        mesh.VertexCount = uint32_t(model.Meshes[i].Vertices.size());
-    //        mesh.Vertices    = reinterpret_cast<Vertex*>(model.Meshes[i].Vertices.data());
-    //        mesh.IndexCount  = uint32_t(model.Meshes[i].Indices.size());
-    //        mesh.Indices     = model.Meshes[i].Indices.data();
-
-    //        auto geometryHandle = m_ModelMgr.AddMesh(mesh);
-
-    //        r3d::CpuInstance instance = {};
-    //        instance.Transform      = asdx::Transform3x4();
-    //        instance.MeshId         = uint32_t(i);
-    //        instance.MaterialId     = (i != 3) ? 0 : 1;
-    //        //instance.MaterialId     = 0;
-
-    //        auto instanceHandle = m_ModelMgr.AddInstance(instance);
-
-    //        D3D12_RAYTRACING_GEOMETRY_DESC desc = {};
-    //        desc.Type                                   = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
-    //        desc.Flags                                  = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
-    //        desc.Triangles.Transform3x4                 = instanceHandle.AddressTB;
-    //        desc.Triangles.IndexFormat                  = DXGI_FORMAT_R32_UINT;
-    //        desc.Triangles.IndexCount                   = mesh.IndexCount;
-    //        desc.Triangles.IndexBuffer                  = geometryHandle.AddressIB;
-    //        desc.Triangles.VertexFormat                 = DXGI_FORMAT_R32G32B32_FLOAT;
-    //        desc.Triangles.VertexBuffer.StartAddress    = geometryHandle.AddressVB;
-    //        desc.Triangles.VertexBuffer.StrideInBytes   = sizeof(Vertex);
-    //        desc.Triangles.VertexCount                  = mesh.VertexCount;
-
-    //        if (!m_BLAS[i].Init(
-    //            pDevice,
-    //            1,
-    //            &desc, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE))
-    //        {
-    //            ELOGA("Error : Blas::Init() Failed.");
-    //            return false;
-    //        }
-
-    //        // ビルドコマンドを積んでおく.
-    //        m_BLAS[i].Build(m_GfxCmdList.GetCommandList());
-
-    //        memcpy(instanceDescs[i].Transform, instance.Transform.m, sizeof(float) * 12);
-    //        instanceDescs[i].InstanceID                             = instanceHandle.InstanceId;
-    //        instanceDescs[i].InstanceMask                           = 0xFF;
-    //        instanceDescs[i].InstanceContributionToHitGroupIndex    = 0;
-    //        instanceDescs[i].Flags                                  = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
-    //        instanceDescs[i].AccelerationStructure                  = m_BLAS[i].GetResource()->GetGPUVirtualAddress();
-
-    //        D3D12_VERTEX_BUFFER_VIEW vbv = {};
-    //        vbv.BufferLocation = geometryHandle.AddressVB;
-    //        vbv.SizeInBytes    = sizeof(Vertex) * mesh.VertexCount;
-    //        vbv.StrideInBytes  = sizeof(Vertex);
-
-    //        D3D12_INDEX_BUFFER_VIEW ibv = {};
-    //        ibv.BufferLocation = geometryHandle.AddressIB;
-    //        ibv.SizeInBytes    = sizeof(uint32_t) * mesh.IndexCount;
-    //        ibv.Format         = DXGI_FORMAT_R32_UINT;
-
-    //        m_MeshDrawCalls[i].StartIndex = 0;
-    //        m_MeshDrawCalls[i].IndexCount = mesh.IndexCount;
-    //        m_MeshDrawCalls[i].BaseVertex = 0;
-    //        m_MeshDrawCalls[i].InstanceId = instanceHandle.InstanceId;
-    //        m_MeshDrawCalls[i].VBV        = vbv;
-    //        m_MeshDrawCalls[i].IBV        = ibv;
-    //    }
-
-    //    auto instanceCount = uint32_t(instanceDescs.size());
-    //    if (!m_TLAS.Init(
-    //        pDevice,
-    //        instanceCount,
-    //        instanceDescs.data(),
-    //        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE))
-    //    {
-    //        ELOGA("Error : Tlas::Init() Failed.");
-    //        return false;
-    //    }
-
-    //    // ビルドコマンドを積んでおく.
-    //    m_TLAS.Build(m_GfxCmdList.GetCommandList());
-    //}
-
-    //// ライト生成.
-    //{
-    //}
-
 #else
     // シーン構築.
     {
@@ -2074,9 +1256,10 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
 
     // デノイズ用 G-Buffer.
     {
-        asdx::ScopedBarrier barrier0(m_GfxCmdList, m_AlbedoTarget  .GetResource(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
-        asdx::ScopedBarrier barrier1(m_GfxCmdList, m_NormalTarget  .GetResource(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
-        asdx::ScopedBarrier barrier2(m_GfxCmdList, m_VelocityTarget.GetResource(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
+        m_AlbedoTarget      .Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_RENDER_TARGET);
+        m_NormalTarget      .Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_RENDER_TARGET);
+        m_VelocityTarget    .Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_RENDER_TARGET);
+        m_ModelDepthTarget  .Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_DEPTH_WRITE);
 
         auto pRTV0 = m_AlbedoTarget    .GetRTV();
         auto pRTV1 = m_NormalTarget    .GetRTV();
@@ -2119,128 +1302,10 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         m_Scene.Draw(m_GfxCmdList.GetCommandList());
     }
 
-#if ENABLE_RESTIR
-    // Initial Sampling & Temporal reuse
-    {
-        auto stateObject    = m_InitialSampling.PSO          .GetStateObject();
-        auto rayGenTable    = m_InitialSampling.RayGenTable  .GetRecordView();
-        auto missTable      = m_InitialSampling.MissTable    .GetTableView();
-        auto hitGroupTable  = m_InitialSampling.HitGroupTable.GetTableView();
-        auto rootSignature  = m_InitialSampling.RootSig      .GetPtr();
-
-    #if (!CAMP_RELEASE)
-        if (m_ReloadShader)
-        {
-            stateObject     = m_DevInitialSampling.PSO          .GetStateObject();
-            rayGenTable     = m_DevInitialSampling.RayGenTable  .GetRecordView();
-            missTable       = m_DevInitialSampling.MissTable    .GetTableView();
-            hitGroupTable   = m_DevInitialSampling.HitGroupTable.GetTableView();
-            rootSignature   = m_DevInitialSampling.RootSig      .GetPtr();
-        }
-    #endif
-
-        m_GfxCmdList.SetStateObject(stateObject);
-        m_GfxCmdList.SetRootSignature(rootSignature, true);
-
-        // 共通.
-        m_GfxCmdList.SetCBV(0, m_SceneParam.GetResource(), true);
-        m_GfxCmdList.SetSRV(1, m_TLAS.GetResource(), true);
-        m_GfxCmdList.SetSRV(2, m_ModelMgr.GetIB(), true);
-        m_GfxCmdList.SetSRV(3, m_ModelMgr.GetMB(), true);
-        m_GfxCmdList.SetSRV(4, m_ModelMgr.GetTB(), true);
-
-        // 個別.
-        m_GfxCmdList.SetUAV(5, m_TemporalReservoirBuffer.GetUAV(), true);
-        //m_GfxCmdList.SetSRV(6, m_Scene.GetIBL(), true);
-        m_GfxCmdList.SetTable(6, m_IBL.GetView(), true);
-
-        D3D12_DISPATCH_RAYS_DESC desc = {};
-        desc.RayGenerationShaderRecord  = rayGenTable;
-        desc.MissShaderTable            = missTable;
-        desc.HitGroupTable              = hitGroupTable;
-        desc.Width                      = m_SceneDesc.Width;
-        desc.Height                     = m_SceneDesc.Height;
-        desc.Depth                      = 1;
-
-        m_GfxCmdList.DispatchRays(&desc);
-
-        // バリアを張っておく.
-        m_GfxCmdList.BarrierUAV(m_TemporalReservoirBuffer.GetResource());
-    }
-
-    // Spatial reuse
-    {
-        auto stateObject    = m_SpatialSampling.PSO          .GetStateObject();
-        auto rayGenTable    = m_SpatialSampling.RayGenTable  .GetRecordView();
-        auto missTable      = m_SpatialSampling.MissTable    .GetTableView();
-        auto hitGroupTable  = m_SpatialSampling.HitGroupTable.GetTableView();
-        auto rootSignature  = m_SpatialSampling.RootSig      .GetPtr();
-
-    #if (!CAMP_RELEASE)
-        if (m_ReloadShader)
-        {
-            stateObject     = m_DevSpatialSampling.PSO          .GetStateObject();
-            rayGenTable     = m_DevSpatialSampling.RayGenTable  .GetRecordView();
-            missTable       = m_DevSpatialSampling.MissTable    .GetTableView();
-            hitGroupTable   = m_DevSpatialSampling.HitGroupTable.GetTableView();
-            rootSignature   = m_DevSpatialSampling.RootSig      .GetPtr();
-        }
-    #endif
-
-        m_GfxCmdList.SetStateObject(stateObject);
-        m_GfxCmdList.SetRootSignature(rootSignature, true);
-
-        // 共通.
-        m_GfxCmdList.SetCBV(0, m_SceneParam.GetResource(), true);
-        m_GfxCmdList.SetSRV(1, m_TLAS.GetResource(), true);
-        m_GfxCmdList.SetSRV(2, m_ModelMgr.GetIB(), true);
-        m_GfxCmdList.SetSRV(3, m_ModelMgr.GetMB(), true);
-        m_GfxCmdList.SetSRV(4, m_ModelMgr.GetTB(), true);
-
-        // 個別.
-        m_GfxCmdList.SetUAV(5, m_SpatialReservoirBuffer.GetUAV(), true);
-        m_GfxCmdList.SetSRV(6, m_TemporalReservoirBuffer.GetSRV(), true);
-
-        D3D12_DISPATCH_RAYS_DESC desc = {};
-        desc.RayGenerationShaderRecord  = rayGenTable;
-        desc.MissShaderTable            = missTable;
-        desc.HitGroupTable              = hitGroupTable;
-        desc.Width                      = m_SceneDesc.Width;
-        desc.Height                     = m_SceneDesc.Height;
-        desc.Depth                      = 1;
-
-        m_GfxCmdList.DispatchRays(&desc);
-
-        // バリアを張っておく.
-        m_GfxCmdList.BarrierUAV(m_SpatialReservoirBuffer.GetResource());
-    }
-
-    // Shade Pixel.
-    {
-        auto pReservoirBuffer = m_SpatialReservoirBuffer.GetSRV();
-
-        ShadeParam param = {};
-        param.Width                 = m_SceneDesc.Width;
-        param.Height                = m_SceneDesc.Height;
-        param.EnableAccumulation    = enableAccumulation;
-        param.AccumulationFrame     = m_AccumulatedFrames;
-
-        uint32_t threadX = (m_SceneDesc.Width  + 7) / 8;
-        uint32_t threadY = (m_SceneDesc.Height + 7) / 8;
-
-        m_GfxCmdList.SetRootSignature(m_ShadePixelRootSig.GetPtr(), true);
-        m_GfxCmdList.SetPipelineState(m_ShadePixelPSO.GetPtr());
-        m_GfxCmdList.SetConstants(0, 4, &param, 0, true);
-        m_GfxCmdList.SetSRV(1, pReservoirBuffer, true);
-        m_GfxCmdList.SetTable(2, m_Canvas.GetUAV(), true);
-        m_GfxCmdList.Dispatch(threadX, threadY, 1);
-
-        m_GfxCmdList.BarrierUAV(m_Canvas.GetResource());
-    }
-#else
-
     // レイトレ実行.
     {
+        m_Canvas.Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
         auto stateObject    = m_RayTracingPSO.GetStateObject();
         auto rayGenTable    = m_RayGenTable  .GetRecordView();
         auto missTable      = m_MissTable    .GetTableView();
@@ -2260,12 +1325,12 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         m_GfxCmdList.SetStateObject(stateObject);
         m_GfxCmdList.SetRootSignature(m_RayTracingRootSig.GetPtr(), true);
         m_GfxCmdList.SetTable(0, m_Canvas.GetUAV(), true);
-        m_GfxCmdList.SetSRV(1, m_Scene.GetTLAS(), true);
-        m_GfxCmdList.SetSRV(2, m_Scene.GetIB(), true);
-        m_GfxCmdList.SetSRV(3, m_Scene.GetMB(), true);
-        m_GfxCmdList.SetSRV(4, m_Scene.GetTB(), true);
+        m_GfxCmdList.SetSRV  (1, m_Scene.GetTLAS(), true);
+        m_GfxCmdList.SetSRV  (2, m_Scene.GetIB(), true);
+        m_GfxCmdList.SetSRV  (3, m_Scene.GetMB(), true);
+        m_GfxCmdList.SetSRV  (4, m_Scene.GetTB(), true);
         m_GfxCmdList.SetTable(5, m_Scene.GetIBL(), true);
-        m_GfxCmdList.SetCBV(6, m_SceneParam.GetResource(), true);
+        m_GfxCmdList.SetCBV  (6, m_SceneParam.GetResource(), true);
         m_GfxCmdList.SetTable(7, m_Scene.GetLB(), true);
 
         D3D12_DISPATCH_RAYS_DESC desc = {};
@@ -2281,23 +1346,19 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         // バリアを張っておく.
         m_GfxCmdList.BarrierUAV(m_Canvas.GetResource());
     }
-#endif
 
     auto threadX = (m_SceneDesc.Width  + 7) / 8;
     auto threadY = (m_SceneDesc.Height + 7) / 8;
 
     // トーンマップ実行.
     {
-        asdx::ScopedBarrier barrier0(
-            m_GfxCmdList,
-            m_Canvas.GetResource(),
-            D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        m_Canvas       .Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        m_TonemapBuffer.Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
         m_GfxCmdList.SetRootSignature(m_TonemapRootSig.GetPtr(), true);
         m_GfxCmdList.SetPipelineState(m_TonemapPSO.GetPtr());
         m_GfxCmdList.SetTable(0, m_Canvas.GetSRV(), true);
-        m_GfxCmdList.SetCBV(1, m_SceneParam.GetResource(), true);
+        m_GfxCmdList.SetCBV  (1, m_SceneParam.GetResource(), true);
         m_GfxCmdList.SetTable(2, m_TonemapBuffer.GetUAV(), true);
         m_GfxCmdList.Dispatch(threadX, threadY, 1);
 
@@ -2306,6 +1367,11 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
 
     // デノイズ Horizontal-Pass
     {
+        m_DenoiseTarget[0].Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        m_TonemapBuffer   .Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        m_ModelDepthTarget.Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        m_NormalTarget    .Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+
         DenoiseParam param = {};
         param.DispathArgsX      = threadX;
         param.DispathArgsY      = threadY;
@@ -2330,6 +1396,11 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
 
     // デノイズ Vertical-Pass
     {
+        m_DenoiseTarget[1].Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        m_DenoiseTarget[0].Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        m_ModelDepthTarget.Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        m_NormalTarget    .Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+
         DenoiseParam param = {};
         param.DispathArgsX      = threadX;
         param.DispathArgsY      = threadY;
@@ -2337,12 +1408,6 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         param.InvTargetSizeY    = 1.0f / float(m_SceneDesc.Height);
         param.OffsetX           = 0.0f;
         param.OffsetY           = 1.0f / float(m_SceneDesc.Height);
-
-        asdx::ScopedBarrier barrier0(
-            m_GfxCmdList,
-            m_DenoiseTarget[0].GetResource(),
-            D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
         m_GfxCmdList.SetRootSignature(m_DenoiseRootSig.GetPtr(), true);
         m_GfxCmdList.SetPipelineState(m_DenoisePSO.GetPtr());
@@ -2360,19 +1425,14 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
 
     // TemporalAA
     {
+        m_CaptureTarget[m_CaptureTargetIndex].Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        m_HistoryTarget[m_CurrHistoryIndex]  .Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        m_DenoiseTarget[1]                   .Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        m_HistoryTarget[m_PrevHistoryIndex]  .Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        m_VelocityTarget                     .Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        m_ModelDepthTarget                   .Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+
         auto jitter = asdx::TaaRenderer::CalcJitter(GetFrameCount(), m_SceneDesc.Width, m_SceneDesc.Height);
-
-        asdx::ScopedBarrier b0(
-            m_GfxCmdList,
-            m_DenoiseTarget[1].GetResource(), 
-            D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-
-        asdx::ScopedBarrier b1(
-            m_GfxCmdList,
-            m_HistoryTarget[m_PrevHistoryIndex].GetResource(),
-            D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
         m_TaaRenerer.RenderCS(
             m_GfxCmdList.GetCommandList(),
@@ -2404,37 +1464,24 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
     //}
 
     // スワップチェインに描画.
+    #if !(CAMP_RELEASE)
     {
         auto& target = m_CaptureTarget[m_CaptureTargetIndex];
+
 
         m_GfxCmdList.BarrierTransition(
             m_ColorTarget[idx].GetResource(), 0,
             D3D12_RESOURCE_STATE_PRESENT,
             D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-        // ピクセルシェーダアクセスのため遷移.
-        m_GfxCmdList.BarrierTransition(
-            target.GetResource(), 0,
-            D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+        target.Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
-    #if !(CAMP_RELEASE)
         const asdx::IShaderResourceView* pSRV = nullptr;
         switch(m_BufferKind)
         {
         case BUFFER_KIND_CANVAS:
             pSRV = target.GetSRV();
             break;
-
-        #if ENABLE_RESTIR
-        case BUFFER_KIND_SPATIAL:
-            pSRV = m_SpatialReservoirBuffer.GetSRV();
-            break;
-
-        case BUFFER_KIND_TEMPORAL:
-            pSRV = m_TemporalReservoirBuffer.GetSRV();
-            break;
-        #endif
 
         case BUFFER_KIND_ALBEDO:
             pSRV = m_AlbedoTarget.GetSRV();
@@ -2456,14 +1503,6 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         m_GfxCmdList.SetPipelineState(m_CopyPSO.GetPtr());
         m_GfxCmdList.SetTable(0, pSRV);
         asdx::Quad::Instance().Draw(m_GfxCmdList.GetCommandList());
-    #else
-        m_GfxCmdList.SetTarget(m_ColorTarget[idx].GetRTV(), nullptr);
-        m_GfxCmdList.SetViewport(m_ColorTarget[idx].GetResource());
-        m_GfxCmdList.SetRootSignature(m_CopyRootSig.GetPtr(), false);
-        m_GfxCmdList.SetPipelineState(m_CopyPSO.GetPtr());
-        m_GfxCmdList.SetTable(0, target.GetSRV());
-        asdx::Quad::Instance().Draw(m_GfxCmdList.GetCommandList());
-    #endif
 
         // 2D描画.
         Draw2D();
@@ -2472,12 +1511,8 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
             m_ColorTarget[idx].GetResource(), 0,
             D3D12_RESOURCE_STATE_RENDER_TARGET,
             D3D12_RESOURCE_STATE_PRESENT);
-
-        m_GfxCmdList.BarrierTransition(
-            target.GetResource(), 0,
-            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
-            D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     }
+    #endif
 
     // コマンド記録終了.
     m_GfxCmdList.Close();
@@ -2775,6 +1810,108 @@ void Renderer::CaptureScreen(ID3D12Resource* pResource, D3D12_RESOURCE_STATES st
     }
 }
 
+bool Renderer::CreateRayTracingPipeline
+(
+    const void*                     pBinary,
+    size_t                          binarySize,
+    asdx::RayTracingPipelineState&  pso,
+    asdx::ShaderTable&              rayGen,
+    asdx::ShaderTable&              miss,
+    asdx::ShaderTable&              hitGroup
+)
+{
+    auto pDevice = asdx::GetD3D12Device();
+
+    // レイトレ用パイプラインステート生成.
+    {
+        D3D12_EXPORT_DESC exports[] = {
+            { L"OnGenerateRay"      , nullptr, D3D12_EXPORT_FLAG_NONE },
+            { L"OnClosestHit"       , nullptr, D3D12_EXPORT_FLAG_NONE },
+            { L"OnShadowAnyHit"     , nullptr, D3D12_EXPORT_FLAG_NONE },
+            { L"OnMiss"             , nullptr, D3D12_EXPORT_FLAG_NONE },
+            { L"OnShadowMiss"       , nullptr, D3D12_EXPORT_FLAG_NONE },
+        };
+
+        D3D12_HIT_GROUP_DESC groups[2] = {};
+        groups[0].ClosestHitShaderImport    = L"OnClosestHit";
+        groups[0].HitGroupExport            = L"StandardHit";
+        groups[0].Type                      = D3D12_HIT_GROUP_TYPE_TRIANGLES;
+
+        groups[1].AnyHitShaderImport        = L"OnShadowAnyHit";
+        groups[1].HitGroupExport            = L"ShadowHit";
+        groups[1].Type                      = D3D12_HIT_GROUP_TYPE_TRIANGLES;
+
+        asdx::RayTracingPipelineStateDesc desc = {};
+        desc.pGlobalRootSignature       = m_RayTracingRootSig.GetPtr();
+        desc.DXILLibrary                = { pBinary, binarySize };
+        desc.ExportCount                = _countof(exports);
+        desc.pExports                   = exports;
+        desc.HitGroupCount              = _countof(groups);
+        desc.pHitGroups                 = groups;
+        desc.MaxPayloadSize             = sizeof(Payload);
+        desc.MaxAttributeSize           = sizeof(asdx::Vector2);
+        desc.MaxTraceRecursionDepth     = 1;
+
+        if (!pso.Init(pDevice, desc))
+        {
+            ELOGA("Error : RayTracing PSO Failed.");
+            return false;
+        }
+    }
+
+    // レイ生成テーブル.
+    {
+        asdx::ShaderRecord record = {};
+        record.ShaderIdentifier = pso.GetShaderIdentifier(L"OnGenerateRay");
+
+        asdx::ShaderTable::Desc desc = {};
+        desc.RecordCount    = 1;
+        desc.pRecords       = &record;
+
+        if (!rayGen.Init(pDevice, &desc))
+        {
+            ELOGA("Error : RayGenTable Init Failed.");
+            return false;
+        }
+    }
+
+    // ミステーブル.
+    {
+        asdx::ShaderRecord record[2] = {};
+        record[0].ShaderIdentifier = pso.GetShaderIdentifier(L"OnMiss");
+        record[1].ShaderIdentifier = pso.GetShaderIdentifier(L"OnShadowMiss");
+
+        asdx::ShaderTable::Desc desc = {};
+        desc.RecordCount = 2;
+        desc.pRecords    = record;
+
+        if (!miss.Init(pDevice, &desc))
+        {
+            ELOGA("Error : MissTable Init Failed.");
+            return false;
+        }
+    }
+
+    // ヒットグループ.
+    {
+        asdx::ShaderRecord record[2];
+        record[0].ShaderIdentifier = pso.GetShaderIdentifier(L"StandardHit");
+        record[1].ShaderIdentifier = pso.GetShaderIdentifier(L"ShadowHit");
+
+        asdx::ShaderTable::Desc desc = {};
+        desc.RecordCount = 2;
+        desc.pRecords    = record;
+
+        if (!hitGroup.Init(pDevice, &desc))
+        {
+            ELOGA("Error : HitGroupTable Init Failed.");
+            return false;
+        }
+    }
+
+    return true;
+}
+
 #if (!CAMP_RELEASE)
 //-----------------------------------------------------------------------------
 //      シェーダをコンパイルします.
@@ -2819,11 +1956,6 @@ void Renderer::ReloadShader()
     m_DevMissTable      .Term();
     m_DevHitGroupTable  .Term();
 
-#if ENABLE_RESTIR
-    m_DevInitialSampling.Reset();
-    m_DevSpatialSampling.Reset();
-#endif
-
     asdx::RefPtr<asdx::IBlob> DevShader;
 
     // シェーダコンパイル.
@@ -2832,140 +1964,16 @@ void Renderer::ReloadShader()
         return;
     }
 
-    // レイトレ用パイプラインステート生成.
+    if (!CreateRayTracingPipeline(
+        DevShader->GetBufferPointer(),
+        DevShader->GetBufferSize(),
+        m_DevRayTracingPSO,
+        m_DevRayGenTable,
+        m_DevMissTable,
+        m_DevHitGroupTable))
     {
-        D3D12_EXPORT_DESC exports[] = {
-            { L"OnGenerateRay"      , nullptr, D3D12_EXPORT_FLAG_NONE },
-            { L"OnClosestHit"       , nullptr, D3D12_EXPORT_FLAG_NONE },
-            { L"OnShadowAnyHit"     , nullptr, D3D12_EXPORT_FLAG_NONE },
-            { L"OnMiss"             , nullptr, D3D12_EXPORT_FLAG_NONE },
-            { L"OnShadowMiss"       , nullptr, D3D12_EXPORT_FLAG_NONE },
-        };
-
-        D3D12_HIT_GROUP_DESC groups[2] = {};
-        groups[0].ClosestHitShaderImport    = L"OnClosestHit";
-        groups[0].HitGroupExport            = L"StandardHit";
-        groups[0].Type                      = D3D12_HIT_GROUP_TYPE_TRIANGLES;
-
-        groups[1].AnyHitShaderImport        = L"OnShadowAnyHit";
-        groups[1].HitGroupExport            = L"ShadowHit";
-        groups[1].Type                      = D3D12_HIT_GROUP_TYPE_TRIANGLES;
-
-        asdx::RayTracingPipelineStateDesc desc = {};
-        desc.pGlobalRootSignature       = m_RayTracingRootSig.GetPtr();
-        desc.DXILLibrary                = { DevShader->GetBufferPointer(), DevShader->GetBufferSize() };
-        desc.ExportCount                = _countof(exports);
-        desc.pExports                   = exports;
-        desc.HitGroupCount              = _countof(groups);
-        desc.pHitGroups                 = groups;
-        desc.MaxPayloadSize             = sizeof(Payload);
-        desc.MaxAttributeSize           = sizeof(asdx::Vector2);
-        desc.MaxTraceRecursionDepth     = 1;
-
-        if (!m_DevRayTracingPSO.Init(pDevice, desc))
-        {
-            ELOGA("Error : RayTracing PSO Failed.");
-            m_ReloadShader = false;
-            return;
-        }
+        return;
     }
-
-    // レイ生成テーブル.
-    {
-        asdx::ShaderRecord record = {};
-        record.ShaderIdentifier = m_DevRayTracingPSO.GetShaderIdentifier(L"OnGenerateRay");
-
-        asdx::ShaderTable::Desc desc = {};
-        desc.RecordCount    = 1;
-        desc.pRecords       = &record;
-
-        if (!m_DevRayGenTable.Init(pDevice, &desc))
-        {
-            ELOGA("Error : RayGenTable Init Failed.");
-            m_ReloadShader = false;
-            return;
-        }
-    }
-
-    // ミステーブル.
-    {
-        asdx::ShaderRecord record[2] = {};
-        record[0].ShaderIdentifier = m_DevRayTracingPSO.GetShaderIdentifier(L"OnMiss");
-        record[1].ShaderIdentifier = m_DevRayTracingPSO.GetShaderIdentifier(L"OnShadowMiss");
-
-        asdx::ShaderTable::Desc desc = {};
-        desc.RecordCount = 2;
-        desc.pRecords    = record;
-
-        if (!m_DevMissTable.Init(pDevice, &desc))
-        {
-            ELOGA("Error : MissTable Init Failed.");
-            m_ReloadShader = false;
-            return;
-        }
-    }
-
-    // ヒットグループ.
-    {
-        asdx::ShaderRecord record[2];
-        record[0].ShaderIdentifier = m_DevRayTracingPSO.GetShaderIdentifier(L"StandardHit");
-        record[1].ShaderIdentifier = m_DevRayTracingPSO.GetShaderIdentifier(L"ShadowHit");
-
-        asdx::ShaderTable::Desc desc = {};
-        desc.RecordCount = 2;
-        desc.pRecords    = record;
-
-        if (!m_DevHitGroupTable.Init(pDevice, &desc))
-        {
-            ELOGA("Error : HitGroupTable Init Failed.");
-            m_ReloadShader = false;
-            return;
-        }
-    }
-
-#if ENABLE_RESTIR
-    // 初期サンプル & テンポラルリユース.
-    {
-        asdx::RefPtr<asdx::IBlob> binary;
-        if (!CompileShader(L"../res/shader/InitialSampling.hlsl", binary.GetAddress()))
-        {
-            m_ReloadShader = false;
-            return;
-        }
-
-        D3D12_SHADER_BYTECODE shader = {};
-        shader.BytecodeLength  = binary->GetBufferSize();
-        shader.pShaderBytecode = binary->GetBufferPointer();
-
-        if (!InitInitialSamplingPipeline(m_DevInitialSampling, shader))
-        {
-            ELOGA("Error : Init InitialSampling Pipeline Failed.");
-            m_ReloadShader = false;
-            return;
-        }
-    }
-
-    // スパシャルリユース.
-    {
-        asdx::RefPtr<asdx::IBlob> binary;
-        if (!CompileShader(L"../res/shader/SpatialResampling.hlsl", binary.GetAddress()))
-        {
-            m_ReloadShader = false;
-            return;
-        }
-
-        D3D12_SHADER_BYTECODE shader = {};
-        shader.BytecodeLength  = binary->GetBufferSize();
-        shader.pShaderBytecode = binary->GetBufferPointer();
-
-        if (!InitSpatialSamplingPipeline(m_DevSpatialSampling, shader))
-        {
-            ELOGA("Error : Init SpatialSampling Pipeline Failed.");
-            m_ReloadShader = false;
-            return;
-        }
-    }
-#endif
 
     // リロードフラグを立てる.
     m_ReloadShader = true;

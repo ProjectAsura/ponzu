@@ -14,10 +14,6 @@
 #define ASDX_ENABLE_IMGUI   (1)
 #endif
 
-#ifndef ENABLE_RESTIR
-#define ENABLE_RESTIR       (0)
-#endif//ENABLE_RESTIR
-
 //-----------------------------------------------------------------------------
 // Include
 //-----------------------------------------------------------------------------
@@ -26,12 +22,12 @@
 #include <gfx/asdxRootSignature.h>
 #include <gfx/asdxPipelineState.h>
 #include <gfx/asdxRayTracing.h>
-#include <gfx/asdxTarget.h>
 #include <gfx/asdxCommandQueue.h>
 #include <gfx/asdxQuad.h>
 #include <renderer/asdxTaaRenderer.h>
 #include <edit/asdxGuiMgr.h>
 #include <model_mgr.h>
+#include <target_wrapper.h>
 #include <scene.h>
 
 #if (!CAMP_RELEASE)
@@ -54,18 +50,6 @@ struct SceneDesc
     const char* Path;
 };
 
-///////////////////////////////////////////////////////////////////////////////
-// MeshDrawCall structure
-///////////////////////////////////////////////////////////////////////////////
-struct MeshDrawCall
-{
-    uint32_t                    StartIndex;
-    uint32_t                    IndexCount;
-    uint32_t                    BaseVertex;
-    uint32_t                    InstanceId;
-    D3D12_VERTEX_BUFFER_VIEW    VBV;
-    D3D12_INDEX_BUFFER_VIEW     IBV;
-};
 
 ///////////////////////////////////////////////////////////////////////////////
 // Renderer class
@@ -91,26 +75,7 @@ public:
         bool                    Processed;
     };
 
-    ///////////////////////////////////////////////////////////////////////////
-    // RtPipeline structure
-    ///////////////////////////////////////////////////////////////////////////
-    struct RtPipeline
-    {
-        asdx::RootSignature             RootSig;
-        asdx::RayTracingPipelineState   PSO;
-        asdx::ShaderTable               RayGenTable;
-        asdx::ShaderTable               MissTable;
-        asdx::ShaderTable               HitGroupTable;
 
-        void Reset()
-        {
-            RootSig      .Term();
-            PSO          .Term();
-            RayGenTable  .Term();
-            MissTable    .Term();
-            HitGroupTable.Term();
-        }
-    };
 
     //=========================================================================
     // public variables.
@@ -131,31 +96,23 @@ private:
     asdx::WaitPoint                 m_FrameWaitPoint;
     asdx::RootSignature             m_RayTracingRootSig;
     asdx::RayTracingPipelineState   m_RayTracingPSO;
-    asdx::ComputeTarget             m_Canvas;
+    ComputeView             m_Canvas;
     asdx::ConstantBuffer            m_SceneParam;
     asdx::ShaderTable               m_RayGenTable;
     asdx::ShaderTable               m_MissTable;
     asdx::ShaderTable               m_HitGroupTable;
-    asdx::ColorTarget               m_AlbedoTarget;
-    asdx::ColorTarget               m_NormalTarget;
-    asdx::ColorTarget               m_VelocityTarget;
-    asdx::DepthTarget               m_ModelDepthTarget;
+    ColorView               m_AlbedoTarget;
+    ColorView               m_NormalTarget;
+    ColorView               m_VelocityTarget;
+    DepthView               m_ModelDepthTarget;
     asdx::RootSignature             m_ModelRootSig;
     asdx::PipelineState             m_ModelPSO;
     Scene                           m_Scene;
     asdx::Camera                    m_Camera;
-    asdx::ComputeTarget             m_TonemapBuffer;
+    ComputeView             m_TonemapBuffer;
 
-#if ENABLE_RESTIR
-    asdx::ComputeTarget             m_TemporalReservoirBuffer;
-    asdx::ComputeTarget             m_SpatialReservoirBuffer;
-    RtPipeline                      m_InitialSampling;
-    RtPipeline                      m_SpatialSampling;
-    asdx::RootSignature             m_ShadePixelRootSig;
-    asdx::PipelineState             m_ShadePixelPSO;
-#endif
 
-    asdx::ComputeTarget             m_CaptureTarget[3];
+    ComputeView             m_CaptureTarget[3];
     asdx::RefPtr<ID3D12Resource>    m_ReadBackTexture;
     uint32_t                        m_ReadBackPitch = 0;
     std::vector<ExportData>         m_ExportData;
@@ -182,13 +139,13 @@ private:
 
     asdx::RootSignature m_DenoiseRootSig;
     asdx::PipelineState m_DenoisePSO;
-    asdx::ComputeTarget m_DenoiseTarget[2];
+    ComputeView         m_DenoiseTarget[2];
 
     asdx::RootSignature m_TonemapRootSig;
     asdx::PipelineState m_TonemapPSO;
 
     asdx::TaaRenderer   m_TaaRenerer;
-    asdx::ComputeTarget m_HistoryTarget[2];
+    ComputeView         m_HistoryTarget[2];
     uint8_t             m_CurrHistoryIndex = 0;
     uint8_t             m_PrevHistoryIndex = 1;
 
@@ -212,12 +169,7 @@ private:
     asdx::ShaderTable               m_DevMissTable;
     asdx::ShaderTable               m_DevHitGroupTable;
 
-#if ENABLE_RESTIR
-    RtPipeline                      m_DevInitialSampling;
-    RtPipeline                      m_DevSpatialSampling;
-#endif
-
-    int                             m_BufferKind;
+    int                             m_BufferKind = 0;
     asdx::CameraController          m_CameraController;
 #endif
 
@@ -237,13 +189,20 @@ private:
 
     bool SystemSetup();
     bool BuildScene();
-    bool InitInitialSamplingPipeline(RtPipeline& value, D3D12_SHADER_BYTECODE shader);
-    bool InitSpatialSamplingPipeline(RtPipeline& value, D3D12_SHADER_BYTECODE shader);
 
     void ChangeFrame(uint32_t index);
     void CaptureScreen(ID3D12Resource* pResource, D3D12_RESOURCE_STATES state, bool forceSync = false);
 
+    bool CreateRayTracingPipeline(
+        const void*                     pBinary,
+        size_t                          binarySize,
+        asdx::RayTracingPipelineState&  pso,
+        asdx::ShaderTable&              rayGen,
+        asdx::ShaderTable&              missTable,
+        asdx::ShaderTable&              hitGroup);
+
 #if (!CAMP_RELEASE)
+    bool BuildTestScene();
     void ReloadShader();
     bool CompileShader(const wchar_t* path, asdx::IBlob** ppBlob);
 #endif

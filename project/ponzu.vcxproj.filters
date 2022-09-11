@@ -57,6 +57,12 @@
     <ClCompile Include="..\external\mikktspace\mikktspace.c">
       <Filter>ソース ファイル\external\mikktspace</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\test_scene.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\target_wrapper.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\include\renderer.h">
@@ -83,6 +89,9 @@
     <ClInclude Include="..\external\mikktspace\mikktspace.h">
       <Filter>ソース ファイル\external\mikktspace</Filter>
     </ClInclude>
+    <ClInclude Include="..\include\target_wrapper.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="..\res\shader\TonemapCS.hlsl">
@@ -95,18 +104,6 @@
       <Filter>リソース ファイル</Filter>
     </FxCompile>
     <FxCompile Include="..\res\shader\ModelPS.hlsl">
-      <Filter>リソース ファイル</Filter>
-    </FxCompile>
-    <FxCompile Include="..\res\shader\InitialSampling.hlsl">
-      <Filter>リソース ファイル</Filter>
-    </FxCompile>
-    <FxCompile Include="..\res\shader\SpatialResampling.hlsl">
-      <Filter>リソース ファイル</Filter>
-    </FxCompile>
-    <FxCompile Include="..\res\shader\TemporalResampling.hlsl">
-      <Filter>リソース ファイル</Filter>
-    </FxCompile>
-    <FxCompile Include="..\res\shader\ShadePixel.hlsl">
       <Filter>リソース ファイル</Filter>
     </FxCompile>
     <FxCompile Include="..\res\shader\CopyPS.hlsl">
