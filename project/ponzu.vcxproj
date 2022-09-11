@@ -161,7 +161,7 @@
     <VCProjectVersion>16.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
     <ProjectGuid>{4414f671-b9fe-4bfb-8b2e-02c0420d3a5d}</ProjectGuid>
-    <RootNamespace>r3d</RootNamespace>
+    <RootNamespace>ponzu</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />

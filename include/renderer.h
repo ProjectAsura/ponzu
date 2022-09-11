@@ -85,7 +85,6 @@ public:
     {
         std::vector<uint8_t>    Pixels;
         std::vector<uint8_t>    Converted;
-        std::vector<uint8_t>    Temporary;
         uint32_t                FrameIndex;
         uint32_t                Width;
         uint32_t                Height;

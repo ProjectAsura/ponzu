@@ -1,9 +1,11 @@
-# r3d
+# ponzu
 
-## レンダリング設定
+My GPU Renderer for Ray Tracing Camp.
+
+## Settings
 * OS           : Windows
-* レンダラータイプ   ： GPU
-* フレームレート    ： 60FPS
-* アニメーション時間 ： 10秒
-* Python       : 無し
+* Render Type  ：GPU
+* FrameRate    ：60FPS
+* Animation    ：10 seconds
+* Python       : None
 

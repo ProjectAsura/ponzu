@@ -204,8 +204,7 @@ unsigned Export(void* args)
         data->Width,
         data->Height,
         4,
-        data->Converted,
-        data->Temporary))
+        data->Converted))
     {
         FILE* pFile = nullptr;
         auto err = fopen_s(&pFile, path, "wb");
@@ -1853,7 +1852,6 @@ void Renderer::OnTerm()
     for(auto i=0; i<m_ExportData.size(); ++i)
     {
         m_ExportData[i].Pixels   .clear();
-        m_ExportData[i].Temporary.clear();
         m_ExportData[i].Converted.clear();
     }
     m_ExportData.clear();
