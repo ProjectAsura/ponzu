@@ -226,6 +226,9 @@ Renderer::Renderer(const SceneDesc& desc)
     m_DeviceDesc.EnableDRED           = false;
     m_DeviceDesc.EnableDebug          = false;
     m_DeviceDesc.EnableCapture        = false;
+
+    // 提出版はウィンドウを生成しない.
+    m_CreateWindow                    = false;
 #else
     m_DeviceDesc.EnableCapture        = true;
     m_DeviceDesc.EnableBreakOnWarning = false;
@@ -490,10 +493,10 @@ bool Renderer::SystemSetup()
 
     if (!CreateRayTracingPipeline(
         RtCamp, sizeof(RtCamp),
-        m_RayTracingPSO,
-        m_RayGenTable,
-        m_MissTable,
-        m_HitGroupTable))
+        &m_RayTracingPSO,
+        &m_RayGenTable,
+        &m_MissTable,
+        &m_HitGroupTable))
     {
         ELOGA("Error : CreateRayTracingPipeline() Failed.");
         return false;
@@ -583,6 +586,7 @@ bool Renderer::SystemSetup()
         m_DenoiseTarget[1].SetName(L"DenoiseTarget1");
     }
 
+    // TAAレンダラー初期化.
     if (!m_TaaRenerer.InitCS())
     {
         ELOGA("Error : TaaRenderer::InitCS() Failed.");
@@ -613,6 +617,9 @@ bool Renderer::SystemSetup()
 
         m_CurrHistoryIndex = 0;
         m_PrevHistoryIndex = 1;
+
+        m_HistoryTarget[0].SetName(L"HistoryTarget0");
+        m_HistoryTarget[1].SetName(L"HistoryTarget1");
     }
 
     // 定数バッファ初期化.
@@ -648,10 +655,7 @@ bool Renderer::SystemSetup()
             return false;
         }
 
-        m_GfxCmdList.BarrierTransition(
-            m_AlbedoTarget.GetResource(), 0,
-            D3D12_RESOURCE_STATE_COMMON,
-            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+        m_AlbedoTarget.SetName(L"AlbedoTarget");
     }
 
     // 法線バッファ.
@@ -677,10 +681,7 @@ bool Renderer::SystemSetup()
             return false;
         }
 
-        m_GfxCmdList.BarrierTransition(
-            m_NormalTarget.GetResource(), 0,
-            D3D12_RESOURCE_STATE_COMMON,
-            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+        m_NormalTarget.SetName(L"NormalTarget");
     }
 
     // 深度ターゲット生成.
@@ -703,6 +704,8 @@ bool Renderer::SystemSetup()
             ELOGA("Error : DebugDepthTarget Init Failed.");
             return false;
         }
+
+        m_ModelDepthTarget.SetName(L"ModelDepthTarget");
     }
 
     // 速度ターゲット生成.
@@ -728,11 +731,7 @@ bool Renderer::SystemSetup()
             return false;
         }
 
-        m_GfxCmdList.BarrierTransition(
-            m_VelocityTarget.GetResource(), 0,
-            D3D12_RESOURCE_STATE_COMMON,
-            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-
+        m_VelocityTarget.SetName(L"VelocityTarget");
     }
 
     // G-Bufferルートシグニチャ生成.
@@ -822,13 +821,6 @@ bool Renderer::SystemSetup()
             return false;
         }
     }
-
-    //// TAAレンダラー初期化.
-    //if (!m_TaaRenderer.InitCS())
-    //{
-    //    ELOGA("Error : TaaRenderer::InitCS() Failed");
-    //    return false;
-    //}
 
 #if !(CAMP_RELEASE)
     // カメラ初期化.
@@ -1468,7 +1460,6 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
     {
         auto& target = m_CaptureTarget[m_CaptureTargetIndex];
 
-
         m_GfxCmdList.BarrierTransition(
             m_ColorTarget[idx].GetResource(), 0,
             D3D12_RESOURCE_STATE_PRESENT,
@@ -1484,14 +1475,17 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
             break;
 
         case BUFFER_KIND_ALBEDO:
+            m_AlbedoTarget.Transition(m_GfxCmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
             pSRV = m_AlbedoTarget.GetSRV();
             break;
 
         case BUFFER_KIND_NORMAL:
+            m_NormalTarget.Transition(m_GfxCmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
             pSRV = m_NormalTarget.GetSRV();
             break;
 
         case BUFFER_KIND_VELOCITY:
+            m_VelocityTarget.Transition(m_GfxCmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
             pSRV = m_VelocityTarget.GetSRV();
             break;
         }
@@ -1810,14 +1804,17 @@ void Renderer::CaptureScreen(ID3D12Resource* pResource, D3D12_RESOURCE_STATES st
     }
 }
 
+//-----------------------------------------------------------------------------
+//      レイトレーシングパイプラインを生成します.
+//-----------------------------------------------------------------------------
 bool Renderer::CreateRayTracingPipeline
 (
     const void*                     pBinary,
     size_t                          binarySize,
-    asdx::RayTracingPipelineState&  pso,
-    asdx::ShaderTable&              rayGen,
-    asdx::ShaderTable&              miss,
-    asdx::ShaderTable&              hitGroup
+    asdx::RayTracingPipelineState*  pso,
+    asdx::ShaderTable*              rayGen,
+    asdx::ShaderTable*              miss,
+    asdx::ShaderTable*              hitGroup
 )
 {
     auto pDevice = asdx::GetD3D12Device();
@@ -1850,9 +1847,9 @@ bool Renderer::CreateRayTracingPipeline
         desc.pHitGroups                 = groups;
         desc.MaxPayloadSize             = sizeof(Payload);
         desc.MaxAttributeSize           = sizeof(asdx::Vector2);
-        desc.MaxTraceRecursionDepth     = 1;
+        desc.MaxTraceRecursionDepth     = MAX_RECURSION_DEPTH;
 
-        if (!pso.Init(pDevice, desc))
+        if (!pso->Init(pDevice, desc))
         {
             ELOGA("Error : RayTracing PSO Failed.");
             return false;
@@ -1862,13 +1859,13 @@ bool Renderer::CreateRayTracingPipeline
     // レイ生成テーブル.
     {
         asdx::ShaderRecord record = {};
-        record.ShaderIdentifier = pso.GetShaderIdentifier(L"OnGenerateRay");
+        record.ShaderIdentifier = pso->GetShaderIdentifier(L"OnGenerateRay");
 
         asdx::ShaderTable::Desc desc = {};
         desc.RecordCount    = 1;
         desc.pRecords       = &record;
 
-        if (!rayGen.Init(pDevice, &desc))
+        if (!rayGen->Init(pDevice, &desc))
         {
             ELOGA("Error : RayGenTable Init Failed.");
             return false;
@@ -1878,14 +1875,14 @@ bool Renderer::CreateRayTracingPipeline
     // ミステーブル.
     {
         asdx::ShaderRecord record[2] = {};
-        record[0].ShaderIdentifier = pso.GetShaderIdentifier(L"OnMiss");
-        record[1].ShaderIdentifier = pso.GetShaderIdentifier(L"OnShadowMiss");
+        record[0].ShaderIdentifier = pso->GetShaderIdentifier(L"OnMiss");
+        record[1].ShaderIdentifier = pso->GetShaderIdentifier(L"OnShadowMiss");
 
         asdx::ShaderTable::Desc desc = {};
         desc.RecordCount = 2;
         desc.pRecords    = record;
 
-        if (!miss.Init(pDevice, &desc))
+        if (!miss->Init(pDevice, &desc))
         {
             ELOGA("Error : MissTable Init Failed.");
             return false;
@@ -1895,14 +1892,14 @@ bool Renderer::CreateRayTracingPipeline
     // ヒットグループ.
     {
         asdx::ShaderRecord record[2];
-        record[0].ShaderIdentifier = pso.GetShaderIdentifier(L"StandardHit");
-        record[1].ShaderIdentifier = pso.GetShaderIdentifier(L"ShadowHit");
+        record[0].ShaderIdentifier = pso->GetShaderIdentifier(L"StandardHit");
+        record[1].ShaderIdentifier = pso->GetShaderIdentifier(L"ShadowHit");
 
         asdx::ShaderTable::Desc desc = {};
         desc.RecordCount = 2;
         desc.pRecords    = record;
 
-        if (!hitGroup.Init(pDevice, &desc))
+        if (!hitGroup->Init(pDevice, &desc))
         {
             ELOGA("Error : HitGroupTable Init Failed.");
             return false;
@@ -1967,10 +1964,10 @@ void Renderer::ReloadShader()
     if (!CreateRayTracingPipeline(
         DevShader->GetBufferPointer(),
         DevShader->GetBufferSize(),
-        m_DevRayTracingPSO,
-        m_DevRayGenTable,
-        m_DevMissTable,
-        m_DevHitGroupTable))
+        &m_DevRayTracingPSO,
+        &m_DevRayGenTable,
+        &m_DevMissTable,
+        &m_DevHitGroupTable))
     {
         return;
     }

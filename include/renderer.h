@@ -96,23 +96,23 @@ private:
     asdx::WaitPoint                 m_FrameWaitPoint;
     asdx::RootSignature             m_RayTracingRootSig;
     asdx::RayTracingPipelineState   m_RayTracingPSO;
-    ComputeView             m_Canvas;
+    ComputeView                     m_Canvas;
     asdx::ConstantBuffer            m_SceneParam;
     asdx::ShaderTable               m_RayGenTable;
     asdx::ShaderTable               m_MissTable;
     asdx::ShaderTable               m_HitGroupTable;
-    ColorView               m_AlbedoTarget;
-    ColorView               m_NormalTarget;
-    ColorView               m_VelocityTarget;
-    DepthView               m_ModelDepthTarget;
+    ColorView                       m_AlbedoTarget;
+    ColorView                       m_NormalTarget;
+    ColorView                       m_VelocityTarget;
+    DepthView                       m_ModelDepthTarget;
     asdx::RootSignature             m_ModelRootSig;
     asdx::PipelineState             m_ModelPSO;
     Scene                           m_Scene;
     asdx::Camera                    m_Camera;
-    ComputeView             m_TonemapBuffer;
+    ComputeView                     m_TonemapBuffer;
 
 
-    ComputeView             m_CaptureTarget[3];
+    ComputeView                     m_CaptureTarget[3];
     asdx::RefPtr<ID3D12Resource>    m_ReadBackTexture;
     uint32_t                        m_ReadBackPitch = 0;
     std::vector<ExportData>         m_ExportData;
@@ -196,10 +196,10 @@ private:
     bool CreateRayTracingPipeline(
         const void*                     pBinary,
         size_t                          binarySize,
-        asdx::RayTracingPipelineState&  pso,
-        asdx::ShaderTable&              rayGen,
-        asdx::ShaderTable&              missTable,
-        asdx::ShaderTable&              hitGroup);
+        asdx::RayTracingPipelineState*  pso,
+        asdx::ShaderTable*              rayGen,
+        asdx::ShaderTable*              missTable,
+        asdx::ShaderTable*              hitGroup);
 
 #if (!CAMP_RELEASE)
     bool BuildTestScene();

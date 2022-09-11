@@ -25,7 +25,7 @@ bool Renderer::BuildTestScene()
 
     std::vector<r3d::MeshInfo> infos;
     std::vector<r3d::Mesh> meshes;
-    if (!LoadMesh("../res/model/rtcamp_2022_02.obj", meshes, infos))
+    if (!LoadMesh("../res/model/dosei_quad.obj", meshes, infos))
     {
         ELOGA("Error : LoadMesh() Failed.");
         return false;
@@ -41,25 +41,27 @@ bool Renderer::BuildTestScene()
         instances[i].Transform  = asdx::Transform3x4();
     }
 
-    if (instances.size() >= 3)
-    { instances[2].MaterialId = 1; } // pole
+    //if (instances.size() >= 3)
+    //{ instances[2].MaterialId = 1; } // pole
 
-    if (instances.size() >= 11)
-    { instances[10].MaterialId = 2; } // wave
+    //if (instances.size() >= 11)
+    //{ instances[10].MaterialId = 2; } // wave
 
-    if (instances.size() >= 2)
-    { instances[1].MaterialId = 0; } // bridge
+    //if (instances.size() >= 2)
+    //{ instances[1].MaterialId = 0; } // bridge
 
-    if (instances.size() >= 1)
-    { instances[0].MaterialId = 3; } // bottom.
+    //if (instances.size() >= 1)
+    //{ instances[0].MaterialId = 3; } // bottom.
 
-    instances[3].MaterialId = 4;
-    instances[4].MaterialId = 5;
-    instances[5].MaterialId = 6;
-    instances[6].MaterialId = 7;
-    instances[7].MaterialId = 8;
-    instances[8].MaterialId = 9;
-    instances[9].MaterialId = 10;
+    //instances[3].MaterialId = 4;
+    //instances[4].MaterialId = 5;
+    //instances[5].MaterialId = 6;
+    //instances[6].MaterialId = 7;
+    //instances[7].MaterialId = 8;
+    //instances[8].MaterialId = 9;
+    //instances[9].MaterialId = 10;
+
+    Material dummy0 = Material::Default();
 
     // mat0
     Material planks = Material::Default();
@@ -145,52 +147,52 @@ bool Renderer::BuildTestScene()
 
 
     SceneExporter exporter;
-    exporter.SetIBL("../res/ibl/lakeside_2k.dds");
-    exporter.AddTexture("../res/texture/modular_wooden_pier_planks_diff_2k.dds"); // 0
-    exporter.AddTexture("../res/texture/modular_wooden_pier_planks_nor_gl_2k.dds"); // 1
-    exporter.AddTexture("../res/texture/modular_wooden_pier_planks_arm_2k.dds"); // 2
-    exporter.AddTexture("../res/texture/modular_wooden_pier_poles_diff_2k.dds"); // 3
-    exporter.AddTexture("../res/texture/modular_wooden_pier_poles_nor_gl_2k.dds"); // 4
-    exporter.AddTexture("../res/texture/modular_wooden_pier_poles_arm_2k.dds"); // 5
-    exporter.AddTexture("../res/texture/coral_mud_01_diff_2k.dds"); // 6
-    exporter.AddTexture("../res/texture/coral_mud_01_nor_gl_2k.dds"); // 7
-    exporter.AddTexture("../res/texture/coral_mud_01_rough_2k.dds"); // 8
-    exporter.AddTexture("../res/texture/wave_normal.dds"); // 9
-    exporter.AddTexture("../res/texture/wave_normal1.dds"); // 10
-    exporter.AddTexture("../res/texture/ship_pinnace_aft_diff_1k.dds"); // 11
-    exporter.AddTexture("../res/texture/ship_pinnace_aft_nor_gl_1k.dds"); // 12
-    exporter.AddTexture("../res/texture/ship_pinnace_aft_arm_1k.dds"); // 13
-    exporter.AddTexture("../res/texture/ship_pinnace_deck_diff_1k.dds"); // 14
-    exporter.AddTexture("../res/texture/ship_pinnace_deck_nor_gl_1k.dds"); // 15
-    exporter.AddTexture("../res/texture/ship_pinnace_deck_arm_1k.dds"); // 16
-    exporter.AddTexture("../res/texture/ship_pinnace_details_diff_1k.dds"); // 17
-    exporter.AddTexture("../res/texture/ship_pinnace_details_nor_gl_1k.dds"); // 18
-    exporter.AddTexture("../res/texture/ship_pinnace_details_arm_1k.dds"); // 19
-    exporter.AddTexture("../res/texture/ship_pinnace_hull_diff_1k.dds"); // 20
-    exporter.AddTexture("../res/texture/ship_pinnace_hull_nor_gl_1k.dds"); // 21
-    exporter.AddTexture("../res/texture/ship_pinnace_hull_arm_1k.dds"); // 22
-    exporter.AddTexture("../res/texture/ship_pinnace_interior_diff_1k.dds"); // 23
-    exporter.AddTexture("../res/texture/ship_pinnace_interior_nor_gl_1k.dds"); // 24
-    exporter.AddTexture("../res/texture/ship_pinnace_interior_arm_1k.dds"); // 25
-    exporter.AddTexture("../res/texture/ship_pinnace_rigging_diff_1k.dds"); // 26
-    exporter.AddTexture("../res/texture/ship_pinnace_rigging_nor_gl_1k.dds"); // 27
-    exporter.AddTexture("../res/texture/ship_pinnace_rigging_arm_1k.dds"); // 28
-    exporter.AddTexture("../res/texture/ship_pinnace_sails_diff_1k.dds"); // 29
-    exporter.AddTexture("../res/texture/ship_pinnace_sails_nor_gl_1k.dds"); // 30
-    exporter.AddTexture("../res/texture/ship_pinnace_sails_orm_1k.dds"); // 31
+    exporter.SetIBL("../res/ibl/alps_field_2k.dds");
+    //exporter.AddTexture("../res/texture/modular_wooden_pier_planks_diff_2k.dds"); // 0
+    //exporter.AddTexture("../res/texture/modular_wooden_pier_planks_nor_gl_2k.dds"); // 1
+    //exporter.AddTexture("../res/texture/modular_wooden_pier_planks_arm_2k.dds"); // 2
+    //exporter.AddTexture("../res/texture/modular_wooden_pier_poles_diff_2k.dds"); // 3
+    //exporter.AddTexture("../res/texture/modular_wooden_pier_poles_nor_gl_2k.dds"); // 4
+    //exporter.AddTexture("../res/texture/modular_wooden_pier_poles_arm_2k.dds"); // 5
+    //exporter.AddTexture("../res/texture/coral_mud_01_diff_2k.dds"); // 6
+    //exporter.AddTexture("../res/texture/coral_mud_01_nor_gl_2k.dds"); // 7
+    //exporter.AddTexture("../res/texture/coral_mud_01_rough_2k.dds"); // 8
+    //exporter.AddTexture("../res/texture/wave_normal.dds"); // 9
+    //exporter.AddTexture("../res/texture/wave_normal1.dds"); // 10
+    //exporter.AddTexture("../res/texture/ship_pinnace_aft_diff_1k.dds"); // 11
+    //exporter.AddTexture("../res/texture/ship_pinnace_aft_nor_gl_1k.dds"); // 12
+    //exporter.AddTexture("../res/texture/ship_pinnace_aft_arm_1k.dds"); // 13
+    //exporter.AddTexture("../res/texture/ship_pinnace_deck_diff_1k.dds"); // 14
+    //exporter.AddTexture("../res/texture/ship_pinnace_deck_nor_gl_1k.dds"); // 15
+    //exporter.AddTexture("../res/texture/ship_pinnace_deck_arm_1k.dds"); // 16
+    //exporter.AddTexture("../res/texture/ship_pinnace_details_diff_1k.dds"); // 17
+    //exporter.AddTexture("../res/texture/ship_pinnace_details_nor_gl_1k.dds"); // 18
+    //exporter.AddTexture("../res/texture/ship_pinnace_details_arm_1k.dds"); // 19
+    //exporter.AddTexture("../res/texture/ship_pinnace_hull_diff_1k.dds"); // 20
+    //exporter.AddTexture("../res/texture/ship_pinnace_hull_nor_gl_1k.dds"); // 21
+    //exporter.AddTexture("../res/texture/ship_pinnace_hull_arm_1k.dds"); // 22
+    //exporter.AddTexture("../res/texture/ship_pinnace_interior_diff_1k.dds"); // 23
+    //exporter.AddTexture("../res/texture/ship_pinnace_interior_nor_gl_1k.dds"); // 24
+    //exporter.AddTexture("../res/texture/ship_pinnace_interior_arm_1k.dds"); // 25
+    //exporter.AddTexture("../res/texture/ship_pinnace_rigging_diff_1k.dds"); // 26
+    //exporter.AddTexture("../res/texture/ship_pinnace_rigging_nor_gl_1k.dds"); // 27
+    //exporter.AddTexture("../res/texture/ship_pinnace_rigging_arm_1k.dds"); // 28
+    //exporter.AddTexture("../res/texture/ship_pinnace_sails_diff_1k.dds"); // 29
+    //exporter.AddTexture("../res/texture/ship_pinnace_sails_nor_gl_1k.dds"); // 30
+    //exporter.AddTexture("../res/texture/ship_pinnace_sails_orm_1k.dds"); // 31
     exporter.AddMeshes(meshes);
-    exporter.AddMaterial(planks);   // 0
-    exporter.AddMaterial(poles);    // 1
-    exporter.AddMaterial(wave);     // 2
-    exporter.AddMaterial(ground);   // 3
-    exporter.AddMaterial(aft);      // 4
-    exporter.AddMaterial(deck);     // 5
-    exporter.AddMaterial(details);  // 6
-    exporter.AddMaterial(hull);     // 7
-    exporter.AddMaterial(interior); // 8
-    exporter.AddMaterial(rigging);  // 9
-    exporter.AddMaterial(sails);    // 10
-    //exporter.AddMaterial(dummy0);
+    //exporter.AddMaterial(planks);   // 0
+    //exporter.AddMaterial(poles);    // 1
+    //exporter.AddMaterial(wave);     // 2
+    //exporter.AddMaterial(ground);   // 3
+    //exporter.AddMaterial(aft);      // 4
+    //exporter.AddMaterial(deck);     // 5
+    //exporter.AddMaterial(details);  // 6
+    //exporter.AddMaterial(hull);     // 7
+    //exporter.AddMaterial(interior); // 8
+    //exporter.AddMaterial(rigging);  // 9
+    //exporter.AddMaterial(sails);    // 10
+    exporter.AddMaterial(dummy0);
     //exporter.AddMaterial(dummy1);
     //exporter.AddMaterial(dummy2);
     exporter.AddInstances(instances);
