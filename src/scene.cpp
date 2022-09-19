@@ -476,10 +476,7 @@ bool Scene::Init(const char* path, asdx::CommandList& cmdList)
 
     // IBLテクスチャのセットアップ.
     {
-        // なぜか ARGB の順番になっているので，暫定としてコンポーネントマッピングで対応.
-        uint32_t mapping = D3D12_ENCODE_SHADER_4_COMPONENT_MAPPING(1, 2, 3, 0);
-
-        if (!m_IBL.Init(cmdList.GetCommandList(), resScene->IblTexture(), mapping))
+        if (!m_IBL.Init(cmdList.GetCommandList(), resScene->IblTexture()))
         {
             ELOGA("Error : IBL Initialize Failed.");
             return false;
@@ -885,6 +882,26 @@ bool SceneExporter::Export(const char* path)
         for(auto i=0u; i<count; ++i)
         {
             srcIBL.Surfaces[i].Pixels.resize(srcIBL.SrcTexture.pResources[i].SlicePitch);
+
+            // 順番補正.
+            if (srcIBL.SrcTexture.Format == 2/*DXGI_FORMAT_R32G32B32A32_FLOAT*/)
+            {
+                auto count = srcIBL.SrcTexture.pResources[i].SlicePitch / sizeof(float);
+                auto pFloatPixels = reinterpret_cast<float*>(srcIBL.SrcTexture.pResources[i].pPixels);
+
+                for(auto px=0; px<count; px+=4)
+                {
+                    auto A = pFloatPixels[px + 0];
+                    auto R = pFloatPixels[px + 1];
+                    auto G = pFloatPixels[px + 2];
+                    auto B = pFloatPixels[px + 3];
+
+                    pFloatPixels[px + 0] = R;
+                    pFloatPixels[px + 1] = G;
+                    pFloatPixels[px + 2] = B;
+                    pFloatPixels[px + 3] = A;
+                }
+            }
 
             memcpy(
                 srcIBL.Surfaces[i].Pixels.data(),
