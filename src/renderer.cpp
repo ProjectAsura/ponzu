@@ -1181,6 +1181,8 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
 
     bool enableAccumulation = true;
 
+    auto pCmd = m_GfxCmdList.GetCommandList();
+
     // 定数バッファ更新.
     {
         auto changed = memcmp(&m_CurrView, &m_PrevView, sizeof(asdx::Matrix)) != 0;
@@ -1248,10 +1250,10 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
 
     // デノイズ用 G-Buffer.
     {
-        m_AlbedoTarget      .Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_RENDER_TARGET);
-        m_NormalTarget      .Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_RENDER_TARGET);
-        m_VelocityTarget    .Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_RENDER_TARGET);
-        m_ModelDepthTarget  .Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_DEPTH_WRITE);
+        m_AlbedoTarget      .Transition(pCmd, D3D12_RESOURCE_STATE_RENDER_TARGET);
+        m_NormalTarget      .Transition(pCmd, D3D12_RESOURCE_STATE_RENDER_TARGET);
+        m_VelocityTarget    .Transition(pCmd, D3D12_RESOURCE_STATE_RENDER_TARGET);
+        m_ModelDepthTarget  .Transition(pCmd, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 
         auto pRTV0 = m_AlbedoTarget    .GetRTV();
         auto pRTV1 = m_NormalTarget    .GetRTV();
@@ -1344,8 +1346,8 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
 
     // トーンマップ実行.
     {
-        m_Canvas       .Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        m_TonemapBuffer.Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        m_Canvas       .Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        m_TonemapBuffer.Transition(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
         m_GfxCmdList.SetRootSignature(m_TonemapRootSig.GetPtr(), true);
         m_GfxCmdList.SetPipelineState(m_TonemapPSO.GetPtr());
@@ -1359,10 +1361,10 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
 
     // デノイズ Horizontal-Pass
     {
-        m_DenoiseTarget[0].Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-        m_TonemapBuffer   .Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        m_ModelDepthTarget.Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        m_NormalTarget    .Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        m_DenoiseTarget[0].Transition(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        m_TonemapBuffer   .Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        m_ModelDepthTarget.Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        m_NormalTarget    .Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
         DenoiseParam param = {};
         param.DispathArgsX      = threadX;
@@ -1388,10 +1390,10 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
 
     // デノイズ Vertical-Pass
     {
-        m_DenoiseTarget[1].Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-        m_DenoiseTarget[0].Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        m_ModelDepthTarget.Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        m_NormalTarget    .Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        m_DenoiseTarget[1].Transition(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        m_DenoiseTarget[0].Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        m_ModelDepthTarget.Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        m_NormalTarget    .Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
         DenoiseParam param = {};
         param.DispathArgsX      = threadX;
@@ -1417,17 +1419,17 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
 
     // TemporalAA
     {
-        m_CaptureTarget[m_CaptureTargetIndex].Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-        m_HistoryTarget[m_CurrHistoryIndex]  .Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-        m_DenoiseTarget[1]                   .Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        m_HistoryTarget[m_PrevHistoryIndex]  .Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        m_VelocityTarget                     .Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        m_ModelDepthTarget                   .Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        m_CaptureTarget[m_CaptureTargetIndex].Transition(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        m_HistoryTarget[m_CurrHistoryIndex]  .Transition(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        m_DenoiseTarget[1]                   .Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        m_HistoryTarget[m_PrevHistoryIndex]  .Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        m_VelocityTarget                     .Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        m_ModelDepthTarget                   .Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
         auto jitter = asdx::TaaRenderer::CalcJitter(GetFrameCount(), m_SceneDesc.Width, m_SceneDesc.Height);
 
         m_TaaRenerer.RenderCS(
-            m_GfxCmdList.GetCommandList(),
+            pCmd,
             m_CaptureTarget[m_CaptureTargetIndex].GetUAV(),
             m_HistoryTarget[m_CurrHistoryIndex].GetUAV(),
             m_DenoiseTarget[1].GetSRV(),
@@ -1455,7 +1457,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
             D3D12_RESOURCE_STATE_PRESENT,
             D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-        target.Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+        target.Transition(pCmd, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
         const asdx::IShaderResourceView* pSRV = nullptr;
         switch(m_BufferKind)
@@ -1465,17 +1467,17 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
             break;
 
         case BUFFER_KIND_ALBEDO:
-            m_AlbedoTarget.Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            m_AlbedoTarget.Transition(pCmd, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
             pSRV = m_AlbedoTarget.GetSRV();
             break;
 
         case BUFFER_KIND_NORMAL:
-            m_NormalTarget.Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            m_NormalTarget.Transition(pCmd, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
             pSRV = m_NormalTarget.GetSRV();
             break;
 
         case BUFFER_KIND_VELOCITY:
-            m_VelocityTarget.Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            m_VelocityTarget.Transition(pCmd, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
             pSRV = m_VelocityTarget.GetSRV();
             break;
         }
@@ -1486,7 +1488,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         m_GfxCmdList.SetRootSignature(m_CopyRootSig.GetPtr(), false);
         m_GfxCmdList.SetPipelineState(m_CopyPSO.GetPtr());
         m_GfxCmdList.SetTable(0, pSRV);
-        asdx::Quad::Instance().Draw(m_GfxCmdList.GetCommandList());
+        asdx::Quad::Instance().Draw(pCmd);
 
         // 2D描画.
         Draw2D();
