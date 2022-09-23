@@ -23,6 +23,9 @@ static const uint32_t OBJ_BUFFER_LENGTH = 2048;
 
 namespace {
 
+//-----------------------------------------------------------------------------
+//      面数を取得します.
+//-----------------------------------------------------------------------------
 int GetFaceCount(const SMikkTSpaceContext* pContext)
 {
     auto mesh = reinterpret_cast<MeshOBJ*>(pContext->m_pUserData);
@@ -33,12 +36,18 @@ int GetFaceCount(const SMikkTSpaceContext* pContext)
     return int(mesh->Indices.size() / 3);
 }
 
+//-----------------------------------------------------------------------------
+//      1面あたりの頂点数を取得します.
+//-----------------------------------------------------------------------------
 int GetVertexCountOfFace(const SMikkTSpaceContext*, const int)
 {
     // 三角形のみサポート.
     return 3;
 }
 
+//-----------------------------------------------------------------------------
+//      位置座標を取得します.
+//-----------------------------------------------------------------------------
 void GetPosition(const SMikkTSpaceContext* pContext, float fvPosOut[], const int iFace, const int iVert)
 {
     auto mesh = reinterpret_cast<MeshOBJ*>(pContext->m_pUserData);
@@ -54,6 +63,9 @@ void GetPosition(const SMikkTSpaceContext* pContext, float fvPosOut[], const int
     fvPosOut[2] = vtx.Position.z;
 }
 
+//-----------------------------------------------------------------------------
+//      法線ベクトルを取得します.
+//-----------------------------------------------------------------------------
 void GetNormal(const SMikkTSpaceContext* pContext, float fvNormOut[], const int iFace, const int iVert)
 {
     auto mesh = reinterpret_cast<MeshOBJ*>(pContext->m_pUserData);
@@ -69,6 +81,9 @@ void GetNormal(const SMikkTSpaceContext* pContext, float fvNormOut[], const int 
     fvNormOut[2] = vtx.Normal.z;
 }
 
+//-----------------------------------------------------------------------------
+//      テクスチャ座標を取得します.
+//-----------------------------------------------------------------------------
 void GetTexCoord(const SMikkTSpaceContext* pContext, float fvTexcOut[], const int iFace, const int iVert)
 {
     auto mesh = reinterpret_cast<MeshOBJ*>(pContext->m_pUserData);
@@ -83,6 +98,9 @@ void GetTexCoord(const SMikkTSpaceContext* pContext, float fvTexcOut[], const in
     fvTexcOut[1] = vtx.TexCoord.y;
 }
 
+//-----------------------------------------------------------------------------
+//      接線空間基底を設定します.
+//-----------------------------------------------------------------------------
 void SetTSpaceBasic(const SMikkTSpaceContext* pContext, const float fvTangent[], const float fSign, const int iFace, const int iVert)
 {
     auto mesh = reinterpret_cast<MeshOBJ*>(pContext->m_pUserData);

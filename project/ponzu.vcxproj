@@ -35,7 +35,6 @@
     <ClCompile Include="..\src\OBJLoader.cpp" />
     <ClCompile Include="..\src\renderer.cpp" />
     <ClCompile Include="..\src\scene.cpp" />
-    <ClCompile Include="..\src\SMDLoader.cpp" />
     <ClCompile Include="..\src\test_scene.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -45,7 +44,6 @@
     <ClInclude Include="..\include\OBJLoader.h" />
     <ClInclude Include="..\include\renderer.h" />
     <ClInclude Include="..\include\scene.h" />
-    <ClInclude Include="..\include\SMDLoader.h" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="..\res\shader\CopyPS.hlsl">
