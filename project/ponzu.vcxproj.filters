@@ -60,9 +60,6 @@
     <ClCompile Include="..\src\test_scene.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\target_wrapper.cpp">
-      <Filter>ソース ファイル</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\include\renderer.h">
@@ -88,9 +85,6 @@
     </ClInclude>
     <ClInclude Include="..\external\mikktspace\mikktspace.h">
       <Filter>ソース ファイル\external\mikktspace</Filter>
-    </ClInclude>
-    <ClInclude Include="..\include\target_wrapper.h">
-      <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

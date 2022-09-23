@@ -27,7 +27,6 @@
 #include <renderer/asdxTaaRenderer.h>
 #include <edit/asdxGuiMgr.h>
 #include <model_mgr.h>
-#include <target_wrapper.h>
 #include <scene.h>
 
 #if (!CAMP_RELEASE)
@@ -96,23 +95,23 @@ private:
     asdx::WaitPoint                 m_FrameWaitPoint;
     asdx::RootSignature             m_RayTracingRootSig;
     asdx::RayTracingPipelineState   m_RayTracingPSO;
-    ComputeView                     m_Canvas;
+    asdx::ComputeTarget             m_Canvas;
     asdx::ConstantBuffer            m_SceneParam;
     asdx::ShaderTable               m_RayGenTable;
     asdx::ShaderTable               m_MissTable;
     asdx::ShaderTable               m_HitGroupTable;
-    ColorView                       m_AlbedoTarget;
-    ColorView                       m_NormalTarget;
-    ColorView                       m_VelocityTarget;
-    DepthView                       m_ModelDepthTarget;
+    asdx::ColorTarget               m_AlbedoTarget;
+    asdx::ColorTarget               m_NormalTarget;
+    asdx::ColorTarget               m_VelocityTarget;
+    asdx::DepthTarget               m_ModelDepthTarget;
     asdx::RootSignature             m_ModelRootSig;
     asdx::PipelineState             m_ModelPSO;
     Scene                           m_Scene;
     asdx::Camera                    m_Camera;
-    ComputeView                     m_TonemapBuffer;
+    asdx::ComputeTarget             m_TonemapBuffer;
 
 
-    ComputeView                     m_CaptureTarget[3];
+    asdx::ComputeTarget             m_CaptureTarget[3];
     asdx::RefPtr<ID3D12Resource>    m_ReadBackTexture;
     uint32_t                        m_ReadBackPitch = 0;
     std::vector<ExportData>         m_ExportData;
@@ -139,13 +138,13 @@ private:
 
     asdx::RootSignature m_DenoiseRootSig;
     asdx::PipelineState m_DenoisePSO;
-    ComputeView         m_DenoiseTarget[2];
+    asdx::ComputeTarget m_DenoiseTarget[2];
 
     asdx::RootSignature m_TonemapRootSig;
     asdx::PipelineState m_TonemapPSO;
 
     asdx::TaaRenderer   m_TaaRenerer;
-    ComputeView         m_HistoryTarget[2];
+    asdx::ComputeTarget m_HistoryTarget[2];
     uint8_t             m_CurrHistoryIndex = 0;
     uint8_t             m_PrevHistoryIndex = 1;
 

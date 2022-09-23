@@ -683,7 +683,7 @@ bool Scene::Init(const char* path, asdx::CommandList& cmdList)
         // ライトがあれば初期化.
         if (count > 0)
         {
-            if (!m_LB.Init(cmdList, count, stride, resScene->Lights()->data()))
+            if (!m_LB.Init(cmdList.GetCommandList(), count, stride, resScene->Lights()->data()))
             {
                 ELOGA("Error : LB::Init() Failed.");
                 return false;

@@ -37,13 +37,11 @@
     <ClCompile Include="..\src\sampling.cpp" />
     <ClCompile Include="..\src\scene.cpp" />
     <ClCompile Include="..\src\SMDLoader.cpp" />
-    <ClCompile Include="..\src\target_wrapper.cpp" />
     <ClCompile Include="..\src\test_scene.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\external\fpng\fpng.h" />
     <ClInclude Include="..\external\mikktspace\mikktspace.h" />
-    <ClInclude Include="..\include\target_wrapper.h" />
     <ClInclude Include="..\include\model_mgr.h" />
     <ClInclude Include="..\include\OBJLoader.h" />
     <ClInclude Include="..\include\renderer.h" />

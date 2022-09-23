@@ -1442,19 +1442,6 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         m_GfxCmdList.BarrierUAV(m_HistoryTarget[m_CurrHistoryIndex].GetUAV());
     }
 
-    //{
-    //    auto cap_idx = m_CaptureTargetIndex;
-
-    //    m_GfxCmdList.BarrierTransition(
-    //        m_DenoiseTarget[1].GetResource(), 0,
-    //        D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-    //        D3D12_RESOURCE_STATE_COPY_SOURCE);
-
-    //    m_GfxCmdList.CopyResource(
-    //        m_CaptureTexture[cap_idx].GetPtr(),
-    //        m_DenoiseTarget[1].GetResource());
-    //}
-
     // スワップチェインに描画.
     #if !(CAMP_RELEASE)
     {
@@ -1475,17 +1462,17 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
             break;
 
         case BUFFER_KIND_ALBEDO:
-            m_AlbedoTarget.Transition(m_GfxCmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            m_AlbedoTarget.Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
             pSRV = m_AlbedoTarget.GetSRV();
             break;
 
         case BUFFER_KIND_NORMAL:
-            m_NormalTarget.Transition(m_GfxCmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            m_NormalTarget.Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
             pSRV = m_NormalTarget.GetSRV();
             break;
 
         case BUFFER_KIND_VELOCITY:
-            m_VelocityTarget.Transition(m_GfxCmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            m_VelocityTarget.Transition(m_GfxCmdList.GetCommandList(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
             pSRV = m_VelocityTarget.GetSRV();
             break;
         }
