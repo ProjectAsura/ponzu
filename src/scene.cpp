@@ -69,13 +69,18 @@ inline void CopySubresource
     UINT                            sliceCount
 ) noexcept
 {
+    auto dstPtr = static_cast<BYTE*>(pDst->pData);
+    auto srcPtr = static_cast<const BYTE*>(pSrc->pData);
+    assert(dstPtr != nullptr);
+    assert(srcPtr != nullptr);
+
     for (auto z=0u; z<sliceCount; ++z)
     {
-        auto pDstSlice = static_cast<BYTE*>(pDst->pData)       + pDst->SlicePitch * z;
-        auto pSrcSlice = static_cast<const BYTE*>(pSrc->pData) + pSrc->SlicePitch * LONG_PTR(z);
+        auto pDstSlice = dstPtr + pDst->SlicePitch * LONG_PTR(z);
+        auto pSrcSlice = srcPtr + pSrc->SlicePitch * LONG_PTR(z);
         for (auto y=0u; y<rowCount; ++y)
         {
-            memcpy(pDstSlice + pDst->RowPitch * y,
+            memcpy(pDstSlice + pDst->RowPitch * LONG_PTR(y),
                    pSrcSlice + pSrc->RowPitch * LONG_PTR(y),
                    rowSizeInBytes);
         }

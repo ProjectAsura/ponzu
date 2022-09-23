@@ -1440,6 +1440,9 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
 
         m_GfxCmdList.BarrierUAV(m_CaptureTarget[m_CaptureTargetIndex].GetUAV());
         m_GfxCmdList.BarrierUAV(m_HistoryTarget[m_CurrHistoryIndex].GetUAV());
+
+        m_CurrHistoryIndex = (m_CurrHistoryIndex + 1) & 0x1;
+        m_PrevHistoryIndex = (m_PrevHistoryIndex + 1) & 0x1;
     }
 
     // スワップチェインに描画.
@@ -1627,22 +1630,15 @@ void Renderer::Draw2D()
         auto upward = m_CameraController.GetUpward();
 
         ImGui::SetNextWindowPos(ImVec2(10, 10));
-        ImGui::SetNextWindowSize(ImVec2(140, 0));
+        ImGui::SetNextWindowSize(ImVec2(250, 0));
         if (ImGui::Begin(u8"フレーム情報", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoTitleBar))
         {
-
             ImGui::Text(u8"FPS   : %.3lf", GetFPS());
             ImGui::Text(u8"Frame : %ld", GetFrameCount());
             ImGui::Text(u8"Accum : %ld", m_AccumulatedFrames);
-            ImGui::Text(u8"Camera : %.3f", pos.x);
-            ImGui::Text(u8"       : %.3f", pos.y);
-            ImGui::Text(u8"       : %.3f", pos.z);
-            ImGui::Text(u8"Target : %.3f", target.x);
-            ImGui::Text(u8"       : %.3f", target.y);
-            ImGui::Text(u8"       : %.3f", target.z);
-            ImGui::Text(u8"Upward : %.3f", upward.x);
-            ImGui::Text(u8"       : %.3f", upward.y);
-            ImGui::Text(u8"       : %.3f", upward.z);
+            ImGui::Text(u8"Camera : (%.2f, %.2f, %.2f)", pos.x, pos.y, pos.z);
+            ImGui::Text(u8"Target : (%.2f, %.2f, %.2f)", target.x, target.y, target.z);
+            ImGui::Text(u8"Upward : (%.2f, %.2f, %.2f)", upward.x, upward.y, upward.z);
 
         }
         ImGui::End();
@@ -1651,7 +1647,7 @@ void Renderer::Draw2D()
         if (ImGui::Begin(u8"デバッグ設定", &m_DebugSetting))
         {
             int count = _countof(kBufferKindItems);
-            ImGui::Combo(u8"表示バッファ", &m_BufferKind, kBufferKindItems, count);
+            ImGui::Combo(u8"ビュー", &m_BufferKind, kBufferKindItems, count);
             ImGui::Checkbox(u8"Accumulation 強制OFF", &m_ForceAccumulationOff);
             if (ImGui::Button(u8"カメラ情報出力"))
             {
