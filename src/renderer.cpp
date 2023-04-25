@@ -63,21 +63,22 @@ enum BUFFER_KIND
 
 enum SAMPLING_TYPE
 {
-    SAMPLING_TYPE_DEFAULT   = 0,
-    SAMPLING_TYPE_NORMAL    = 1,
-    SAMPLING_TYPE_VELOCITY  = 2,
-    SAMPLING_TYPE_R         = 3,
-    SAMPLING_TYPE_G         = 4,
-    SAMPLING_TYPE_B         = 5,
-    SAMPLING_TYPE_A         = 6,
+    SAMPLING_TYPE_DEFAULT   = 0,    // RGBA.
+    SAMPLING_TYPE_NORMAL    = 1,    // Octahedronをデコードして[0, 1]に変換.
+    SAMPLING_TYPE_VELOCITY  = 2,    // [-1, 1] を[0, 1]に変換.
+    SAMPLING_TYPE_R         = 3,    // (R, R, R, 1)で出力.
+    SAMPLING_TYPE_G         = 4,    // (G, G, G, 1)で出力.
+    SAMPLING_TYPE_B         = 5,    // (B, B, B, 1)で出力.
+    SAMPLING_TYPE_A         = 6,    // (A, A, A, 1)で出力.
+    SAMPLING_TYPE_HEAT_MAP  = 7,    // ヒートマップ表示.
 };
 
 static const char* kBufferKindItems[] = {
-    u8"Rendered",
-    u8"Albedo",
-    u8"Normal",
-    u8"Roughness",
-    u8"Velocity",
+    u8"描画結果",
+    u8"アルベド",
+    u8"法線",
+    u8"ラフネス",
+    u8"速度",
 };
 #endif
 

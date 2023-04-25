@@ -4,7 +4,11 @@
 // Copyright(c) Project Asura. All right reserved.
 //-----------------------------------------------------------------------------
 
+//-----------------------------------------------------------------------------
+// Includes
+//-----------------------------------------------------------------------------
 #include <Math.hlsli>
+
 
 ///////////////////////////////////////////////////////////////////////////////
 // VSOutput structure
@@ -22,6 +26,7 @@ static const uint TYPE_R         = 3;
 static const uint TYPE_G         = 4;
 static const uint TYPE_B         = 5;
 static const uint TYPE_A         = 6;
+static const uint TYPE_HEAT_MAP  = 7;
 
 cbuffer DebugParam : register(b0) {
     uint    Type;
@@ -76,6 +81,11 @@ float4 main(const VSOutput input) : SV_TARGET0
     else if (Type == TYPE_A)
     {
         output.rgb = ColorBuffer.SampleLevel(ColorSampler, input.TexCoord, 0.0f).aaa;
+        output.a   = 1.0f;
+    }
+    else if (Type == TYPE_HEAT_MAP)
+    {
+        output.rgb = HeatMap(ColorBuffer.SampleLevel(ColorSampler, input.TexCoord, 0.0f).x);
         output.a   = 1.0f;
     }
 
