@@ -8,7 +8,7 @@
 // Includes
 //-----------------------------------------------------------------------------
 #include <model_mgr.h>
-#include <gfx/asdxGraphicsSystem.h>
+#include <gfx/asdxDevice.h>
 #include <fnd/asdxLogger.h>
 
 
@@ -82,7 +82,7 @@ bool ModelMgr::Init
             }
         }
 
-        if (!m_DefaultBaseColor.Init(cmdList, res))
+        if (!m_DefaultBaseColor.Init(cmdList.GetCommandList(), res))
         {
             ELOGA("Error : Default Base Color Init Failed.");
             res.Dispose();
@@ -125,7 +125,7 @@ bool ModelMgr::Init
             }
         }
 
-        if (!m_DefaultNormal.Init(cmdList, res))
+        if (!m_DefaultNormal.Init(cmdList.GetCommandList(), res))
         {
             ELOGA("Error : Default Normal Init Failed.");
             res.Dispose();
@@ -168,7 +168,7 @@ bool ModelMgr::Init
             }
         }
 
-        if (!m_DefaultORM.Init(cmdList, res))
+        if (!m_DefaultORM.Init(cmdList.GetCommandList(), res))
         {
             ELOGA("Error : Default ORM Init Failed.");
             res.Dispose();
@@ -211,7 +211,7 @@ bool ModelMgr::Init
             }
         }
 
-        if (!m_Black.Init(cmdList, res))
+        if (!m_Black.Init(cmdList.GetCommandList(), res))
         {
             ELOGA("Error : Default Emissive Init Failed.");
             res.Dispose();

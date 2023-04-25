@@ -74,6 +74,9 @@
     <ClInclude Include="..\external\mikktspace\mikktspace.h">
       <Filter>ソース ファイル\external\mikktspace</Filter>
     </ClInclude>
+    <ClInclude Include="..\include\Macro.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="..\res\shader\TonemapCS.hlsl">
@@ -88,13 +91,13 @@
     <FxCompile Include="..\res\shader\ModelPS.hlsl">
       <Filter>リソース ファイル</Filter>
     </FxCompile>
-    <FxCompile Include="..\res\shader\CopyPS.hlsl">
-      <Filter>リソース ファイル</Filter>
-    </FxCompile>
     <FxCompile Include="..\res\shader\TonemapVS.hlsl">
       <Filter>リソース ファイル</Filter>
     </FxCompile>
     <FxCompile Include="..\res\shader\DenoiserCS.hlsl">
+      <Filter>リソース ファイル</Filter>
+    </FxCompile>
+    <FxCompile Include="..\res\shader\DebugPS.hlsl">
       <Filter>リソース ファイル</Filter>
     </FxCompile>
   </ItemGroup>

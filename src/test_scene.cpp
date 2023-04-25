@@ -147,7 +147,7 @@ bool Renderer::BuildTestScene()
 
 
     SceneExporter exporter;
-    exporter.SetIBL("../res/ibl/alps_field_2k.dds");
+    exporter.SetIBL("../res/ibl/modern_buildings_2_2k.dds");
     //exporter.AddTexture("../res/texture/modular_wooden_pier_planks_diff_2k.dds"); // 0
     //exporter.AddTexture("../res/texture/modular_wooden_pier_planks_nor_gl_2k.dds"); // 1
     //exporter.AddTexture("../res/texture/modular_wooden_pier_planks_arm_2k.dds"); // 2

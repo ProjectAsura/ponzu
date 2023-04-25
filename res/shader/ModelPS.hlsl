@@ -28,9 +28,10 @@ struct VSOutput
 ///////////////////////////////////////////////////////////////////////////////
 struct PSOutput
 {
-    float4 Albedo   : SV_TARGET0;
-    float4 Normal   : SV_TARGET1;
-    float2 Velocity : SV_TARGET2;
+    float4 Albedo    : SV_TARGET0;
+    float2 Normal    : SV_TARGET1;
+    float  Roughness : SV_TARGET2;
+    float2 Velocity  : SV_TARGET3;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -99,6 +100,9 @@ PSOutput main(const VSOutput input)
     Texture2D<float4> normalMap = ResourceDescriptorHeap[material.Textures0.y];
     float3 n = normalMap.Sample(LinearWrap, uv0).xyz;
 
+    Texture2D<float4> ormMap = ResourceDescriptorHeap[material.Textures0.z];
+    float4 orm = ormMap.Sample(LinearWrap, uv0);
+
     if (material.LayerCount > 1)
     {
         float2 uv1 = input.TexCoord * material.UvControl1.xy + material.UvControl1.zw;
@@ -116,9 +120,10 @@ PSOutput main(const VSOutput input)
     float3 bitangent = normalize(cross(input.Tangent, input.Normal));
     float3 normal = FromTangentSpaceToWorld(n, input.Tangent, bitangent, input.Normal);
 
-    output.Albedo   = bc;
-    output.Normal   = float4(normal * 0.5f + 0.5f, 1.0f);
-    output.Velocity = velocity;
+    output.Albedo    = bc;
+    output.Normal    = PackNormal(normal);
+    output.Roughness = orm.y;
+    output.Velocity  = velocity;
 
     return output;
 }

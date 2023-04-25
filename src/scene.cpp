@@ -10,7 +10,7 @@
 #include <scene.h>
 #include <fnd/asdxLogger.h>
 #include <fnd/asdxMisc.h>
-#include <gfx/asdxGraphicsSystem.h>
+#include <gfx/asdxDevice.h>
 #include <generated/scene_format.h>
 #include <Windows.h>
 

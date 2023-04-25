@@ -239,11 +239,11 @@ SurfaceHit GetSurfaceHit(uint instanceId, uint triangleIndex, float2 barycentric
         uint address = indices[i] * VERTEX_STRIDE;
 
         v[i] = asfloat(vertices.Load3(address));
-        float4 pos = float4(v[i], 1.0f);
+        v[i] = mul(world, float4(v[i], 1.0f)).xyz;
 
-        surfaceHit.Position += mul(world, pos).xyz * factor[i];
-        surfaceHit.Normal   += asfloat(vertices.Load3(address + NORMAL_OFFSET)) * factor[i];
-        surfaceHit.Tangent  += asfloat(vertices.Load3(address + TANGENT_OFFSET)) * factor[i];
+        surfaceHit.Position += v[i] * factor[i];
+        surfaceHit.Normal   += asfloat(vertices.Load3(address + NORMAL_OFFSET))   * factor[i];
+        surfaceHit.Tangent  += asfloat(vertices.Load3(address + TANGENT_OFFSET))  * factor[i];
         surfaceHit.TexCoord += asfloat(vertices.Load2(address + TEXCOORD_OFFSET)) * factor[i];
     }
 

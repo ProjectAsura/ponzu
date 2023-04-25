@@ -40,13 +40,14 @@
   <ItemGroup>
     <ClInclude Include="..\external\fpng\fpng.h" />
     <ClInclude Include="..\external\mikktspace\mikktspace.h" />
+    <ClInclude Include="..\include\Macro.h" />
     <ClInclude Include="..\include\model_mgr.h" />
     <ClInclude Include="..\include\OBJLoader.h" />
     <ClInclude Include="..\include\renderer.h" />
     <ClInclude Include="..\include\scene.h" />
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="..\res\shader\CopyPS.hlsl">
+    <FxCompile Include="..\res\shader\DebugPS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Master|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>

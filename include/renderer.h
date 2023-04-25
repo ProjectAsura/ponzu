@@ -17,20 +17,23 @@
 //-----------------------------------------------------------------------------
 // Include
 //-----------------------------------------------------------------------------
+#include <Macro.h>
+#include <fnd/asdxBitFlags.h>
 #include <fw/asdxApp.h>
-#include <fw/asdxCameraController.h>
-#include <gfx/asdxRootSignature.h>
+#include <fw/asdxAppCamera.h>
 #include <gfx/asdxPipelineState.h>
 #include <gfx/asdxRayTracing.h>
 #include <gfx/asdxCommandQueue.h>
-#include <gfx/asdxQuad.h>
-#include <renderer/asdxTaaRenderer.h>
-#include <edit/asdxGuiMgr.h>
 #include <model_mgr.h>
 #include <scene.h>
 
-#if (!CAMP_RELEASE)
+#if RTC_TARGET == RTC_DEVELOP
 #include <gfx/asdxShaderCompiler.h>
+#include <edit/asdxFileWatcher.h>
+#endif
+
+#ifdef ASDX_ENABLE_IMGUI
+#include <edit/asdxGuiMgr.h>
 #endif
 
 
@@ -54,6 +57,9 @@ struct SceneDesc
 // Renderer class
 ///////////////////////////////////////////////////////////////////////////////
 class Renderer : public asdx::Application
+#if RTC_TARGET == RTC_TARGET_DEVELOP
+    , public asdx::IFileUpdateListener
+#endif
 {
     //=========================================================================
     // list of friend classes and methods.
@@ -66,15 +72,15 @@ public:
     //////////////////////////////////////////////////////////////////////////
     struct ExportData
     {
-        std::vector<uint8_t>    Pixels;
         std::vector<uint8_t>    Converted;
         uint32_t                FrameIndex;
         uint32_t                Width;
         uint32_t                Height;
+        ID3D12Resource*         pResources;
+        asdx::WaitPoint         WaitPoint;
+        asdx::CommandQueue*     pQueue;
         bool                    Processed;
     };
-
-
 
     //=========================================================================
     // public variables.
@@ -88,30 +94,50 @@ public:
     ~Renderer();
 
 private:
+    ///////////////////////////////////////////////////////////////////////////
+    // RayTracingPipe structure
+    ///////////////////////////////////////////////////////////////////////////
+    struct RayTracingPipe
+    {
+        asdx::RayTracingPipelineState   PipelineState;
+        asdx::ShaderTable               RayGen;
+        asdx::ShaderTable               Miss;
+        asdx::ShaderTable               HitGroup;
+
+        bool Init(ID3D12RootSignature* pRootSig, const void* binary, size_t binarySize);
+        void Term();
+        void Dispatch(ID3D12GraphicsCommandList6* pCmd, uint32_t width, uint32_t height);
+    };
+
     //=========================================================================
     // private variables.
     //=========================================================================
-    SceneDesc                       m_SceneDesc;
-    asdx::WaitPoint                 m_FrameWaitPoint;
-    asdx::RootSignature             m_RayTracingRootSig;
-    asdx::RayTracingPipelineState   m_RayTracingPSO;
-    asdx::ComputeTarget             m_Canvas;
+    SceneDesc                           m_SceneDesc;
+    asdx::WaitPoint                     m_FrameWaitPoint;
+    asdx::RefPtr<ID3D12RootSignature>   m_ModelRootSig;
+    asdx::RefPtr<ID3D12RootSignature>   m_RtRootSig;
+    asdx::RefPtr<ID3D12RootSignature>   m_TonemapRootSig;
+
+    RayTracingPipe                  m_RtPipe;
+    asdx::PipelineState             m_ModelPipe;
+    asdx::PipelineState             m_TonemapPipe;
+
     asdx::ConstantBuffer            m_SceneParam;
-    asdx::ShaderTable               m_RayGenTable;
-    asdx::ShaderTable               m_MissTable;
-    asdx::ShaderTable               m_HitGroupTable;
-    asdx::ColorTarget               m_AlbedoTarget;
-    asdx::ColorTarget               m_NormalTarget;
-    asdx::ColorTarget               m_VelocityTarget;
-    asdx::DepthTarget               m_ModelDepthTarget;
-    asdx::RootSignature             m_ModelRootSig;
-    asdx::PipelineState             m_ModelPSO;
+
+    asdx::ComputeTarget             m_Radiance;         // 放射輝度.
+    asdx::ColorTarget               m_Albedo;           // G-Buffer アルベド.
+    asdx::ColorTarget               m_Normal;           // G-Buffer 法線.
+    asdx::ColorTarget               m_Roughness;        // G-Buffer ラフネス.
+    asdx::ColorTarget               m_Velocity;         // G-Buffer 速度.
+    asdx::DepthTarget               m_Depth;            // 深度.
+    asdx::ComputeTarget             m_Tonemapped;       // トーンマップ適用済み.
+    asdx::ComputeTarget             m_ColorHistory[2];  // カラーヒストリーバッファ.
+    asdx::ComputeTarget             m_CaptureTarget[3];
+
     Scene                           m_Scene;
     asdx::Camera                    m_Camera;
-    asdx::ComputeTarget             m_TonemapBuffer;
 
 
-    asdx::ComputeTarget             m_CaptureTarget[3];
     asdx::RefPtr<ID3D12Resource>    m_ReadBackTexture;
     uint32_t                        m_ReadBackPitch = 0;
     std::vector<ExportData>         m_ExportData;
@@ -136,40 +162,36 @@ private:
     asdx::Matrix        m_PrevInvProj;
     asdx::Matrix        m_PrevInvViewProj;
 
-    asdx::RootSignature m_DenoiseRootSig;
-    asdx::PipelineState m_DenoisePSO;
-    asdx::ComputeTarget m_DenoiseTarget[2];
-
-    asdx::RootSignature m_TonemapRootSig;
-    asdx::PipelineState m_TonemapPSO;
-
-    asdx::TaaRenderer   m_TaaRenerer;
-    asdx::ComputeTarget m_HistoryTarget[2];
     uint8_t             m_CurrHistoryIndex = 0;
     uint8_t             m_PrevHistoryIndex = 1;
 
-    asdx::RootSignature m_CopyRootSig;
-    asdx::PipelineState m_CopyPSO;
+    D3D12_VIEWPORT      m_RendererViewport = {};
+    D3D12_RECT          m_RendererScissor  = {};
+
 
     bool                m_EndRequest = false;
     bool                m_ForceChanged = false;
     uint64_t            m_MyFrameCount = 0;
 
-#if (!CAMP_RELEASE)
+#if RTC_TARGET == RTC_DEVELOP
     //+++++++++++++++++++
     //      開発用.
     //+++++++++++++++++++
     bool                            m_DebugSetting          = true;
-    bool                            m_ReloadShader          = false;
-    bool                            m_RequestReload         = false;
+    //bool                            m_ReloadShader          = false;
+    //bool                            m_RequestReload         = false;
     bool                            m_ForceAccumulationOff  = false;
-    asdx::RayTracingPipelineState   m_DevRayTracingPSO;
-    asdx::ShaderTable               m_DevRayGenTable;
-    asdx::ShaderTable               m_DevMissTable;
-    asdx::ShaderTable               m_DevHitGroupTable;
 
     int                             m_BufferKind = 0;
-    asdx::CameraController          m_CameraController;
+
+    asdx::AppCamera                     m_AppCamera;
+    asdx::FileWatcher                   m_ShaderWatcher;
+    RayTracingPipe                      m_DevPipe;
+    asdx::RefPtr<ID3D12RootSignature>   m_DebugRootSig;
+    asdx::PipelineState                 m_DebugPipe;
+
+    asdx::BitFlags8                 m_RtShaderFlags;
+    asdx::BitFlags8                 m_TonemapShaderFlags;
 #endif
 
     //=========================================================================
@@ -188,22 +210,20 @@ private:
 
     bool SystemSetup();
     bool BuildScene();
+    void DispatchRays(ID3D12GraphicsCommandList6* pCmd);
 
     void ChangeFrame(uint32_t index);
-    void CaptureScreen(ID3D12Resource* pResource, D3D12_RESOURCE_STATES state, bool forceSync = false);
+    void CaptureScreen(ID3D12Resource* pResource);
 
-    bool CreateRayTracingPipeline(
-        const void*                     pBinary,
-        size_t                          binarySize,
-        asdx::RayTracingPipelineState*  pso,
-        asdx::ShaderTable*              rayGen,
-        asdx::ShaderTable*              missTable,
-        asdx::ShaderTable*              hitGroup);
-
-#if (!CAMP_RELEASE)
+#if RTC_TARGET == RTC_DEVELOP
     bool BuildTestScene();
     void ReloadShader();
-    bool CompileShader(const wchar_t* path, asdx::IBlob** ppBlob);
+
+    // ファイル更新コールバック.
+    void OnUpdate(
+        asdx::ACTION_TYPE actionType,
+        const char* directoryPath,
+        const char* relativePath) override;
 #endif
 };
 

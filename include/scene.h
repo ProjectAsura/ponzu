@@ -9,8 +9,7 @@
 // Includes
 //-----------------------------------------------------------------------------
 #include <fnd/asdxMath.h>
-#include <gfx/asdxConstantBuffer.h>
-#include <gfx/asdxStructuredBuffer.h>
+#include <gfx/asdxBuffer.h>
 #include <gfx/asdxCommandList.h>
 #include <vector>
 #include <model_mgr.h>
