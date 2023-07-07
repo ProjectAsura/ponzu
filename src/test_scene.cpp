@@ -38,7 +38,7 @@ bool Renderer::BuildTestScene()
     {
         instances[i].MaterialId = 0;
         instances[i].MeshId     = uint32_t(i);
-        instances[i].Transform  = asdx::Transform3x4();
+        instances[i].Transform  = asdx::FromMatrix(asdx::Matrix::CreateTranslation(-1.0f, 3.0f, 0.0f) * asdx::Matrix::CreateRotationY(asdx::F_PIDIV2));
     }
 
     //if (instances.size() >= 3)

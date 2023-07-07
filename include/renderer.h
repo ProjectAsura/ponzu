@@ -169,6 +169,8 @@ private:
     D3D12_RECT          m_RendererScissor  = {};
 
 
+    bool                m_Dirty = false;
+
     bool                m_EndRequest = false;
     bool                m_ForceChanged = false;
     uint64_t            m_MyFrameCount = 0;

@@ -1381,10 +1381,17 @@ void Renderer::ChangeFrame(uint32_t index)
         if (GetFrameCount() == 0)
         { changed = true; }
 
-    //#if RTC_TARGET == RTC_DEVELOP
-    //    if (m_RequestReload)
-    //    { changed = true; }
-    //#endif
+    #if RTC_TARGET == RTC_DEVELOP
+        if (m_Dirty)
+        {
+            changed = true;
+            m_Dirty = false;
+        }
+        if (m_ForceAccumulationOff)
+        {
+            changed = true;
+        }
+    #endif
 
     #if RTC_TARGET == RTC_RELEASE
         if (m_ForceChanged)
@@ -2026,6 +2033,8 @@ void Renderer::ReloadShader()
             local_time.tm_min,
             local_time.tm_sec,
             successCount);
+
+        m_Dirty = true;
     }
 }
 #endif//(!CAMP_RELEASE)
