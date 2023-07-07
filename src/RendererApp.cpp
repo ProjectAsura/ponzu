@@ -1,5 +1,5 @@
 ﻿//-----------------------------------------------------------------------------
-// File : renderer.cpp
+// File : RendererApp.cpp
 // Desc : Renderer.
 // Copyright(c) Project Asura. All right reserved.
 //-----------------------------------------------------------------------------
@@ -7,7 +7,7 @@
 //-----------------------------------------------------------------------------
 // Includes
 //-----------------------------------------------------------------------------
-#include <renderer.h>
+#include <RendererApp.h>
 #include <fnd/asdxLogger.h>
 #include <fnd/asdxStopWatch.h>
 #include <fnd/asdxMisc.h>

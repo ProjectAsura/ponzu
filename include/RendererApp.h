@@ -24,8 +24,8 @@
 #include <gfx/asdxPipelineState.h>
 #include <gfx/asdxRayTracing.h>
 #include <gfx/asdxCommandQueue.h>
-#include <model_mgr.h>
-#include <scene.h>
+#include <ModelManager.h>
+#include <Scene.h>
 
 #if RTC_TARGET == RTC_DEVELOP
 #include <gfx/asdxShaderCompiler.h>

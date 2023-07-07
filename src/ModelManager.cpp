@@ -7,7 +7,7 @@
 //-----------------------------------------------------------------------------
 // Includes
 //-----------------------------------------------------------------------------
-#include <model_mgr.h>
+#include <ModelManager.h>
 #include <gfx/asdxDevice.h>
 #include <fnd/asdxLogger.h>
 

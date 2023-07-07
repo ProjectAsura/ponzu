@@ -31,20 +31,20 @@
     <ClCompile Include="..\external\fpng\fpng.cpp" />
     <ClCompile Include="..\external\mikktspace\mikktspace.c" />
     <ClCompile Include="..\src\main.cpp" />
-    <ClCompile Include="..\src\model_mgr.cpp" />
+    <ClCompile Include="..\src\ModelManager.cpp" />
     <ClCompile Include="..\src\OBJLoader.cpp" />
-    <ClCompile Include="..\src\renderer.cpp" />
-    <ClCompile Include="..\src\scene.cpp" />
+    <ClCompile Include="..\src\RendererApp.cpp" />
+    <ClCompile Include="..\src\Scene.cpp" />
     <ClCompile Include="..\src\test_scene.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\external\fpng\fpng.h" />
     <ClInclude Include="..\external\mikktspace\mikktspace.h" />
     <ClInclude Include="..\include\Macro.h" />
-    <ClInclude Include="..\include\model_mgr.h" />
+    <ClInclude Include="..\include\ModelManager.h" />
     <ClInclude Include="..\include\OBJLoader.h" />
-    <ClInclude Include="..\include\renderer.h" />
-    <ClInclude Include="..\include\scene.h" />
+    <ClInclude Include="..\include\RendererApp.h" />
+    <ClInclude Include="..\include\Scene.h" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="..\res\shader\DebugPS.hlsl">
@@ -121,7 +121,7 @@
     <VCProjectVersion>16.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
     <ProjectGuid>{4414f671-b9fe-4bfb-8b2e-02c0420d3a5d}</ProjectGuid>
-    <RootNamespace>ponzu</RootNamespace>
+    <RootNamespace>rtc</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -200,12 +200,15 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
+    <IntDir>$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
+    <IntDir>$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Master|x64'">
     <LinkIncremental>false</LinkIncremental>
+    <IntDir>$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>

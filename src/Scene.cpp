@@ -1,5 +1,5 @@
 ﻿//-----------------------------------------------------------------------------
-// File : scene.cpp
+// File : Scene.cpp
 // Desc : Scene Data.
 // Copyright(c) Project Asura. All right reserved.
 //-----------------------------------------------------------------------------
@@ -7,7 +7,7 @@
 //-----------------------------------------------------------------------------
 // Includes
 //-----------------------------------------------------------------------------
-#include <scene.h>
+#include <Scene.h>
 #include <fnd/asdxLogger.h>
 #include <fnd/asdxMisc.h>
 #include <gfx/asdxDevice.h>

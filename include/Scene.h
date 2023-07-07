@@ -1,5 +1,5 @@
 ﻿//-----------------------------------------------------------------------------
-// File : scene.h
+// File : Scene.h
 // Desc : Scene Data.
 // Copyright(c) Project Asura. All right reserved.
 //-----------------------------------------------------------------------------
@@ -12,7 +12,7 @@
 #include <gfx/asdxBuffer.h>
 #include <gfx/asdxCommandList.h>
 #include <vector>
-#include <model_mgr.h>
+#include <ModelManager.h>
 
 
 namespace r3d {
