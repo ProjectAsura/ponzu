@@ -1,5 +1,5 @@
 ﻿//-----------------------------------------------------------------------------
-// File : model_mgr.h
+// File : ModelManager.h
 // Desc : Model Manager.
 // Copyright(c) Project Asura. All right reserved.
 //-----------------------------------------------------------------------------
@@ -38,26 +38,17 @@ struct Mesh
 ///////////////////////////////////////////////////////////////////////////////
 struct Material
 {
-    uint32_t        BaseColor0; //!< ベースカラー0.
-    uint32_t        Normal0;    //!< 法線マップ0.
-    uint32_t        ORM0;       //!< オクルージョン/ラフネス/メタリック 0.
-    uint32_t        Emissive0;  //!< エミッシブ0.
+    uint32_t    BaseColorMap;
+    uint32_t    NormalMap;
+    uint32_t    OrmMap;
+    uint32_t    EmissiveMap;
 
-    uint32_t        BaseColor1; //!< ベースカラー1.
-    uint32_t        Normal1;    //!< 法線マップ1.
-    uint32_t        ORM1;       //!< オクルージョン/ラフネス/メタリック 1.
-    uint32_t        Emissive1;  //!< エミッシブ1.
-
-    asdx::Vector2   UvScale0;   //!< UVスケール0.
-    asdx::Vector2   UvScroll0;  //!< UVスクロール0.
-
-    asdx::Vector2   UvScale1;   //!< UVスケール1.
-    asdx::Vector2   UvScroll1;  //!< UVスクロール1.
-
-    float           IntIor;     //!< 内部屈折率(屈折処理しない場合は0.0を代入).
-    float           ExtIor;     //!< 外部屈折率(屈折処理しない場合は0.0を代入).
-    uint32_t        LayerCount; //!< レイヤー数.
-    uint32_t        LayerMask;  //!< レイヤーマスクマップ.
+    asdx::Vector4   BaseColor;  // xyz: BaseColor, w: Alpha.
+    float           Occlusion;
+    float           Roughness;
+    float           Metalness;
+    float           Ior;
+    asdx::Vector4   Emissive;   // xyz: Color, w: Scale.
 
     //-------------------------------------------------------------------------
     //! @brief      デフォルト値を取得します.
@@ -65,27 +56,17 @@ struct Material
     static Material Default()
     {
         Material mat = {};
-        mat.BaseColor0  = INVALID_MATERIAL_MAP;
-        mat.Normal0     = INVALID_MATERIAL_MAP;
-        mat.ORM0        = INVALID_MATERIAL_MAP;
-        mat.Emissive0   = INVALID_MATERIAL_MAP;
+        mat.BaseColorMap = INVALID_MATERIAL_MAP;
+        mat.NormalMap    = INVALID_MATERIAL_MAP;
+        mat.OrmMap       = INVALID_MATERIAL_MAP;
+        mat.EmissiveMap  = INVALID_MATERIAL_MAP;
 
-        mat.BaseColor1  = INVALID_MATERIAL_MAP;
-        mat.Normal1     = INVALID_MATERIAL_MAP;
-        mat.ORM1        = INVALID_MATERIAL_MAP;
-        mat.Emissive1   = INVALID_MATERIAL_MAP;
-
-        mat.UvScale0    = asdx::Vector2(1.0f, 1.0f);
-        mat.UvScroll0   = asdx::Vector2(0.0f, 0.0f);
-
-        mat.UvScale1    = asdx::Vector2(1.0f, 1.0f);
-        mat.UvScroll1   = asdx::Vector2(0.0f, 0.0f);
-
-        mat.IntIor      = 0.0f;
-        mat.ExtIor      = 0.0f;
-
-        mat.LayerCount  = 1;
-        mat.LayerMask   = INVALID_MATERIAL_MAP;
+        mat.BaseColor = asdx::Vector4(0.5f, 0.5f, 0.5f, 1.0f);
+        mat.Occlusion = 0.0f;
+        mat.Roughness = 1.0f;
+        mat.Metalness = 0.0f;
+        mat.Ior       = 0.0f;
+        mat.Emissive  = asdx::Vector4(0.0f, 0.0f, 0.0f, 0.0f);
 
         return mat;
     }
@@ -173,7 +154,7 @@ public:
     //! @retval false   初期化に失敗.
     //-------------------------------------------------------------------------
     bool Init(
-        asdx::CommandList& cmdList,
+        ID3D12GraphicsCommandList6* pCmdList,
         uint32_t maxInstanceCount,
         uint32_t maxMaterialCount);
 

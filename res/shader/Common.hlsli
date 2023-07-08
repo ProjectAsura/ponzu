@@ -13,11 +13,13 @@
 #include <BRDF.hlsli>
 #include <SceneParam.hlsli>
 
+#define ENABLE_TEXTURED_MATERIAL    (0) // テクスチャ付きマテリアルを有効にする場合は 1.
 
 #define INVALID_ID          (-1)
 #define STANDARD_RAY_INDEX  (0)
 #define SHADOW_RAY_INDEX    (1)
 #define USE_GGX             (0)
+#define T_MIN               (0.001f) // シーンの大きさによって適切な値が変わるので，適宜調整.
 
 //-----------------------------------------------------------------------------
 // Type Definitions
@@ -34,23 +36,30 @@ struct Payload
     uint    InstanceId;
     uint    PrimitiveId;
     float2  Barycentrics;
+    
+    void Clear()
+    {
+        InstanceId   = INVALID_ID;
+        PrimitiveId  = INVALID_ID;
+        Barycentrics = 0.0f.xx;
+    }
 
-    bool HasHit()
-    { return InstanceId != INVALID_ID; }
+    bool HasHit(uint instanceId, uint primitiveId)
+    {
+        if (InstanceId == INVALID_ID) {
+            return false;
+        }
+        if (InstanceId == instanceId && PrimitiveId == primitiveId) {
+            return false;
+        }
+        return true;
+    }
 };
 
 ///////////////////////////////////////////////////////////////////////////////
-// ShadowPayload structure
+// ResVertex structure
 ///////////////////////////////////////////////////////////////////////////////
-struct ShadowPayload
-{
-    bool   Visible;
-};
-
-///////////////////////////////////////////////////////////////////////////////
-// MeshVertex structure
-///////////////////////////////////////////////////////////////////////////////
-struct MeshVertex
+struct ResVertex
 {
     float3  Position;
     float3  Normal;
@@ -59,18 +68,17 @@ struct MeshVertex
 };
 
 ///////////////////////////////////////////////////////////////////////////////
-// MeshMaterial structure
+// ResMaterial structure
 ///////////////////////////////////////////////////////////////////////////////
-struct MeshMaterial
+struct ResMaterial
 {
-    uint4   Textures0;      // x:BaseColorMap, y:NormalMap, z:OrmiMap, w:EmissiveMap.
-    uint4   Textures1;      // x:BaseColorMap, y:NormalMap, z:OrmiMap, w:EmissiveMap
-    float4  UvControl0;     // xy:Scale, zw:Scroll;
-    float4  UvControl1;     // xy:Scale, zw:Scroll;
-    float   IntIor;         // Interior Index Of Refraction.
-    float   ExtIor;         // Exterior Index Of Refraction.
-    uint    LayerCount;     // Texture Layer Count.
-    uint    LayerMask;      // Texture Layer Mask Map.
+    uint4   TextureMaps;    // x:BaseColorMap, y:NormalMap, z:OrmMap, w:EmissiveMap.
+    float4  BaseColor;
+    float   Occlusion;
+    float   Roughness;
+    float   Metalness;
+    float   Ior;
+    float4  Emissive;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -114,12 +122,10 @@ struct Material
     float4  BaseColor;      // ベースカラー.
     float3  Normal;         // 法線ベクトル.
     float   Roughness;      // ラフネス.
-    float   Metalness;      // メタルネス.
     float3  Emissive;       // エミッシブ.
-    float   IntIor;         // 内部屈折率.
-    float   ExtIor;         // 外部屈折率(デフォルトは空気1.0).
+    float   Metalness;      // メタルネス.
+    float   Ior;            // 屈折率.
 };
-
 
 //=============================================================================
 // Constants
@@ -127,9 +133,9 @@ struct Material
 #define LIGHT_TYPE_POINT        (1)
 #define LIGHT_TYPE_DIRECTIONAL  (2)
 
-#define VERTEX_STRIDE       (sizeof(MeshVertex))
+#define VERTEX_STRIDE       (sizeof(ResVertex))
 #define INDEX_STRIDE        (sizeof(uint3))
-#define MATERIAL_STRIDE     (sizeof(MeshMaterial))
+#define MATERIAL_STRIDE     (sizeof(ResMaterial))
 #define INSTANCE_STRIDE     (sizeof(Instance))
 #define TRANSFORM_STRIDE    (sizeof(float3x4))
 
@@ -151,7 +157,7 @@ struct Material
 ConstantBuffer<SceneParameter>  SceneParam  : register(b0);
 RayTracingAS                    SceneAS     : register(t0);
 ByteAddressBuffer               Instances   : register(t1);
-StructuredBuffer<MeshMaterial>  Materials   : register(t2);
+StructuredBuffer<ResMaterial>   Materials   : register(t2);
 ByteAddressBuffer               Transforms  : register(t3);
 SamplerState                    LinearWrap  : register(s0);
 
@@ -264,45 +270,38 @@ Material GetMaterial(uint instanceId, float2 uv, float mip)
 {
     uint  materialId = Instances.Load(instanceId * INSTANCE_STRIDE + 8);
 
-    MeshMaterial mat = Materials[materialId];
+    ResMaterial mat = Materials[materialId];
+    
+ #if ENABLE_TEXTURED_MATERIAL
+    Texture2D<float4> baseColorMap = ResourceDescriptorHeap[mat.Textures0.x];
+    float4 bc = baseColorMap.SampleLevel(LinearWrap, uv, mip);
 
-    float2 st0 = uv * mat.UvControl0.xy + mat.UvControl0.zw * SceneParam.AnimationTime;
+    Texture2D<float4> normalMap = ResourceDescriptorHeap[mat.Textures0.y];
+    float3 n = normalMap.SampleLevel(LinearWrap, uv, mip).xyz;
+    n = normalize(n * 2.0f - 1.0f);
 
-    Texture2D<float4> baseColorMap0 = ResourceDescriptorHeap[mat.Textures0.x];
-    float4 bc = baseColorMap0.SampleLevel(LinearWrap, st0, mip);
+    Texture2D<float4> ormMap = ResourceDescriptorHeap[mat.Textures0.z];
+    float3 orm = ormiMap.SampleLevel(LinearWrap, uv, mip).rgb;
 
-    Texture2D<float4> normalMap0 = ResourceDescriptorHeap[mat.Textures0.y];
-    float3 n = normalMap0.SampleLevel(LinearWrap, st0, mip).xyz;
-
-    // レイトレ合宿用処理.
-    if (mat.LayerCount > 1)
-    {
-        float2 st1 = uv * mat.UvControl1.xy + mat.UvControl1.zw * SceneParam.AnimationTime;
-
-        Texture2D<float4> normalMap1 = ResourceDescriptorHeap[mat.Textures1.y];
-        float3 n1 = normalMap1.SampleLevel(LinearWrap, st1, mip).xyz;
-
-        n = BlendNormal(n, n1);
-    }
-    else
-    {
-        n = normalize(n * 2.0f - 1.0f);
-    }
-
-    Texture2D<float4> ormMap0 = ResourceDescriptorHeap[mat.Textures0.z];
-    float3 orm = ormMap0.SampleLevel(LinearWrap, st0, mip).rgb;
-
-    Texture2D<float4> emissiveMap0 = ResourceDescriptorHeap[mat.Textures0.w];
-    float3 e = emissiveMap0.SampleLevel(LinearWrap, st0, mip).rgb;
+    Texture2D<float4> emissiveMap = ResourceDescriptorHeap[mat.Textures0.w];
+    float3 e = emissiveMap.SampleLevel(LinearWrap, uv, mip).rgb;
 
     Material param;
-    param.BaseColor = bc;
+    param.BaseColor = bc * mat.BaseColor;
     param.Normal    = n;
-    param.Roughness = orm.y;
-    param.Metalness = orm.z;
-    param.Emissive  = e;
-    param.IntIor    = mat.IntIor;
-    param.ExtIor    = mat.ExtIor;
+    param.Roughness = ormi.y * mat.Roughness;
+    param.Metalness = ormi.z * mat.Metalness;
+    param.Emissive  = e * mat.Emissive.rgb * mat.Emissive.a;
+    param.Ior       = mat.Ior;
+#else
+    Material param;
+    param.BaseColor = mat.BaseColor;
+    param.Normal    = float3(0.0f, 0.0f, 1.0f);
+    param.Roughness = mat.Roughness;
+    param.Metalness = mat.Metalness;
+    param.Emissive  = mat.Emissive.rgb * mat.Emissive.a;
+    param.Ior       = mat.Ior;
+#endif
 
     return param;
 }
@@ -323,7 +322,7 @@ bool IsPerfectDiffuse(Material material)
 //      透明屈折マテリアルかどうかチェックします.
 //-----------------------------------------------------------------------------
 bool IsDielectric(Material material)
-{ return (material.IntIor > 0.0f) && (material.ExtIor > 0.0); }
+{ return (material.Ior > 0.0f); }
 
 //-----------------------------------------------------------------------------
 //      デルタ関数を持つかどうかチェックします.
@@ -406,7 +405,7 @@ RayDesc GeneratePinholeCameraRay(float2 pixel)
     RayDesc ray;
     ray.Origin      = GetPosition(SceneParam.View);
     ray.Direction   = CalcRayDir(pixel, SceneParam.View, SceneParam.Proj);
-    ray.TMin        = 0.1f;
+    ray.TMin        = T_MIN;
     ray.TMax        = FLT_MAX;
 
     return ray;
@@ -415,20 +414,24 @@ RayDesc GeneratePinholeCameraRay(float2 pixel)
 //-----------------------------------------------------------------------------
 //      シャドウレイをキャストします.
 //-----------------------------------------------------------------------------
-bool CastShadowRay(float3 pos, float3 normal, float3 dir, float tmax)
+bool CastShadowRay(float3 pos, float3 normal, float3 dir, float tmax, uint instanceId, uint primitiveId)
 {
     RayDesc ray;
-    ray.Origin      = OffsetRay(pos, normal);
+    ray.Origin      = pos + normal * T_MIN;
     ray.Direction   = dir;
-    ray.TMin        = 0.1f;
+    ray.TMin        = T_MIN;
     ray.TMax        = tmax;
 
-    ShadowPayload payload;
-    payload.Visible = true;
+    Payload payload;
+    payload.Clear();
+    
+    uint flags = RAY_FLAG_SKIP_CLOSEST_HIT_SHADER;
+    flags |= RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH;
+    flags |= RAY_FLAG_CULL_FRONT_FACING_TRIANGLES;
 
     TraceRay(
         SceneAS,
-        RAY_FLAG_SKIP_CLOSEST_HIT_SHADER | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH,
+        flags,
         0xFF,
         SHADOW_RAY_INDEX,
         0,
@@ -436,7 +439,7 @@ bool CastShadowRay(float3 pos, float3 normal, float3 dir, float tmax)
         ray,
         payload);
 
-    return payload.Visible;
+    return payload.HasHit(instanceId, primitiveId);
 }
 
 //-----------------------------------------------------------------------------
@@ -520,180 +523,34 @@ float ProbabilityToSampleDiffuse(float3 diffuseColor, float3 specularColor)
     return lumDiffuse / (lumDiffuse + lumSpecular);
 }
 
-// [Heitz 2018] Eric Heitz, "Sampling the GGX Distribution of Visible Normals", JCGT, vol.7, no.4, 1-13, 2018.
-float3 SampleGGXVNDF(float3 Ve, float alpha_x, float alpha_y, float2 u)
-{
-    // Input Ve: view direction
-    // Input alpha_x, alpha_y: roughness parameters
-    // Input u: uniform random numbers
-    // Output Ne: normal sampled with PDF D_Ve(Ne) = G1(Ve) * max(0, dot(Ve, Ne)) * D(Ne) / Ve.z
-
-    // Section 3.2: transforming the view direction to the hemisphere configuration
-    float3 Vh = normalize(float3(alpha_x * Ve.x, alpha_y * Ve.y, Ve.z));
-
-    // Section 4.1: orthonormal basis (with special case if cross product is zero)
-    float lensq = Vh.x * Vh.x + Vh.y * Vh.y;
-    float3 T1 = (lensq > 0.0f) ? float3(-Vh.y, Vh.x, 0.0f) * rsqrt(lensq) : float3(1.0f, 0.0f, 0.0f);
-    float3 T2 = cross(Vh, T1);
-
-    // Section 4.2: parameterization of the projected area
-    float r = sqrt(u.x);
-    float phi = 2.0f * F_PI * u.y;
-    float t1 = r * cos(phi);
-    float t2 = r * sin(phi);
-    float s = 0.5f * (1.0f + Vh.z);
-    t2 = (1.0f - s) * sqrt(1.0f - t1*t1) + s*t2;
-
-    // Section 4.3: reprojection onto hemisphere
-    float3 Nh = t1*T1 + t2*T2 + sqrt(max(0.0f, 1.0f - t1*t1 - t2*t2))*Vh;
-
-    // Section 3.4: transforming the normal back to the ellipsoid configuration
-    float3 Ne = normalize(float3(alpha_x * Nh.x, alpha_y * Nh.y, max(0.0f, Nh.z)));
-
-    return Ne;
-}
-
-//-----------------------------------------------------------------------------
-//      出射方向をサンプリングします.
-//-----------------------------------------------------------------------------
-float3 SampleDir(float3 V, float3 N, float3 u, Material material)
-{
-    // 物体からのレイの入出を考慮した法線.
-    float3 Nm = dot(N, -V) < 0.0f ? N : -N;
-
-    // レイがオブジェクトから出射するか入射するか?
-    bool into = dot(N, Nm) > 0.0f;
-
-    // 透明屈折.
-    if (IsDielectric(material))
-    {
-        // Snellの法則.
-        float n1 = (into) ? material.ExtIor : material.IntIor;
-        float n2 = (into) ? material.IntIor : material.ExtIor;
-
-        // 相対屈折率.
-        float eta = n1 /n2;
-
-        // cos(θ_1).
-        float cosT1 = dot(V, Nm);
-
-        // cos^2(θ_2).
-        float cos2T2 = 1.0f - Pow2(eta) * (1.0f - Pow2(cosT1));
-
-        // 反射ベクトル.
-        float3 reflection = normalize(reflect(-V, Nm));
-
-        // 全反射チェック.
-        if (cos2T2 <= 0.0f)
-        {
-            return reflection;
-        }
-
-        // 屈折ベクトル.
-        float3 refraction = normalize(refract(-V, Nm, eta));
-
-        float a = n2 - n1;
-        float b = n2 + n1;
-        float F0 = Pow2(a) / Pow2(b);
-
-        // Schlickの近似によるフレネル項.
-        float c  = saturate((n1 > n2) ? dot(-Nm, refraction) : cosT1); // n1 > n2 なら cos(θ_2).
-        float Fr = F_Schlick(F0, c);
-
-        // 屈折光による放射輝度.
-        float Tr = (1.0f - Fr) * Pow2(eta);
-
-        float p = 0.25f + 0.5f * Fr;
-        if (u.z < p)
-        {
-            return reflection;
-        }
-        else
-        {
-            return refraction;
-        }
-    }
-    // 完全拡散反射.
-    else if (IsPerfectDiffuse(material))
-    {
-        float3 T, B;
-        CalcONB(N, T, B);
-
-        float3 s = SampleLambert(u.xy);
-        return normalize(T * s.x + B * s.y + N * s.z);
-    }
-    // 完全鏡面反射.
-    else if (IsPerfectSpecular(material))
-    {
-        return normalize(reflect(-V, N));
-    }
-    else
-    {
-        float3 diffuseColor  = ToKd(material.BaseColor.rgb, material.Metalness);
-        float3 specularColor = ToKs(material.BaseColor.rgb, material.Metalness);
-
-        float p = ProbabilityToSampleDiffuse(diffuseColor, specularColor);
-
-        // Diffuse.
-        if (u.z < p)
-        {
-            float3 T, B;
-            CalcONB(N, T, B);
-
-            float3 s = SampleLambert(u.xy);
-            return normalize(T * s.x + B * s.y + N * s.z);
-        }
-
-        float a = max(Pow2(material.Roughness), 0.01f);
-
-#if USE_GGX
-        float3 T, B;
-        CalcONB(N, T, B);
-
-        float3 s = SampleGGX(u.xy, a);
-        float3 H = normalize(T * s.x + B * s.y + N * s.z);
-        return normalize(reflect(-V, H));
-#else
-        // Phong. 
-        float3 R = normalize(reflect(-V, N));
-    
-        float3 T, B;
-        CalcONB(R, T, B);
-
-        float shininess = ToSpecularPower(a);
-        float3 s = SamplePhong(u.xy, shininess);
-        return normalize(T * s.x + B * s.y + R * s.z);
-#endif
-    }
-}
-
 //-----------------------------------------------------------------------------
 //      マテリアルを評価します.
 //-----------------------------------------------------------------------------
 float3 SampleMaterial
 (
-    float3      V,          // 入射方向.
-    float3      N,          // 法線ベクトル.
-    float3      L,          // ライトベクトル.
-    float       u,          // 乱数.
-    Material    material    // マテリアル.
+    float3   V,         // 入射方向.
+    float3   N,         // 法線ベクトル.
+    float3   L,         // ライトベクトル.
+    float    u,         // 乱数.
+    float    ior,       // 屈折率.
+    Material material   // マテリアル.
 )
 {
     // 物体からのレイの入出を考慮した法線.
-    float3 Nm = dot(N, -V) < 0.0f ? N : -N;
-
-    // レイがオブジェクトから出射するか入射するか?
-    bool into = dot(N, Nm) > 0.0f;
+    float3 Nm = dot(N, V) < 0.0f ? -N : N;
 
     // 透明屈折.
     if (IsDielectric(material))
     {
+        // レイがオブジェクトから出射するか入射するか?
+        bool into = dot(N, Nm) > 0.0f;
+        
         // Snellの法則.
-        float n1 = (into) ? material.ExtIor : material.IntIor;
-        float n2 = (into) ? material.IntIor : material.ExtIor;
+        float n1 = (into) ? ior : material.Ior;
+        float n2 = (into) ? material.Ior : ior;
 
         // 相対屈折率.
-        float eta = n1 /n2;
+        float eta = n1 / n2;
 
         // cos(θ_1).
         float cosT1 = dot(V, Nm);
@@ -718,7 +575,7 @@ float3 SampleMaterial
         float F0 = Pow2(a) / Pow2(b);
 
         // Schlickの近似によるフレネル項.
-        float c  = saturate((n1 > n2) ? dot(-Nm, refraction) : cosT1); // n1 > n2 なら cos(θ_2).
+        float c = saturate((n1 > n2) ? dot(-Nm, refraction) : cosT1); // n1 > n2 なら cos(θ_2).
         float Fr = F_Schlick(F0, c);
 
         // 屈折光による放射輝度.
@@ -727,11 +584,11 @@ float3 SampleMaterial
         float p = 0.25f + 0.5f * Fr;
         if (u < p)
         {
-            return material.BaseColor.rgb * Fr / p;
+            return SaturateFloat(material.BaseColor.rgb * Fr / p);
         }
         else
         {
-            return material.BaseColor.rgb * Tr / (1.0f - p);
+            return SaturateFloat(material.BaseColor.rgb * Tr / (1.0f - p));
         }
     }
     // 完全拡散反射.
@@ -753,17 +610,17 @@ float3 SampleMaterial
 
         // Diffuse
         if (u < p)
-        { return (diffuseColor / p) * (1.0f.xxx - specularColor); }
+        { return SaturateFloat((diffuseColor / p) * (1.0f.xxx - specularColor)); }
 
         float a = max(Pow2(material.Roughness), 0.01f);
 
 #if USE_GGX
         float3 H = normalize(V + L);
 
-        float NdotL = abs(dot(Nm, L));
-        float NdotH = abs(dot(Nm, H));
+        float NdotL = abs(dot(N, L));
+        float NdotH = abs(dot(N, H));
         float VdotH = abs(dot(V, H));
-        float NdotV = abs(dot(Nm, V));
+        float NdotV = abs(dot(N, V));
 
         float  G = G_SmithGGX(NdotL, NdotV, a);
         float3 F = F_Schlick(specularColor, VdotH);
@@ -776,7 +633,7 @@ float3 SampleMaterial
         float shininess = ToSpecularPower(a);
         float LoR = dot(L, R);
 
-        return specularColor * pow(LoR, shininess) / (1.0f - p);
+        return SaturateFloat(specularColor * pow(LoR, shininess) / (1.0f - p));
 #endif
     }
 }
@@ -787,28 +644,31 @@ float3 SampleMaterial
 float3 EvaluateMaterial
 (
     float3      V,          // 視線ベクトル.(-Vでレイの方向ベクトルになる).
+    float3      T,          // 接線ベクトル.
+    float3      B,          // 従接線ベクトル.
     float3      N,          // 法線ベクトル.
     float3      u,          // 乱数.
+    float       ior,        // 屈折率. 
     Material    material,   // マテリアル.
     out float3  dir,        // 出射方向.
     out float   pdf         // 確率密度.
 )
 {
-    // 物体からのレイの入出を考慮した法線.
-    float3 Nm = dot(N, -V) < 0.0f ? N : -N;
-
-    // レイがオブジェクトから出射するか入射するか?
-    bool into = dot(N, Nm) > 0.0f;
-
     // 屈折半透明.
     if (IsDielectric(material))
     {
+        // 物体からのレイの入出を考慮した法線.
+        float3 Nm = dot(N, V) < 0.0f ? -N : N;
+
+        // レイがオブジェクトから出射するか入射するか?
+        bool into = dot(N, Nm) > 0.0f;
+    
         // Snellの法則.
-        float n1 = (into) ? material.ExtIor : material.IntIor;
-        float n2 = (into) ? material.IntIor : material.ExtIor;
+        float n1 = (into) ? ior : material.Ior;
+        float n2 = (into) ? material.Ior : ior;
 
         // 相対屈折率.
-        float eta = n1 /n2;
+        float eta = n1 / n2;
 
         // cos(θ_1).
         float cosT1 = dot(V, Nm);
@@ -858,13 +718,10 @@ float3 EvaluateMaterial
     // 完全拡散反射.
     else if (IsPerfectDiffuse(material))
     {
-        float3 T, B;
-        CalcONB(Nm, T, B);
-
         float3 s = SampleLambert(u.xy);
-        float3 L = normalize(T * s.x + B * s.y + Nm * s.z);
+        float3 L = normalize(T * s.x + B * s.y + N * s.z);
 
-        float NoL = dot(Nm, L);
+        float NoL = dot(N, L);
 
         dir = L;
         pdf = NoL / F_PI;
@@ -874,7 +731,7 @@ float3 EvaluateMaterial
     // 完全鏡面反射.
     else if (IsPerfectSpecular(material))
     {
-        float3 L = normalize(reflect(-V, Nm));
+        float3 L = normalize(reflect(-V, N));
         dir = L;
         pdf = 1.0f;
 
@@ -890,13 +747,10 @@ float3 EvaluateMaterial
         // Diffuse
         if (u.z < p)
         {
-            float3 T, B;
-            CalcONB(Nm, T, B);
-
             float3 s = SampleLambert(u.xy);
-            float3 L = normalize(T * s.x + B * s.y + Nm * s.z);
+            float3 L = normalize(T * s.x + B * s.y + N * s.z);
 
-            float NoL = dot(Nm, L);
+            float NoL = dot(N, L);
 
             dir = L;
             pdf = (NoL / F_PI);
@@ -908,23 +762,20 @@ float3 EvaluateMaterial
         float a = max(Pow2(material.Roughness), 0.01f);
 
 #if USE_GGX
-        float3 T, B;
-        CalcONB(Nm, T, B);
-
         float3 s = SampleGGX(u.xy, a);
-        float3 H = normalize(T * s.x + B * s.y + Nm * s.z);
+        float3 H = normalize(T * s.x + B * s.y + N * s.z);
         float3 L = normalize(reflect(-V, H));
 
-        float NdotL = dot(Nm, L);
-        float NdotH = dot(Nm, H);
+        float NdotL = dot(N, L);
+        float NdotH = dot(N, H);
         float VdotH = dot(V, H);
-        float NdotV = dot(Nm, V);
+        float NdotV = dot(N, V);
 
         float  D = D_GGX(NdotH, a);
         float  G = G_SmithGGX(NdotL, NdotV, a);
         float3 F = F_Schlick(specularColor, VdotH);
         float3 ggxTerm = D * F * G / (4 * NdotV) * NdotL;
-        float  ggxProb = D * NdotH / (4 * VdotH) * NdotL;
+        float  ggxProb = D * NdotH / (4 * VdotH);
 
         dir = L;
         pdf = ggxProb;
@@ -933,11 +784,8 @@ float3 EvaluateMaterial
         return ggxTerm;
 #else
         // Phong. 
-        float3 R = normalize(reflect(-V, Nm));
+        float3 R = normalize(reflect(-V, N));
     
-        float3 T, B;
-        CalcONB(R, T, B);
-
         float shininess = ToSpecularPower(a);
         float3 s = SamplePhong(u.xy, shininess);
         float3 L = normalize(T * s.x + B * s.y + R * s.z);

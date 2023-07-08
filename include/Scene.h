@@ -119,7 +119,7 @@ public:
     //=========================================================================
     // public methods.
     //=========================================================================
-    bool Init(const char* path, asdx::CommandList& cmdList);
+    bool Init(const char* path, ID3D12GraphicsCommandList6* pCmdList);
     void Term();
 
     asdx::IConstantBufferView* GetParamCBV() const;
@@ -133,6 +133,11 @@ public:
     void Draw(ID3D12GraphicsCommandList6* pCmdList);
 
     uint32_t GetLightCount() const;
+
+#if !CAMP_RELEASE
+    void Reload(const char* path);
+    bool IsReloading() const;
+#endif
 
 private:
     ///////////////////////////////////////////////////////////////////////////
@@ -170,6 +175,11 @@ private:
     asdx::ConstantBuffer                    m_Param;
     ModelMgr                                m_ModelMgr;
     asdx::StructuredBuffer                  m_LB;
+#if !CAMP_RELEASE
+    bool                                    m_RequestTerm = false;
+    uint8_t                                 m_WaitCount   = 0;
+    std::string                             m_ReloadPath;
+#endif
 
     //=========================================================================
     // private methods.
@@ -197,6 +207,7 @@ public:
     //=========================================================================
     // public methods.
     //=========================================================================
+    bool LoadFromTXT(const char* path, std::string& exportPath);
     bool Export(const char* path);
     void Reset();
 

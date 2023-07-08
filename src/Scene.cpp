@@ -16,6 +16,8 @@
 
 #if !CAMP_RELEASE
 #include <OBJLoader.h>
+#include <fstream>
+#include <map>
 #endif//!CAMP_RELEASE
 
 
@@ -218,6 +220,24 @@ void UpdateTexture
 
     asdx::Dispose(pSrcResource);
 }
+
+asdx::Vector4 FromBinaryFormat(const r3d::Vector4& value)
+{ return asdx::Vector4(value.x(), value.y(), value.z(), value.w()); }
+
+asdx::Vector3 FromBinaryFormat(const r3d::Vector3& value)
+{ return asdx::Vector3(value.x(), value.y(), value.z()); }
+
+asdx::Vector2 FromBinaryFormat(const r3d::Vector2& value)
+{ return asdx::Vector2(value.x(), value.y()); }
+
+r3d::Vector4 ToBinaryFormat(const asdx::Vector4& value)
+{ return r3d::Vector4(value.x, value.y, value.z, value.w); }
+
+r3d::Vector3 ToBinaryFormat(const asdx::Vector3& value)
+{ return r3d::Vector3(value.x, value.y, value.z); }
+
+r3d::Vector2 ToBinaryFormat(const asdx::Vector2& value)
+{ return r3d::Vector2(value.x, value.y); }
 
 } // namespace
 
@@ -436,15 +456,15 @@ asdx::IShaderResourceView* SceneTexture::GetView() const
 //-----------------------------------------------------------------------------
 //      バイナリからからロードします.
 //-----------------------------------------------------------------------------
-bool Scene::Init(const char* path, asdx::CommandList& cmdList)
+bool Scene::Init(const char* path, ID3D12GraphicsCommandList6* pCmdList)
 {
-    if (!m_ModelMgr.Init(cmdList, UINT16_MAX, UINT16_MAX))
+    if (!m_ModelMgr.Init(pCmdList, UINT16_MAX, UINT16_MAX))
     {
         ELOGA("Error : ModelMgr::Init() Failed.");
         return false;
     }
 
-    ILOGA("path %s", path);
+    ILOGA("scene path %s", path);
 
     // ファイル読み込み.
     {
@@ -481,7 +501,7 @@ bool Scene::Init(const char* path, asdx::CommandList& cmdList)
 
     // IBLテクスチャのセットアップ.
     {
-        if (!m_IBL.Init(cmdList.GetCommandList(), resScene->IblTexture()))
+        if (!m_IBL.Init(pCmdList, resScene->IblTexture()))
         {
             ELOGA("Error : IBL Initialize Failed.");
             return false;
@@ -497,7 +517,7 @@ bool Scene::Init(const char* path, asdx::CommandList& cmdList)
 
         for(auto i=0u; i<count; ++i)
         {
-            if (!m_Textures[i].Init(cmdList.GetCommandList(), resTextures->Get(i)))
+            if (!m_Textures[i].Init(pCmdList, resTextures->Get(i)))
             {
                 ELOGA("Error : SceneTexture::Init() Failed. index = %u", i);
                 return false;
@@ -517,27 +537,17 @@ bool Scene::Init(const char* path, asdx::CommandList& cmdList)
             assert(srcMaterial != nullptr);
 
             r3d::Material material = {};
-            material.BaseColor0 = GetTextureHandle(srcMaterial->BaseColor0());
-            material.Normal0    = GetTextureHandle(srcMaterial->Normal0());
-            material.ORM0       = GetTextureHandle(srcMaterial->Orm0());
-            material.Emissive0  = GetTextureHandle(srcMaterial->Emissive0());
+            material.BaseColorMap = GetTextureHandle(srcMaterial->BaseColorMap());
+            material.NormalMap    = GetTextureHandle(srcMaterial->NormalMap());
+            material.OrmMap       = GetTextureHandle(srcMaterial->OrmMap());
+            material.EmissiveMap  = GetTextureHandle(srcMaterial->EmissiveMap());
 
-            material.BaseColor1 = GetTextureHandle(srcMaterial->BaseColor1());
-            material.Normal1    = GetTextureHandle(srcMaterial->Normal1());
-            material.ORM1       = GetTextureHandle(srcMaterial->Orm1());
-            material.Emissive1  = GetTextureHandle(srcMaterial->Emissive1());
-
-            material.UvScale0   = asdx::Vector2(srcMaterial->UvScale0().x(), srcMaterial->UvScale0().y());
-            material.UvScroll0  = asdx::Vector2(srcMaterial->UvScroll0().x(), srcMaterial->UvScroll0().y());
-
-            material.UvScale1   = asdx::Vector2(srcMaterial->UvScale1().x(), srcMaterial->UvScale1().y());
-            material.UvScroll1  = asdx::Vector2(srcMaterial->UvScroll1().x(), srcMaterial->UvScroll1().y());
-
-            material.ExtIor     = srcMaterial->ExtIor();
-            material.IntIor     = srcMaterial->IntIor();
-
-            material.LayerCount = srcMaterial->LayerCount();
-            material.LayerMask  = srcMaterial->LayerMask();
+            material.BaseColor = FromBinaryFormat(srcMaterial->BaseColor());
+            material.Occlusion = srcMaterial->Occlusion();
+            material.Roughness = srcMaterial->Roughness();
+            material.Metalness = srcMaterial->Metalness();
+            material.Ior       = srcMaterial->Ior();
+            material.Emissive  = FromBinaryFormat(srcMaterial->Emissive());
 
             m_ModelMgr.AddMaterials(&material, 1);
         }
@@ -582,7 +592,7 @@ bool Scene::Init(const char* path, asdx::CommandList& cmdList)
                 return false;
             }
 
-            m_BLAS[i].Build(cmdList.GetCommandList());
+            m_BLAS[i].Build(pCmdList);
         }
     }
 
@@ -677,7 +687,7 @@ bool Scene::Init(const char* path, asdx::CommandList& cmdList)
             return false;
         }
 
-        m_TLAS.Build(cmdList.GetCommandList());
+        m_TLAS.Build(pCmdList);
     }
 
     // ライトバッファ構築.
@@ -688,7 +698,7 @@ bool Scene::Init(const char* path, asdx::CommandList& cmdList)
         // ライトがあれば初期化.
         if (count > 0)
         {
-            if (!m_LB.Init(cmdList.GetCommandList(), count, stride, resScene->Lights()->data()))
+            if (!m_LB.Init(pCmdList, count, stride, resScene->Lights()->data()))
             {
                 ELOGA("Error : LB::Init() Failed.");
                 return false;
@@ -775,6 +785,22 @@ ID3D12Resource* Scene::GetTLAS() const
 //-----------------------------------------------------------------------------
 void Scene::Draw(ID3D12GraphicsCommandList6* pCmdList)
 {
+#if !CAMP_RELEASE
+    // 終了要求中は描画指せない.
+    if (m_RequestTerm)
+    {
+        m_WaitCount++;
+        if (m_WaitCount == 8)
+        {
+            Term();
+            Init(m_ReloadPath.c_str(), pCmdList);
+            m_RequestTerm = false;
+            m_WaitCount   = 0;
+        }
+        return;
+    }
+#endif
+
     auto count = m_Instances.size();
     for(auto i=0u; i<count; ++i)
     {
@@ -814,6 +840,28 @@ uint32_t Scene::GetLightCount() const
     return resScene->LightCount();
 }
 
+#if !CAMP_RELEASE
+//-----------------------------------------------------------------------------
+//      リロード処理を行います.
+//-----------------------------------------------------------------------------
+void Scene::Reload(const char* path)
+{
+    std::string findPath;
+    if (asdx::SearchFilePathA(path, findPath))
+    {
+        m_RequestTerm = true;
+        m_WaitCount   = 0;
+        m_ReloadPath  = findPath;
+    }
+}
+
+//-----------------------------------------------------------------------------
+//      リロード中かどうか?
+//-----------------------------------------------------------------------------
+bool Scene::IsReloading() const
+{ return m_RequestTerm; }
+#endif
+
 
 #if !CAMP_RELEASE
 
@@ -840,6 +888,267 @@ struct ImTextureMemory
 ///////////////////////////////////////////////////////////////////////////////
 // SceneExporter class
 ///////////////////////////////////////////////////////////////////////////////
+
+//-----------------------------------------------------------------------------
+//      テキストファイルからシーンを読み込み，出力します.
+//-----------------------------------------------------------------------------
+bool SceneExporter::LoadFromTXT(const char* path, std::string& exportPath)
+{
+    std::ifstream stream;
+
+    stream.open(path, std::ios::in);
+
+    if (!stream.is_open())
+    {
+        ELOG("Error : File Open Failed. path = %s", path);
+        return false;
+    }
+
+    const uint32_t BUFFER_SIZE =4096;
+    char buf[BUFFER_SIZE] = {};
+
+    std::vector<r3d::CpuInstance> instances;
+    std::map<std::string, uint32_t>  meshDic;
+    std::map<std::string, uint32_t>  materialDic;
+
+    uint32_t meshIndex     = 0;
+    uint32_t materialIndex = 0;
+
+    for(;;)
+    {
+        // バッファに格納.
+        stream >> buf;
+
+        if (!stream || stream.eof())
+        { break; }
+
+        if (0 == strcmp(buf, "#"))
+        { /* DO_NOTHING */ }
+        else if (0 == _stricmp(buf, "mesh"))
+        {
+            std::string tag;
+            std::string path;
+            stream >> tag >> path;
+
+            if (!path.empty())
+            {
+                std::string findPath;
+                if (asdx::SearchFilePathA(path.c_str(), findPath))
+                {
+                    std::vector<r3d::MeshInfo> meshInfos;
+                    std::vector<r3d::Mesh>     meshes;
+
+                    if (LoadMesh(findPath.c_str(), meshes, meshInfos))
+                    {
+                        for(size_t i=0; i<meshInfos.size(); ++i)
+                        {
+                            if (meshDic.find(meshInfos[i].MeshName) == meshDic.end())
+                            {
+                                meshDic[meshInfos[i].MeshName] = meshIndex;
+                                meshIndex++;
+                            }
+                        }
+
+                        AddMeshes(meshes);
+                    }
+                }
+            }
+        }
+        else if (0 == _stricmp(buf, "material"))
+        {
+            std::string tag;
+            asdx::Vector4 baseColor;
+            float occlusion = 0.0f;
+            float roughness = 0.0f;
+            float metalness = 0.0f;
+            asdx::Vector4 emissive;
+            float ior = 0.0f;
+
+            stream >> tag 
+                >> baseColor.x >> baseColor.y >> baseColor.z >> baseColor.w
+                >> occlusion
+                >> roughness
+                >> metalness
+                >> ior
+                >> emissive.x >> emissive.y >> emissive.z >> emissive.w;
+
+            if (materialDic.find(tag) == materialDic.end())
+            {
+                Material material = Material::Default();
+                material.BaseColor = baseColor;
+                material.Occlusion = occlusion;
+                material.Roughness = roughness;
+                material.Metalness = metalness;
+                material.Ior       = ior;
+                material.Emissive  = emissive;
+
+                AddMaterial(material);
+
+                materialDic[tag] = materialIndex;
+                materialIndex++;
+            }
+        }
+        else if (0 == _stricmp(buf, "textured_material"))
+        {
+            std::string tag;
+            asdx::Vector4 baseColor;
+            float occlusion = 0.0f;
+            float roughness = 0.0f;
+            float metalness = 0.0f;
+            asdx::Vector4 emissive;
+            float ior = 0.0f;
+            std::string texBaseColor;
+            std::string texNormal;
+            std::string texOrm;
+            std::string texEmissive;
+
+            stream >> tag
+                >> baseColor.x >> baseColor.y >> baseColor.z >> baseColor.w
+                >> occlusion
+                >> roughness
+                >> metalness
+                >> ior
+                >> emissive.x >> emissive.y >> emissive.z >> emissive.w
+                >> texBaseColor
+                >> texNormal
+                >> texOrm
+                >> texEmissive;
+
+            if (materialDic.find(tag) == materialDic.end())
+            {
+                Material material = Material::Default();
+                material.BaseColor = baseColor;
+                material.Occlusion = occlusion;
+                material.Roughness = roughness;
+                material.Metalness = metalness;
+                material.Ior       = ior;
+                material.Emissive  = emissive;
+
+                assert(false); // Not Implementaion Yet.
+
+                materialDic[tag] = materialIndex;
+                materialIndex++;
+            }
+        }
+        else if (0 == _stricmp(buf, "instance"))
+        {
+            std::string   meshTag;
+            std::string   materialTag;
+            asdx::Vector3 scale;
+            asdx::Vector3 rotate;
+            asdx::Vector3 translation;
+
+            stream
+                >> meshTag
+                >> materialTag
+                >> scale.x >> scale.y >> scale.z 
+                >> rotate.x >> rotate.y >> rotate.z 
+                >> translation.x >> translation.y >> translation.z;
+
+            bool findMesh = meshDic.find(meshTag) != meshDic.end();
+            bool findMat  = materialDic.find(materialTag) != materialDic.end();
+
+            if (findMesh && findMat)
+            {
+                asdx::Matrix matrix = asdx::Matrix::CreateTranslation(translation)
+                    * asdx::Matrix::CreateRotationZ(asdx::ToRadian(rotate.z))
+                    * asdx::Matrix::CreateRotationX(asdx::ToRadian(rotate.x))
+                    * asdx::Matrix::CreateRotationY(asdx::ToRadian(rotate.y))
+                    * asdx::Matrix::CreateScale(scale);
+
+                r3d::CpuInstance instance;
+                instance.MaterialId = materialDic[materialTag];
+                instance.MeshId     = meshDic[meshTag];
+                instance.Transform  = asdx::FromMatrix(matrix);
+
+                AddInstance(instance);
+            }
+            else
+            {
+                ELOGA("Error : Instance(MeshTag = %s, MaterialTag = %s) is Not Registered. findMesh = %s, findMat = %s", meshTag.c_str(), materialTag.c_str(),
+                    findMesh ? "true" : "false",
+                    findMat ? "true" : "false"); 
+            }
+        }
+        else if (0 == _stricmp(buf, "ibl"))
+        {
+            std::string path;
+
+            stream >> path;
+
+            if (!path.empty())
+            {
+                std::string findPath;
+                if (asdx::SearchFilePathA(path.c_str(), findPath))
+                { SetIBL(path.c_str()); }
+            }
+        }
+        else if (0 == _stricmp(buf, "directional_light"))
+        {
+            asdx::Vector3 direction;
+            asdx::Vector3 intensity;
+
+            stream 
+                >> direction.x >> direction.y >> direction.z
+                >> intensity.x >> intensity.y >> intensity.z;
+            
+            Light light;
+            light.Type      = LIGHT_TYPE_DIRECTIONAL;
+            light.Position  = direction;
+            light.Intensity = intensity;
+            light.Radius    = 1.0f;
+
+            AddLight(light);
+        }
+        else if (0 == _stricmp(buf, "point_light"))
+        {
+            asdx::Vector3 position;
+            float radius;
+            asdx::Vector3 intensity;
+
+            stream
+                >> position.x >> position.y >> position.z
+                >> radius
+                >> intensity.x >> intensity.y >> intensity.z;
+
+            Light light;
+            light.Type      = LIGHT_TYPE_POINT;
+            light.Position  = position;
+            light.Radius    = radius;
+            light.Intensity = intensity;
+
+            AddLight(light);
+        }
+        else if (0 == _stricmp(buf, "spot_light"))
+        {
+            assert(false); // Not Implementation Yet.
+        }
+        else if (0 == _stricmp(buf, "export"))
+        {
+            stream >> exportPath;
+        }
+
+        stream.ignore(BUFFER_SIZE, '\n');
+    }
+    stream.close();
+
+    // エクスポート名が無ければタイムスタンプを着ける
+    if (exportPath.empty())
+    {
+        exportPath = "../res/scene/scene_";
+        // TODO : タイムスタンプ.
+        exportPath += ".scn";
+    }
+
+    if (!Export(exportPath.c_str()))
+    {
+        ELOG("Error : Scene Export Failed.");
+        return false;
+    }
+
+    ILOGA("Info : Scene Exported!! path = %s", exportPath.c_str());
+    return true;
+}
 
 //-----------------------------------------------------------------------------
 //      ファイルに出力します.
@@ -1022,27 +1331,17 @@ bool SceneExporter::Export(const char* path)
         for(size_t i=0; i<m_Materials.size(); ++i)
         {
             r3d::ResMaterial item(
-                m_Materials[i].BaseColor0,
-                m_Materials[i].Normal0,
-                m_Materials[i].ORM0,
-                m_Materials[i].Emissive0,
+                m_Materials[i].BaseColorMap,
+                m_Materials[i].NormalMap,
+                m_Materials[i].OrmMap,
+                m_Materials[i].EmissiveMap,
 
-                m_Materials[i].BaseColor1,
-                m_Materials[i].Normal1,
-                m_Materials[i].ORM1,
-                m_Materials[i].Emissive1,
-
-                r3d::Vector2(m_Materials[i].UvScale0.x, m_Materials[i].UvScale0.y),
-                r3d::Vector2(m_Materials[i].UvScroll0.x, m_Materials[i].UvScroll0.y),
-
-                r3d::Vector2(m_Materials[i].UvScale1.x, m_Materials[i].UvScale1.y),
-                r3d::Vector2(m_Materials[i].UvScroll1.x, m_Materials[i].UvScroll1.y),
-
-                m_Materials[i].IntIor,
-                m_Materials[i].ExtIor,
-
-                m_Materials[i].LayerCount,
-                m_Materials[i].LayerMask
+                ToBinaryFormat(m_Materials[i].BaseColor),
+                m_Materials[i].Occlusion,
+                m_Materials[i].Roughness,
+                m_Materials[i].Metalness,
+                m_Materials[i].Ior,
+                ToBinaryFormat(m_Materials[i].Emissive)
             );
 
             dstMaterials.push_back(item);

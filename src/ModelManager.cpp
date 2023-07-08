@@ -23,7 +23,7 @@ namespace r3d {
 //-----------------------------------------------------------------------------
 bool ModelMgr::Init
 (
-    asdx::CommandList& cmdList,
+    ID3D12GraphicsCommandList6* pCmdList,
     uint32_t maxInstanceCount,
     uint32_t maxMaterialCount
 )
@@ -82,7 +82,7 @@ bool ModelMgr::Init
             }
         }
 
-        if (!m_DefaultBaseColor.Init(cmdList.GetCommandList(), res))
+        if (!m_DefaultBaseColor.Init(pCmdList, res))
         {
             ELOGA("Error : Default Base Color Init Failed.");
             res.Dispose();
@@ -125,7 +125,7 @@ bool ModelMgr::Init
             }
         }
 
-        if (!m_DefaultNormal.Init(cmdList.GetCommandList(), res))
+        if (!m_DefaultNormal.Init(pCmdList, res))
         {
             ELOGA("Error : Default Normal Init Failed.");
             res.Dispose();
@@ -168,7 +168,7 @@ bool ModelMgr::Init
             }
         }
 
-        if (!m_DefaultORM.Init(cmdList.GetCommandList(), res))
+        if (!m_DefaultORM.Init(pCmdList, res))
         {
             ELOGA("Error : Default ORM Init Failed.");
             res.Dispose();
@@ -211,7 +211,7 @@ bool ModelMgr::Init
             }
         }
 
-        if (!m_Black.Init(cmdList.GetCommandList(), res))
+        if (!m_Black.Init(pCmdList, res))
         {
             ELOGA("Error : Default Emissive Init Failed.");
             res.Dispose();
@@ -484,27 +484,18 @@ D3D12_GPU_VIRTUAL_ADDRESS ModelMgr::AddMaterials(const Material* ptr, uint32_t c
         auto& src = ptr[i];
         auto& dst = m_pMaterials[m_OffsetMaterial + i];
 
-        dst.BaseColor0 = GetBaseColor(src.BaseColor0);
-        dst.Normal0    = GetNormal(src.Normal0);
-        dst.ORM0       = GetOrm(src.ORM0);
-        dst.Emissive0  = GetEmissive(src.Emissive0);
+        dst.BaseColorMap = GetBaseColor(src.BaseColorMap);
+        dst.NormalMap    = GetNormal(src.NormalMap);
+        dst.OrmMap       = GetOrm(src.OrmMap);
+        dst.EmissiveMap  = GetEmissive(src.EmissiveMap);
 
-        dst.BaseColor1 = GetBaseColor(src.BaseColor1);
-        dst.Normal1    = GetNormal(src.Normal1);
-        dst.ORM1       = GetOrm(src.ORM1);
-        dst.Emissive1  = GetEmissive(src.Emissive1);
+        dst.BaseColor  = src.BaseColor;
+        dst.Occlusion  = src.Occlusion;
+        dst.Roughness  = src.Roughness;
+        dst.Metalness  = src.Metalness;
 
-        dst.UvScale0   = src.UvScale0;
-        dst.UvScroll0  = src.UvScroll0;
-
-        dst.UvScale1   = src.UvScale1;
-        dst.UvScroll1  = src.UvScroll1;
-
-        dst.IntIor     = src.IntIor;
-        dst.ExtIor     = src.ExtIor;
-
-        dst.LayerCount = src.LayerCount;
-        dst.LayerMask  = GetMask(src.LayerMask);
+        dst.Emissive   = src.Emissive;
+        dst.Ior        = src.Ior;
     }
 
     m_OffsetMaterial += count;

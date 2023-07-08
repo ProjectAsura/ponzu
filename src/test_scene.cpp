@@ -62,83 +62,77 @@ bool Renderer::BuildTestScene()
     //instances[9].MaterialId = 10;
 
     Material dummy0 = Material::Default();
+    dummy0.Ior = 1.23f;
 
     // mat0
     Material planks = Material::Default();
-    planks.BaseColor0 = 0;
-    planks.Normal0    = 1;
-    planks.ORM0       = 2; 
+    planks.BaseColorMap = 0;
+    planks.NormalMap    = 1;
+    planks.OrmMap       = 2; 
 
     // mat1
     Material poles = Material::Default();
-    poles.BaseColor0 = 3;
-    poles.Normal0    = 4;
-    poles.ORM0       = 5;
+    poles.BaseColorMap = 3;
+    poles.NormalMap    = 4;
+    poles.OrmMap       = 5;
 
     // mat2
     Material wave = Material::Default();
-    wave.BaseColor0 = INVALID_MATERIAL_MAP;
-    wave.Normal0    = 9;
-    wave.ORM0       = INVALID_MATERIAL_MAP;
-    wave.Emissive0  = INVALID_MATERIAL_MAP;
-    wave.ExtIor     = 1.0f;
-    wave.IntIor     = 1.2f;
-    wave.Normal1    = 10;
-    wave.UvScale0   = asdx::Vector2(50.0f, 50.0f);
-    wave.UvScroll0  = asdx::Vector2(0.005f, -0.02f);
-    wave.UvScale1   = asdx::Vector2(50.0f, 50.0f);
-    wave.UvScroll1  = asdx::Vector2(-0.01f, 0.01f);
-    wave.LayerCount = 2;
+    wave.BaseColorMap = INVALID_MATERIAL_MAP;
+    wave.NormalMap    = 9;
+    wave.OrmMap       = INVALID_MATERIAL_MAP;
+    wave.EmissiveMap  = INVALID_MATERIAL_MAP;
+    wave.Ior          = 1.2f;
 
-    // mat3
-    Material ground = Material::Default();
-    ground.BaseColor0 = 6;
-    ground.Normal0    = 7;
-    ground.ORM0       = 8;
-    ground.UvScale0   = asdx::Vector2(500.0f, 500.0f);
-    //ground.UvScroll  = asdx::Vector2(0.1f, 0.0f);
+    //// mat3
+    //Material ground = Material::Default();
+    //ground.BaseColor0 = 6;
+    //ground.Normal0    = 7;
+    //ground.ORM0       = 8;
+    //ground.UvScale0   = asdx::Vector2(500.0f, 500.0f);
+    ////ground.UvScroll  = asdx::Vector2(0.1f, 0.0f);
 
-    // mat4
-    Material aft = Material::Default();
-    aft.BaseColor0 = 11;
-    aft.Normal0 = 12;
-    aft.ORM0 = 13;
+    //// mat4
+    //Material aft = Material::Default();
+    //aft.BaseColor0 = 11;
+    //aft.Normal0 = 12;
+    //aft.ORM0 = 13;
 
-    // mat5
-    Material deck = Material::Default();
-    deck.BaseColor0 = 14;
-    deck.Normal0 = 15;
-    deck.ORM0 = 16;
+    //// mat5
+    //Material deck = Material::Default();
+    //deck.BaseColor0 = 14;
+    //deck.Normal0 = 15;
+    //deck.ORM0 = 16;
 
-    // mat6
-    Material details = Material::Default();
-    details.BaseColor0 = 17;
-    details.Normal0 = 18;
-    details.ORM0 = 19;
+    //// mat6
+    //Material details = Material::Default();
+    //details.BaseColor0 = 17;
+    //details.Normal0 = 18;
+    //details.ORM0 = 19;
 
-    // mat7
-    Material hull = Material::Default();
-    hull.BaseColor0 = 20;
-    hull.Normal0 = 21;
-    hull.ORM0 = 22;
+    //// mat7
+    //Material hull = Material::Default();
+    //hull.BaseColor0 = 20;
+    //hull.Normal0 = 21;
+    //hull.ORM0 = 22;
 
-    // mat8
-    Material interior = Material::Default();
-    interior.BaseColor0 = 23;
-    interior.Normal0 = 24;
-    interior.ORM0 = 25;
+    //// mat8
+    //Material interior = Material::Default();
+    //interior.BaseColor0 = 23;
+    //interior.Normal0 = 24;
+    //interior.ORM0 = 25;
 
-    // mat9
-    Material rigging = Material::Default();
-    rigging.BaseColor0 = 26;
-    rigging.Normal0 = 27;
-    rigging.ORM0 = 28;
+    //// mat9
+    //Material rigging = Material::Default();
+    //rigging.BaseColor0 = 26;
+    //rigging.Normal0 = 27;
+    //rigging.ORM0 = 28;
 
-    // mat10
-    Material sails = Material::Default();
-    sails.BaseColor0 = 29;
-    //sails.Normal0 = 30;
-    sails.ORM0 = 31;
+    //// mat10
+    //Material sails = Material::Default();
+    //sails.BaseColor0 = 29;
+    ////sails.Normal0 = 30;
+    //sails.ORM0 = 31;
 
     //instances[1].MaterialId = 0;
     //instances[2].MaterialId = 1;
@@ -208,7 +202,7 @@ bool Renderer::BuildTestScene()
 
     // シーン構築.
     {
-        if (!m_Scene.Init(exportPath, m_GfxCmdList))
+        if (!m_Scene.Init(exportPath, m_GfxCmdList.GetCommandList()))
         {
             ELOGA("Error : Scene::Init() Failed.");
             return false;

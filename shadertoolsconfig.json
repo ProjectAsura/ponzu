@@ -1,0 +1,7 @@
+﻿{
+    "root": true,
+    "hlsl.additionalIncludeDirectories": {
+        ".\\external\\asdx12\\res\\shaders",
+        ".\\res\\shader"
+    }
+}

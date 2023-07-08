@@ -40,6 +40,7 @@
   <ItemGroup>
     <ClInclude Include="..\external\fpng\fpng.h" />
     <ClInclude Include="..\external\mikktspace\mikktspace.h" />
+    <ClInclude Include="..\include\generated\scene_format.h" />
     <ClInclude Include="..\include\Macro.h" />
     <ClInclude Include="..\include\ModelManager.h" />
     <ClInclude Include="..\include\OBJLoader.h" />

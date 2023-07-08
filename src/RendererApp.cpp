@@ -1024,6 +1024,35 @@ bool Renderer::SystemSetup()
             return false;
         }
     }
+
+    // ワイヤーフレーム描画用 G-Bufferパイプラインステート.
+    {
+        D3D12_GRAPHICS_PIPELINE_STATE_DESC desc = {};
+        desc.pRootSignature                 = m_ModelRootSig.GetPtr();
+        desc.VS                             = { ModelVS, sizeof(ModelVS) };
+        desc.PS                             = { ModelPS, sizeof(ModelPS) };
+        desc.BlendState                     = asdx::BLEND_DESC(asdx::BLEND_STATE_OPAQUE);
+        desc.DepthStencilState              = asdx::DEPTH_STENCIL_DESC(asdx::DEPTH_STATE_DEFAULT);
+        desc.RasterizerState                = asdx::RASTERIZER_DESC(asdx::RASTERIZER_STATE_CULL_NONE);
+        desc.SampleMask                     = D3D12_DEFAULT_SAMPLE_MASK;
+        desc.PrimitiveTopologyType          = D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE;
+        desc.NumRenderTargets               = 4;
+        desc.RTVFormats[0]                  = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;  // Albedo
+        desc.RTVFormats[1]                  = DXGI_FORMAT_R16G16_FLOAT;         // Normal.
+        desc.RTVFormats[2]                  = DXGI_FORMAT_R8_UNORM;             // Roughness.
+        desc.RTVFormats[3]                  = DXGI_FORMAT_R16G16_FLOAT;         // Velocity.
+        desc.DSVFormat                      = DXGI_FORMAT_D32_FLOAT;            // Depth.
+        desc.InputLayout.NumElements        = _countof(kModelElements);
+        desc.InputLayout.pInputElementDescs = kModelElements;
+        desc.SampleDesc.Count               = 1;
+        desc.SampleDesc.Quality             = 0;
+
+        if (!m_WireFramePipe.Init(pDevice, &desc))
+        {
+            ELOGA("Error : PipelineState Failed.");
+            return false;
+        }
+    }
     #endif
 
 #if RTC_TARGET == RTC_DEVELOP
@@ -1109,8 +1138,25 @@ bool Renderer::BuildScene()
     printf_s("Build scene  ... ");
 
 #if RTC_TARGET == RTC_DEVELOP
-    if (!BuildTestScene())
+    SceneExporter exporter;
+
+    std::string path;
+    if (!asdx::SearchFilePathA("../res/scene/scene_setting.txt", path))
     {
+        ELOG("Error : Scene Settings File Not Found.");
+        return false;
+    }
+
+    std::string exportPath;
+    if (!exporter.LoadFromTXT(path.c_str(), exportPath))
+    {
+        ELOG("Error : Scene Load Failed.");
+        return false;
+    }
+
+    if (!m_Scene.Init(exportPath.c_str(), m_GfxCmdList.GetCommandList()))
+    {
+        ELOG("Error : Scene::Init() Failed.");
         return false;
     }
 #else
@@ -1180,6 +1226,7 @@ void Renderer::OnTerm()
         m_ShaderWatcher .Term();
         m_DebugPipe     .Term();
         m_DebugRootSig  .Reset();
+        m_WireFramePipe .Term();
     }
     #endif
 
@@ -1488,13 +1535,25 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         pCmd->RSSetViewports(1, &m_RendererViewport);
         pCmd->RSSetScissorRects(1, &m_RendererScissor);
         pCmd->SetGraphicsRootSignature(m_ModelRootSig.GetPtr());
+#if RTC_TARGET == RTC_DEVELOP
+        if (m_EnableWireFrame)
+        {
+            pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
+            m_WireFramePipe.SetState(pCmd);
+        }
+        else
+        {
+            pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+            m_ModelPipe.SetState(pCmd);
+        }
+#else
         m_ModelPipe.SetState(pCmd);
+#endif
 
         pCmd->SetGraphicsRootConstantBufferView(0, m_SceneParam.GetResource()->GetGPUVirtualAddress());
         pCmd->SetGraphicsRootShaderResourceView(2, m_Scene.GetTB()->GetResource()->GetGPUVirtualAddress());
         pCmd->SetGraphicsRootShaderResourceView(3, m_Scene.GetMB()->GetResource()->GetGPUVirtualAddress());
         pCmd->SetGraphicsRootShaderResourceView(4, m_Scene.GetIB()->GetResource()->GetGPUVirtualAddress());
-        pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
         m_Scene.Draw(m_GfxCmdList.GetCommandList());
     }
@@ -1591,6 +1650,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         m_DebugPipe.SetState(pCmd);
         pCmd->SetGraphicsRootDescriptorTable(0, pSRV->GetHandleGPU());
         pCmd->SetGraphicsRoot32BitConstant(1, type, 0);
+        pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         asdx::DrawQuad(pCmd);
 
         // 2D描画.
@@ -1774,6 +1834,7 @@ void Renderer::Draw2D()
             int count = _countof(kBufferKindItems);
             ImGui::Combo(u8"ビュー", &m_BufferKind, kBufferKindItems, count);
             ImGui::Checkbox(u8"Accumulation 強制OFF", &m_ForceAccumulationOff);
+            ImGui::Checkbox(u8"ワイヤーフレーム", &m_EnableWireFrame);
             if (ImGui::Button(u8"カメラ情報出力"))
             {
                 auto& param = m_AppCamera.GetParam();

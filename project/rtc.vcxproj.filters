@@ -28,6 +28,9 @@
     <Filter Include="ソース ファイル\external\mikktspace">
       <UniqueIdentifier>{96562465-8d49-4982-b227-afd1011f5a9f}</UniqueIdentifier>
     </Filter>
+    <Filter Include="ヘッダー ファイル\generated">
+      <UniqueIdentifier>{8c1e7af1-3f6a-4e7f-ad7e-ead4c7682535}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\main.cpp">
@@ -76,6 +79,9 @@
     </ClInclude>
     <ClInclude Include="..\include\Scene.h">
       <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\generated\scene_format.h">
+      <Filter>ヘッダー ファイル\generated</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

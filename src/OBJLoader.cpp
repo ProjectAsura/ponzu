@@ -371,9 +371,9 @@ bool OBJLoader::LoadOBJ(const char* path, ModelOBJ& model)
                 faceIndex++;
                 faceCount++;
 
-                IndexOBJ f0 = { p[2], t[2], n[2] };
-                IndexOBJ f1 = { p[3], t[3], n[3] };
-                IndexOBJ f2 = { p[0], t[0], n[0] };
+                IndexOBJ f0 = { p[0], t[0], n[0] };
+                IndexOBJ f1 = { p[2], t[2], n[2] };
+                IndexOBJ f2 = { p[3], t[3], n[3] };
 
                 indices.push_back(f0);
                 indices.push_back(f1);

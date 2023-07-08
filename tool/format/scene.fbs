@@ -66,26 +66,17 @@ table ResTexture
 
 struct ResMaterial
 {
-    BaseColor0 : uint;
-    Normal0    : uint;
-    Orm0       : uint;
-    Emissive0  : uint;
+    BaseColorMap : uint;
+    NormalMap    : uint;
+    OrmMap       : uint;
+    EmissiveMap  : uint;
 
-    BaseColor1 : uint;
-    Normal1    : uint;
-    Orm1       : uint;
-    Emissive1  : uint;
-
-    UvScale0   : Vector2;
-    UvScroll0  : Vector2;
-
-    UvScale1   : Vector2;
-    UvScroll1  : Vector2;
-
-    IntIor     : float;
-    ExtIor     : float;
-    LayerCount : uint;
-    LayerMask  : uint;
+    BaseColor  : Vector4;
+    Occlusion  : float;
+    Roughness  : float;
+    Metalness  : float;
+    Ior        : float;
+    Emissive   : Vector4;
 }
 
 table ResMesh

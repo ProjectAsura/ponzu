@@ -183,6 +183,7 @@ private:
     //bool                            m_ReloadShader          = false;
     //bool                            m_RequestReload         = false;
     bool                            m_ForceAccumulationOff  = false;
+    bool                            m_EnableWireFrame       = false;
 
     int                             m_BufferKind = 0;
 
@@ -191,6 +192,7 @@ private:
     RayTracingPipe                      m_DevPipe;
     asdx::RefPtr<ID3D12RootSignature>   m_DebugRootSig;
     asdx::PipelineState                 m_DebugPipe;
+    asdx::PipelineState                 m_WireFramePipe;
 
     asdx::BitFlags8                 m_RtShaderFlags;
     asdx::BitFlags8                 m_TonemapShaderFlags;
