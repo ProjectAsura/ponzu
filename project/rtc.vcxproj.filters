@@ -45,9 +45,6 @@
     <ClCompile Include="..\external\mikktspace\mikktspace.c">
       <Filter>ソース ファイル\external\mikktspace</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\test_scene.cpp">
-      <Filter>ソース ファイル</Filter>
-    </ClCompile>
     <ClCompile Include="..\src\ModelManager.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>

@@ -49,6 +49,7 @@ static_assert(sizeof(r3d::ResVertex) == sizeof(VertexOBJ), "Vertex size not matc
 #if RTC_TARGET == RTC_DEVELOP
 static const size_t     REQUEST_BIT_INDEX   = 0;
 static const size_t     RELOADED_BIT_INDEX  = 1;
+#define SCENE_SETTING_PATH     ("../res/scene/scene_setting.txt")
 #endif
 
 #ifdef ASDX_ENABLE_IMGUI
@@ -1139,16 +1140,8 @@ bool Renderer::BuildScene()
 
 #if RTC_TARGET == RTC_DEVELOP
     SceneExporter exporter;
-
-    std::string path;
-    if (!asdx::SearchFilePathA("../res/scene/scene_setting.txt", path))
-    {
-        ELOG("Error : Scene Settings File Not Found.");
-        return false;
-    }
-
     std::string exportPath;
-    if (!exporter.LoadFromTXT(path.c_str(), exportPath))
+    if (!exporter.LoadFromTXT(SCENE_SETTING_PATH, exportPath))
     {
         ELOG("Error : Scene Load Failed.");
         return false;
@@ -1438,6 +1431,10 @@ void Renderer::ChangeFrame(uint32_t index)
         {
             changed = true;
         }
+        if (m_Scene.IsReloading())
+        {
+            changed = true;
+        }
     #endif
 
     #if RTC_TARGET == RTC_RELEASE
@@ -1501,6 +1498,9 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
     auto pCmd = m_GfxCmdList.GetCommandList();
 
     // G-Buffer描画.
+#if RTC_TARGET == RTC_DEVELOP
+    if (!m_Scene.IsReloading())
+#endif
     {
         m_Albedo    .Transition(pCmd, D3D12_RESOURCE_STATE_RENDER_TARGET);
         m_Normal    .Transition(pCmd, D3D12_RESOURCE_STATE_RENDER_TARGET);
@@ -1557,8 +1557,12 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
 
         m_Scene.Draw(m_GfxCmdList.GetCommandList());
     }
+    RTC_DEBUG_CODE(m_Scene.Polling(m_GfxCmdList.GetCommandList()));
 
     // レイトレ実行.
+#if RTC_TARGET == RTC_DEVELOP
+    if (!m_Scene.IsReloading())
+#endif
     {
         m_Radiance.Transition(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
@@ -1849,6 +1853,20 @@ void Renderer::Draw2D()
                 printf_s("param.MinDist  = %f;\n", param.MinDist);
                 printf_s("param.MaxDist  = %f;\n", param.MaxDist);
                 printf_s("\n");
+            }
+            if (ImGui::Button(u8"シーン設定 リロード"))
+            {
+                SceneExporter exporter;
+                std::string exportPath;
+                if (exporter.LoadFromTXT(SCENE_SETTING_PATH, exportPath))
+                {
+                    m_Scene.Reload(exportPath.c_str());
+                }
+            }
+            if (ImGui::Button(u8"シェーダ リロード"))
+            {
+                m_RtShaderFlags.Set(REQUEST_BIT_INDEX, true);
+                m_TonemapShaderFlags.Set(REQUEST_BIT_INDEX, true);
             }
         }
         ImGui::End();

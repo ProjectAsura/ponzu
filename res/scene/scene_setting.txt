@@ -1,16 +1,17 @@
 # フォーマットは次の通り.
 # export 出力パス
 # ibl IBLファイルパス
-# mesh 識別名 OBJメッシュファイルパス
+# model 識別名 OBJメッシュファイルパス
 # material 識別名 BaseColor_R BaseColor_G BaseColor_B BaseColor_A Occlusion Roughness Metalness Ior Emissive_R Emissive_G Emissive_B EmissiveScale
 # textured_material 識別名 BaseColor_R BaseColor_G BaseColor_B BaseColor_A Occlusion Roughness Metalness Ior Emissive_R Emissive_G Emissive_B EmissiveScale BaseColorMapファイルパス NormalMapファイルパス OrmMapファイルパス EmissiveMap ファイルパス
 # instance メッシュ名 マテリアル識別名 ScaleX ScaleY ScaleZ RotateDegX RotateDegY RotateDegZ TranslateX TranslateY TranslateZ
 # directional_light DirectionX DirectionY DirectionZ IntensityR IntensityG IntensityB
 # point_light PositionX PositionY PositionZ Radius IntensityR IntensityG IntensityB
+# ※ メッシュ名は OBJファイル内のメッシュの名前なので注意！
 
 export ..\res\scene\test_scene.scn
 ibl ..\res\ibl\modern_buildings_2_2k.dds
-mesh DoseiMesh ..\res\model\dosei_quad.obj
+model DoseiMesh ..\res\model\dosei_quad.obj
 material DoseiMat 1.0 1.0 1.0 1.0 0.0 1.0 0.0 1.2 0.0 0.0 0.0 0.0
 instance mesh0 DoseiMat 1.0 1.0 1.0 0.0 0.0 0.0 0.0 0.0 0.0
 instance mesh1 DoseiMat 1.0 1.0 1.0 0.0 0.0 0.0 0.0 0.0 0.0

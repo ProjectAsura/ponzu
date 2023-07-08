@@ -18,6 +18,7 @@
 #include <OBJLoader.h>
 #include <fstream>
 #include <map>
+#include <ctime>
 #endif//!CAMP_RELEASE
 
 
@@ -785,22 +786,6 @@ ID3D12Resource* Scene::GetTLAS() const
 //-----------------------------------------------------------------------------
 void Scene::Draw(ID3D12GraphicsCommandList6* pCmdList)
 {
-#if !CAMP_RELEASE
-    // 終了要求中は描画指せない.
-    if (m_RequestTerm)
-    {
-        m_WaitCount++;
-        if (m_WaitCount == 8)
-        {
-            Term();
-            Init(m_ReloadPath.c_str(), pCmdList);
-            m_RequestTerm = false;
-            m_WaitCount   = 0;
-        }
-        return;
-    }
-#endif
-
     auto count = m_Instances.size();
     for(auto i=0u; i<count; ++i)
     {
@@ -860,6 +845,28 @@ void Scene::Reload(const char* path)
 //-----------------------------------------------------------------------------
 bool Scene::IsReloading() const
 { return m_RequestTerm; }
+
+//-----------------------------------------------------------------------------
+//      巡回処理.
+//-----------------------------------------------------------------------------
+void Scene::Polling(ID3D12GraphicsCommandList6* pCmdList)
+{
+    if (!m_RequestTerm) 
+        return;
+
+    if (m_WaitCount == 4)
+    {
+        Term();
+    }
+    else if (m_WaitCount == 8) 
+    {
+        Init(m_ReloadPath.c_str(), pCmdList);
+        m_RequestTerm = false;
+        m_WaitCount   = 0;
+    }
+
+    m_WaitCount++;
+}
 #endif
 
 
@@ -894,13 +901,19 @@ struct ImTextureMemory
 //-----------------------------------------------------------------------------
 bool SceneExporter::LoadFromTXT(const char* path, std::string& exportPath)
 {
-    std::ifstream stream;
+    std::string inputPath;
+    if (!asdx::SearchFilePathA(path, inputPath))
+    {
+        ELOGA("Error : File Not Found. path = %s", path);
+        return false;
+    }
 
-    stream.open(path, std::ios::in);
+    std::ifstream stream;
+    stream.open(inputPath.c_str(), std::ios::in);
 
     if (!stream.is_open())
     {
-        ELOG("Error : File Open Failed. path = %s", path);
+        ELOGA("Error : File Open Failed. path = %s", inputPath.c_str());
         return false;
     }
 
@@ -910,9 +923,11 @@ bool SceneExporter::LoadFromTXT(const char* path, std::string& exportPath)
     std::vector<r3d::CpuInstance> instances;
     std::map<std::string, uint32_t>  meshDic;
     std::map<std::string, uint32_t>  materialDic;
+    std::map<std::string, uint32_t>  textureDic;
 
     uint32_t meshIndex     = 0;
     uint32_t materialIndex = 0;
+    uint32_t textureIndex  = 0;
 
     for(;;)
     {
@@ -924,7 +939,7 @@ bool SceneExporter::LoadFromTXT(const char* path, std::string& exportPath)
 
         if (0 == strcmp(buf, "#"))
         { /* DO_NOTHING */ }
-        else if (0 == _stricmp(buf, "mesh"))
+        else if (0 == _stricmp(buf, "model"))
         {
             std::string tag;
             std::string path;
@@ -1024,7 +1039,36 @@ bool SceneExporter::LoadFromTXT(const char* path, std::string& exportPath)
                 material.Ior       = ior;
                 material.Emissive  = emissive;
 
-                assert(false); // Not Implementaion Yet.
+                uint32_t baseColorMapId = INVALID_MATERIAL_MAP;
+                uint32_t normalMapId    = INVALID_MATERIAL_MAP;
+                uint32_t ormMapId       = INVALID_MATERIAL_MAP;
+                uint32_t emissiveMapId  = INVALID_MATERIAL_MAP;
+
+                auto getOrRegisterTextureId = [&](std::string& path, uint32_t& retId)
+                {
+                    if (textureDic.find(path) != textureDic.end()) {
+                        retId = textureDic[path];
+                    }
+                    else {
+                        retId = textureIndex;
+                        textureIndex++;
+                        textureDic[path] = retId;
+                    }
+                };
+
+                if (!texBaseColor.empty())
+                { getOrRegisterTextureId(texBaseColor, baseColorMapId); }
+                if (!texNormal.empty())
+                { getOrRegisterTextureId(texNormal, normalMapId); }
+                if (!texOrm.empty())
+                { getOrRegisterTextureId(texOrm, ormMapId); }
+                if (!texEmissive.empty())
+                { getOrRegisterTextureId(texEmissive, emissiveMapId); }
+
+                material.BaseColorMap = baseColorMapId;
+                material.NormalMap    = normalMapId;
+                material.OrmMap       = ormMapId;
+                material.EmissiveMap  = emissiveMapId;
 
                 materialDic[tag] = materialIndex;
                 materialIndex++;
@@ -1135,8 +1179,21 @@ bool SceneExporter::LoadFromTXT(const char* path, std::string& exportPath)
     // エクスポート名が無ければタイムスタンプを着ける
     if (exportPath.empty())
     {
+        tm local_time = {};
+        auto t   = time(nullptr);
+        auto err = localtime_s( &local_time, &t );
+
+        char timeStamp[256] = {};
+        sprintf_s(timeStamp, "%04d%02d%02d_%02d%02d%02d",
+            local_time.tm_year + 1900,
+            local_time.tm_mon + 1,
+            local_time.tm_mday,
+            local_time.tm_hour,
+            local_time.tm_min,
+            local_time.tm_sec);
+
         exportPath = "../res/scene/scene_";
-        // TODO : タイムスタンプ.
+        exportPath += timeStamp;
         exportPath += ".scn";
     }
 

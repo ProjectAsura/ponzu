@@ -35,7 +35,6 @@
     <ClCompile Include="..\src\OBJLoader.cpp" />
     <ClCompile Include="..\src\RendererApp.cpp" />
     <ClCompile Include="..\src\Scene.cpp" />
-    <ClCompile Include="..\src\test_scene.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\external\fpng\fpng.h" />

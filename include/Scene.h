@@ -137,6 +137,7 @@ public:
 #if !CAMP_RELEASE
     void Reload(const char* path);
     bool IsReloading() const;
+    void Polling(ID3D12GraphicsCommandList6* pCmdList);
 #endif
 
 private:
