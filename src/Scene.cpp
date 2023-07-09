@@ -937,15 +937,33 @@ bool SceneExporter::LoadFromTXT(const char* path, std::string& exportPath)
         if (!stream || stream.eof())
         { break; }
 
-        if (0 == strcmp(buf, "#"))
+        if (0 == strcmp(buf, "#") || 0 == strcmp(buf, "//"))
         { /* DO_NOTHING */ }
         else if (0 == _stricmp(buf, "model"))
         {
             std::string tag;
             std::string path;
-            stream >> tag >> path;
 
-            if (!path.empty())
+            for(;;)
+            {
+                stream >> buf;
+                if (!stream || stream.eof())
+                { break; }
+
+                if (0 == strcmp(buf, "};"))
+                { break; }
+                else if (0 == strcmp(buf, "#") || 0 == strcmp(buf, "//"))
+                { /* DO_NOTHING */ }
+                else if (0 == _stricmp(buf, "-Tag:"))
+                { stream >> tag; }
+                else if (0 == _stricmp(buf, "-Path:"))
+                { stream >> path; }
+
+                stream.ignore(BUFFER_SIZE, '\n');
+            }
+
+            assert(tag.empty() == false);
+            assert(path.empty() == false);
             {
                 std::string findPath;
                 if (asdx::SearchFilePathA(path.c_str(), findPath))
@@ -972,66 +990,58 @@ bool SceneExporter::LoadFromTXT(const char* path, std::string& exportPath)
         else if (0 == _stricmp(buf, "material"))
         {
             std::string tag;
-            asdx::Vector4 baseColor;
+            asdx::Vector4 baseColor = asdx::Vector4(0.0f, 0.0f, 0.0f, 1.0f);
             float occlusion = 0.0f;
-            float roughness = 0.0f;
+            float roughness = 1.0f;
             float metalness = 0.0f;
-            asdx::Vector4 emissive;
-            float ior = 0.0f;
-
-            stream >> tag 
-                >> baseColor.x >> baseColor.y >> baseColor.z >> baseColor.w
-                >> occlusion
-                >> roughness
-                >> metalness
-                >> ior
-                >> emissive.x >> emissive.y >> emissive.z >> emissive.w;
-
-            if (materialDic.find(tag) == materialDic.end())
-            {
-                Material material = Material::Default();
-                material.BaseColor = baseColor;
-                material.Occlusion = occlusion;
-                material.Roughness = roughness;
-                material.Metalness = metalness;
-                material.Ior       = ior;
-                material.Emissive  = emissive;
-
-                AddMaterial(material);
-
-                materialDic[tag] = materialIndex;
-                materialIndex++;
-            }
-        }
-        else if (0 == _stricmp(buf, "textured_material"))
-        {
-            std::string tag;
-            asdx::Vector4 baseColor;
-            float occlusion = 0.0f;
-            float roughness = 0.0f;
-            float metalness = 0.0f;
-            asdx::Vector4 emissive;
+            asdx::Vector4 emissive = asdx::Vector4(0.0f, 0.0f, 0.0f, 0.0f);
             float ior = 0.0f;
             std::string texBaseColor;
             std::string texNormal;
             std::string texOrm;
             std::string texEmissive;
 
-            stream >> tag
-                >> baseColor.x >> baseColor.y >> baseColor.z >> baseColor.w
-                >> occlusion
-                >> roughness
-                >> metalness
-                >> ior
-                >> emissive.x >> emissive.y >> emissive.z >> emissive.w
-                >> texBaseColor
-                >> texNormal
-                >> texOrm
-                >> texEmissive;
+            for(;;)
+            {
+                stream >> buf;
+                if (!stream || stream.eof())
+                { break; }
+
+                if (0 == strcmp(buf, "};"))
+                { break; }
+                else if (0 == strcmp(buf, "#") || 0 == strcmp(buf, "//"))
+                { /* DO_NOTHING */ }
+                else if (0 == _stricmp(buf, "-Tag:"))
+                { stream >> tag; }
+                else if (0 == _stricmp(buf, "-BaseColor:"))
+                { stream >> baseColor.x >> baseColor.y >> baseColor.z >> baseColor.w; }
+                else if (0 == _stricmp(buf, "-Occlusion:"))
+                { stream >> occlusion; }
+                else if (0 == _stricmp(buf, "-Roughness:"))
+                { stream >> roughness; }
+                else if (0 == _stricmp(buf, "-Metalness:"))
+                { stream >> metalness; }
+                else if (0 == _stricmp(buf, "-Ior:"))
+                { stream >> ior; }
+                else if (0 == _stricmp(buf, "-Emissive:"))
+                { stream >> emissive.x >> emissive.y >> emissive.z >> emissive.w; }
+                else if (0 == _stricmp(buf, "-BaseColorMap:"))
+                { stream >> texBaseColor; }
+                else if (0 == _stricmp(buf, "-NormalMap:"))
+                { stream >> texNormal; }
+                else if (0 == _stricmp(buf, "-OrmMap:"))
+                { stream >> texOrm; }
+                else if (0 == _stricmp(buf, "-EmissiveMap:"))
+                { stream >> texEmissive; }
+
+                stream.ignore(BUFFER_SIZE, '\n');
+            }
+
+            assert(tag.empty() == false);
 
             if (materialDic.find(tag) == materialDic.end())
             {
-                Material material = Material::Default();
+                Material material = material.Default();
                 material.BaseColor = baseColor;
                 material.Occlusion = occlusion;
                 material.Roughness = roughness;
@@ -1065,10 +1075,13 @@ bool SceneExporter::LoadFromTXT(const char* path, std::string& exportPath)
                 if (!texEmissive.empty())
                 { getOrRegisterTextureId(texEmissive, emissiveMapId); }
 
+                // テクスチャIDを設定.
                 material.BaseColorMap = baseColorMapId;
                 material.NormalMap    = normalMapId;
                 material.OrmMap       = ormMapId;
                 material.EmissiveMap  = emissiveMapId;
+
+                AddMaterial(material);
 
                 materialDic[tag] = materialIndex;
                 materialIndex++;
@@ -1078,16 +1091,36 @@ bool SceneExporter::LoadFromTXT(const char* path, std::string& exportPath)
         {
             std::string   meshTag;
             std::string   materialTag;
-            asdx::Vector3 scale;
-            asdx::Vector3 rotate;
-            asdx::Vector3 translation;
+            asdx::Vector3 scale         = asdx::Vector3(1.0f, 1.0f, 1.0f);
+            asdx::Vector3 rotate        = asdx::Vector3(0.0f, 0.0f, 0.0f);
+            asdx::Vector3 translation   = asdx::Vector3(0.0f, 0.0f, 0.0f);
 
-            stream
-                >> meshTag
-                >> materialTag
-                >> scale.x >> scale.y >> scale.z 
-                >> rotate.x >> rotate.y >> rotate.z 
-                >> translation.x >> translation.y >> translation.z;
+            for(;;)
+            {
+                stream >> buf;
+                if (!stream || stream.eof())
+                { break; }
+
+                if (0 == strcmp(buf, "};"))
+                { break; }
+                else if (0 == strcmp(buf, "#") || 0 == strcmp(buf, "//"))
+                { /* DO_NOTHING */ }
+                else if (0 == _stricmp(buf, "-Mesh:"))
+                { stream >> meshTag; }
+                else if (0 == _stricmp(buf, "-Material:"))
+                { stream >> materialTag; }
+                else if (0 == _stricmp(buf, "-Scale:"))
+                { stream >> scale.x >> scale.y >> scale.z; }
+                else if (0 == _stricmp(buf, "-Rotate:"))
+                { stream >> rotate.x >> rotate.y >> rotate.z; }
+                else if (0 == _stricmp(buf, "-Translation:"))
+                { stream >> translation.x >> translation.y >> translation.z; }
+
+                stream.ignore(BUFFER_SIZE, '\n');
+            }
+
+            assert(meshTag.empty() == false);
+            assert(materialTag.empty() == false);
 
             bool findMesh = meshDic.find(meshTag) != meshDic.end();
             bool findMat  = materialDic.find(materialTag) != materialDic.end();
@@ -1112,15 +1145,30 @@ bool SceneExporter::LoadFromTXT(const char* path, std::string& exportPath)
                 ELOGA("Error : Instance(MeshTag = %s, MaterialTag = %s) is Not Registered. findMesh = %s, findMat = %s", meshTag.c_str(), materialTag.c_str(),
                     findMesh ? "true" : "false",
                     findMat ? "true" : "false"); 
+                assert(false);
             }
         }
         else if (0 == _stricmp(buf, "ibl"))
         {
             std::string path;
 
-            stream >> path;
+            for(;;)
+            {
+                stream >> buf;
+                if (!stream || stream.eof())
+                { break; }
 
-            if (!path.empty())
+                if (0 == strcmp(buf, "};"))
+                { break; }
+                else if (0 == strcmp(buf, "#") || 0 == strcmp(buf, "//"))
+                { /* DO_NOTHING */ }
+                else if (0 == _stricmp(buf, "-Path:"))
+                { stream >> path; }
+
+                stream.ignore(BUFFER_SIZE, '\n');
+            }
+
+            assert(path.empty() == false);
             {
                 std::string findPath;
                 if (asdx::SearchFilePathA(path.c_str(), findPath))
@@ -1129,13 +1177,27 @@ bool SceneExporter::LoadFromTXT(const char* path, std::string& exportPath)
         }
         else if (0 == _stricmp(buf, "directional_light"))
         {
-            asdx::Vector3 direction;
-            asdx::Vector3 intensity;
+            asdx::Vector3 direction = asdx::Vector3(0.0f, -1.0f, 0.0f);
+            asdx::Vector3 intensity = asdx::Vector3(1.0f, 1.0f, 1.0f);
 
-            stream 
-                >> direction.x >> direction.y >> direction.z
-                >> intensity.x >> intensity.y >> intensity.z;
-            
+            for(;;)
+            {
+                stream >> buf;
+                if (!stream || stream.eof())
+                { break; }
+
+                if (0 == strcmp(buf, "};"))
+                { break; }
+                else if (0 == strcmp(buf, "#") || 0 == strcmp(buf, "//"))
+                { /* DO_NOTHING */ }
+                else if (0 == _stricmp(buf, "-Direction:"))
+                { stream >> direction.x >> direction.y >> direction.z; }
+                else if (0 == _stricmp(buf, "-Intensity:"))
+                { stream >> intensity.x >> intensity.y >> intensity.z; }
+
+                stream.ignore(BUFFER_SIZE, '\n');
+            }
+
             Light light;
             light.Type      = LIGHT_TYPE_DIRECTIONAL;
             light.Position  = direction;
@@ -1146,14 +1208,29 @@ bool SceneExporter::LoadFromTXT(const char* path, std::string& exportPath)
         }
         else if (0 == _stricmp(buf, "point_light"))
         {
-            asdx::Vector3 position;
-            float radius;
-            asdx::Vector3 intensity;
+            asdx::Vector3 position  = asdx::Vector3(0.0f, 0.0f, 0.0f);
+            float         radius    = 1.0f;
+            asdx::Vector3 intensity = asdx::Vector3(0.0f, 0.0f, 0.0f);
 
-            stream
-                >> position.x >> position.y >> position.z
-                >> radius
-                >> intensity.x >> intensity.y >> intensity.z;
+            for(;;)
+            {
+                stream >> buf;
+                if (!stream || stream.eof())
+                { break; }
+
+                if (0 == strcmp(buf, "};"))
+                { break; }
+                else if (0 == strcmp(buf, "#") || 0 == strcmp(buf, "//"))
+                { /* DO_NOTHING */ }
+                else if (0 == _stricmp(buf, "-Position:"))
+                { stream >> position.x >> position.y >> position.z; }
+                else if (0 == _stricmp(buf, "-Radius:"))
+                { stream >> radius; }
+                else if (0 == _stricmp(buf, "-Intensity:"))
+                { stream >> intensity.x >> intensity.y >> intensity.z; }
+
+                stream.ignore(BUFFER_SIZE, '\n');
+            }
 
             Light light;
             light.Type      = LIGHT_TYPE_POINT;
@@ -1169,7 +1246,21 @@ bool SceneExporter::LoadFromTXT(const char* path, std::string& exportPath)
         }
         else if (0 == _stricmp(buf, "export"))
         {
-            stream >> exportPath;
+            for(;;)
+            {
+                stream >> buf;
+                if (!stream || stream.eof())
+                { break; }
+
+                if (0 == strcmp(buf, "};"))
+                { break; }
+                else if (0 == strcmp(buf, "#") || 0 == strcmp(buf, "//"))
+                { /* DO_NOTHING */ }
+                else if (0 == _stricmp(buf, "-Path:"))
+                { stream >> exportPath; }
+
+                stream.ignore(BUFFER_SIZE, '\n');
+            }
         }
 
         stream.ignore(BUFFER_SIZE, '\n');

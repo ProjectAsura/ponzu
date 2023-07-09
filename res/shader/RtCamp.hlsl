@@ -576,7 +576,7 @@ void OnGenerateRay()
             brdf /= p;
         }
 
-        W *= brdf / pdf;
+        W *= SaturateFloat(brdf / pdf);
 
         // 重みがゼロに成ったら以降の更新は無駄なので打ち切りにする.
         if (all(W <= (0.0f).xxx))

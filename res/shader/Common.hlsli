@@ -18,8 +18,8 @@
 #define INVALID_ID          (-1)
 #define STANDARD_RAY_INDEX  (0)
 #define SHADOW_RAY_INDEX    (1)
-#define USE_GGX             (0)
-#define T_MIN               (0.001f) // シーンの大きさによって適切な値が変わるので，適宜調整.
+#define USE_GGX             (1)
+#define T_MIN               (0.1f) // シーンの大きさによって適切な値が変わるので，適宜調整.
 
 //-----------------------------------------------------------------------------
 // Type Definitions
@@ -528,7 +528,7 @@ float ProbabilityToSampleDiffuse(float3 diffuseColor, float3 specularColor)
 //-----------------------------------------------------------------------------
 float3 SampleMaterial
 (
-    float3   V,         // 入射方向.
+    float3   V,         // 視線ベクトル.
     float3   N,         // 法線ベクトル.
     float3   L,         // ライトベクトル.
     float    u,         // 乱数.
@@ -550,7 +550,7 @@ float3 SampleMaterial
         float n2 = (into) ? material.Ior : ior;
 
         // 相対屈折率.
-        float eta = n1 / n2;
+        float eta = SaturateFloat(n1 / n2);
 
         // cos(θ_1).
         float cosT1 = dot(V, Nm);
@@ -559,7 +559,7 @@ float3 SampleMaterial
         float cos2T2 = 1.0f - Pow2(eta) * (1.0f - Pow2(cosT1));
 
         // 反射ベクトル.
-        float3 reflection = normalize(reflect(-V, Nm));
+        float3 reflection = normalize(reflect(V, Nm));
 
         // 全反射チェック.
         if (cos2T2 <= 0.0f)
@@ -568,11 +568,11 @@ float3 SampleMaterial
         }
 
         // 屈折ベクトル.
-        float3 refraction = normalize(refract(-V, Nm, eta));
+        float3 refraction = normalize(refract(V, Nm, eta));
 
         float a = n2 - n1;
         float b = n2 + n1;
-        float F0 = Pow2(a) / Pow2(b);
+        float F0 = SaturateFloat(Pow2(a) / Pow2(b));
 
         // Schlickの近似によるフレネル項.
         float c = saturate((n1 > n2) ? dot(-Nm, refraction) : cosT1); // n1 > n2 なら cos(θ_2).
@@ -668,7 +668,7 @@ float3 EvaluateMaterial
         float n2 = (into) ? material.Ior : ior;
 
         // 相対屈折率.
-        float eta = n1 / n2;
+        float eta = SaturateFloat(n1 / n2);
 
         // cos(θ_1).
         float cosT1 = dot(V, Nm);
@@ -677,7 +677,7 @@ float3 EvaluateMaterial
         float cos2T2 = 1.0f - Pow2(eta) * (1.0f - Pow2(cosT1));
 
         // 反射ベクトル.
-        float3 reflection = normalize(reflect(-V, Nm));
+        float3 reflection = normalize(reflect(V, Nm));
 
         // 全反射チェック.
         if (cos2T2 <= 0.0f)
@@ -688,11 +688,11 @@ float3 EvaluateMaterial
         }
 
         // 屈折ベクトル.
-        float3 refraction = normalize(refract(-V, Nm, eta));
+        float3 refraction = normalize(refract(V, Nm, eta));
 
         float a = n2 - n1;
         float b = n2 + n1;
-        float F0 = Pow2(a) / Pow2(b);
+        float F0 = SaturateFloat(Pow2(a) / Pow2(b));
 
         // Schlickの近似によるフレネル項.
         float c  = saturate((n1 > n2) ? dot(-Nm, refraction) : cosT1); // n1 > n2 なら cos(θ_2).
@@ -731,7 +731,7 @@ float3 EvaluateMaterial
     // 完全鏡面反射.
     else if (IsPerfectSpecular(material))
     {
-        float3 L = normalize(reflect(-V, N));
+        float3 L = normalize(reflect(V, N));
         dir = L;
         pdf = 1.0f;
 
@@ -766,15 +766,15 @@ float3 EvaluateMaterial
         float3 H = normalize(T * s.x + B * s.y + N * s.z);
         float3 L = normalize(reflect(-V, H));
 
-        float NdotL = dot(N, L);
-        float NdotH = dot(N, H);
-        float VdotH = dot(V, H);
-        float NdotV = dot(N, V);
+        float NdotL = abs(dot(N, L));
+        float NdotH = abs(dot(N, H));
+        float VdotH = abs(dot(V, H));
+        float NdotV = abs(dot(N, V));
 
         float  D = D_GGX(NdotH, a);
         float  G = G_SmithGGX(NdotL, NdotV, a);
         float3 F = F_Schlick(specularColor, VdotH);
-        float3 ggxTerm = D * F * G / (4 * NdotV) * NdotL;
+        float3 ggxTerm = (D * F * G / (4 * NdotV)) * NdotL;
         float  ggxProb = D * NdotH / (4 * VdotH);
 
         dir = L;
