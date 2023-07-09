@@ -439,6 +439,9 @@ bool OBJLoader::LoadOBJ(const char* path, ModelOBJ& model)
 
     MeshOBJ dstMesh;
 
+    std::string baseName = asdx::RemoveDirectoryPathA(path).c_str();
+    baseName = asdx::GetPathWithoutExtA(baseName.c_str());
+
     for(size_t i=0; i<subsets.size(); ++i)
     {
         auto& subset = subsets[i];
@@ -464,8 +467,14 @@ bool OBJLoader::LoadOBJ(const char* path, ModelOBJ& model)
                 vertIndex = 0;
             }
 
-            dstMesh.Name         = "mesh";
-            dstMesh.Name         += std::to_string(meshId);
+            std::string meshName = subset.MeshName;
+            if (meshName.empty())
+            {
+                meshName = baseName;
+                meshName += std::to_string(meshId);
+            }
+
+            dstMesh.Name         = meshName;
             dstMesh.MaterialName = subset.MaterialName;
 
             meshId++;

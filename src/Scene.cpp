@@ -1111,7 +1111,7 @@ bool SceneExporter::LoadFromTXT(const char* path, std::string& exportPath)
                 { stream >> materialTag; }
                 else if (0 == _stricmp(buf, "-Scale:"))
                 { stream >> scale.x >> scale.y >> scale.z; }
-                else if (0 == _stricmp(buf, "-Rotate:"))
+                else if (0 == _stricmp(buf, "-Rotation:"))
                 { stream >> rotate.x >> rotate.y >> rotate.z; }
                 else if (0 == _stricmp(buf, "-Translation:"))
                 { stream >> translation.x >> translation.y >> translation.z; }
@@ -1127,11 +1127,11 @@ bool SceneExporter::LoadFromTXT(const char* path, std::string& exportPath)
 
             if (findMesh && findMat)
             {
-                asdx::Matrix matrix = asdx::Matrix::CreateTranslation(translation)
+                asdx::Matrix matrix = asdx::Matrix::CreateScale(scale)
+                    * asdx::Matrix::CreateRotationY(asdx::ToRadian(rotate.y))
                     * asdx::Matrix::CreateRotationZ(asdx::ToRadian(rotate.z))
                     * asdx::Matrix::CreateRotationX(asdx::ToRadian(rotate.x))
-                    * asdx::Matrix::CreateRotationY(asdx::ToRadian(rotate.y))
-                    * asdx::Matrix::CreateScale(scale);
+                    * asdx::Matrix::CreateTranslation(translation);
 
                 r3d::CpuInstance instance;
                 instance.MaterialId = materialDic[materialTag];

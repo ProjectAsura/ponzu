@@ -18,7 +18,6 @@
 #define INVALID_ID          (-1)
 #define STANDARD_RAY_INDEX  (0)
 #define SHADOW_RAY_INDEX    (1)
-#define USE_GGX             (1)
 #define T_MIN               (0.1f) // シーンの大きさによって適切な値が変わるので，適宜調整.
 
 //-----------------------------------------------------------------------------
@@ -256,8 +255,8 @@ SurfaceHit GetSurfaceHit(uint instanceId, uint triangleIndex, float2 barycentric
     surfaceHit.Normal  = normalize(mul((float3x3)world, normalize(surfaceHit.Normal)));
     surfaceHit.Tangent = normalize(mul((float3x3)world, normalize(surfaceHit.Tangent)));
 
-    float3 e0 = v[1] - v[0];
-    float3 e1 = v[2] - v[0];
+    float3 e0 = v[0] - v[1];
+    float3 e1 = v[2] - v[1];
     surfaceHit.GeometryNormal = normalize(cross(e0, e1));
 
     return surfaceHit;
@@ -559,7 +558,7 @@ float3 SampleMaterial
         float cos2T2 = 1.0f - Pow2(eta) * (1.0f - Pow2(cosT1));
 
         // 反射ベクトル.
-        float3 reflection = normalize(reflect(V, Nm));
+        float3 reflection = normalize(reflect(-V, Nm));
 
         // 全反射チェック.
         if (cos2T2 <= 0.0f)
@@ -568,7 +567,7 @@ float3 SampleMaterial
         }
 
         // 屈折ベクトル.
-        float3 refraction = normalize(refract(V, Nm, eta));
+        float3 refraction = normalize(refract(-V, Nm, eta));
 
         float a = n2 - n1;
         float b = n2 + n1;
@@ -614,27 +613,17 @@ float3 SampleMaterial
 
         float a = max(Pow2(material.Roughness), 0.01f);
 
-#if USE_GGX
         float3 H = normalize(V + L);
 
-        float NdotL = abs(dot(N, L));
-        float NdotH = abs(dot(N, H));
+        float NdotL = abs(dot(Nm, L));
+        float NdotH = abs(dot(Nm, H));
         float VdotH = abs(dot(V, H));
-        float NdotV = abs(dot(N, V));
-
-        float  G = G_SmithGGX(NdotL, NdotV, a);
+        float NdotV = abs(dot(Nm, V));
+        
+        float  G = G2_Smith(a, NdotL, NdotV);
         float3 F = F_Schlick(specularColor, VdotH);
 
-        return F * G * VdotH / (NdotH * NdotV) / (1.0f - p);
-#else
-        // Phong. 
-        float3 R = normalize(reflect(-V, N));
-    
-        float shininess = ToSpecularPower(a);
-        float LoR = dot(L, R);
-
-        return SaturateFloat(specularColor * pow(LoR, shininess) / (1.0f - p));
-#endif
+        return (F * G * NdotH / (NdotV * VdotH)) * (1.0f.xxx - diffuseColor) / (1.0f - p) ;
     }
 }
 
@@ -654,12 +643,15 @@ float3 EvaluateMaterial
     out float   pdf         // 確率密度.
 )
 {
+    // 物体からのレイの入出を考慮した法線.
+    bool reverse = dot(N, V) < 0.0f;
+    float3 Nm = (reverse) ? -N : N;
+    float3 Tm = (reverse) ? -T : T;
+    float3 Bm = (reverse) ? -B : B;
+    
     // 屈折半透明.
     if (IsDielectric(material))
     {
-        // 物体からのレイの入出を考慮した法線.
-        float3 Nm = dot(N, V) < 0.0f ? -N : N;
-
         // レイがオブジェクトから出射するか入射するか?
         bool into = dot(N, Nm) > 0.0f;
     
@@ -677,7 +669,7 @@ float3 EvaluateMaterial
         float cos2T2 = 1.0f - Pow2(eta) * (1.0f - Pow2(cosT1));
 
         // 反射ベクトル.
-        float3 reflection = normalize(reflect(V, Nm));
+        float3 reflection = normalize(reflect(-V, Nm));
 
         // 全反射チェック.
         if (cos2T2 <= 0.0f)
@@ -688,7 +680,7 @@ float3 EvaluateMaterial
         }
 
         // 屈折ベクトル.
-        float3 refraction = normalize(refract(V, Nm, eta));
+        float3 refraction = normalize(refract(-V, Nm, eta));
 
         float a = n2 - n1;
         float b = n2 + n1;
@@ -719,9 +711,9 @@ float3 EvaluateMaterial
     else if (IsPerfectDiffuse(material))
     {
         float3 s = SampleLambert(u.xy);
-        float3 L = normalize(T * s.x + B * s.y + N * s.z);
+        float3 L = normalize(Tm * s.x + Bm * s.y + Nm * s.z);
 
-        float NoL = dot(N, L);
+        float NoL = dot(Nm, L);
 
         dir = L;
         pdf = NoL / F_PI;
@@ -731,7 +723,7 @@ float3 EvaluateMaterial
     // 完全鏡面反射.
     else if (IsPerfectSpecular(material))
     {
-        float3 L = normalize(reflect(V, N));
+        float3 L = normalize(reflect(-V, Nm));
         dir = L;
         pdf = 1.0f;
 
@@ -748,12 +740,12 @@ float3 EvaluateMaterial
         if (u.z < p)
         {
             float3 s = SampleLambert(u.xy);
-            float3 L = normalize(T * s.x + B * s.y + N * s.z);
+            float3 L = normalize(Tm * s.x + Bm * s.y + Nm * s.z);
 
-            float NoL = dot(N, L);
+            float NoL = dot(Nm, L);
 
             dir = L;
-            pdf = (NoL / F_PI);
+            pdf = NoL / F_PI;
             pdf *= p;
 
             return (diffuseColor / F_PI) * NoL * (1.0f.xxx - specularColor);
@@ -761,45 +753,26 @@ float3 EvaluateMaterial
 
         float a = max(Pow2(material.Roughness), 0.01f);
 
-#if USE_GGX
         float3 s = SampleGGX(u.xy, a);
-        float3 H = normalize(T * s.x + B * s.y + N * s.z);
+        float3 H = normalize(Tm * s.x + Bm * s.y + Nm * s.z);
         float3 L = normalize(reflect(-V, H));
 
-        float NdotL = abs(dot(N, L));
-        float NdotH = abs(dot(N, H));
-        float VdotH = abs(dot(V, H));
-        float NdotV = abs(dot(N, V));
+        float NdotL = saturate(dot(Nm, L));
+        float NdotH = saturate(dot(Nm, H));
+        float VdotH = saturate(dot(V, H));
+        float NdotV = saturate(dot(Nm, V));
 
         float  D = D_GGX(NdotH, a);
-        float  G = G_SmithGGX(NdotL, NdotV, a);
+        float  G = G2_Smith(a, NdotL, NdotV);
         float3 F = F_Schlick(specularColor, VdotH);
-        float3 ggxTerm = (D * F * G / (4 * NdotV)) * NdotL;
-        float  ggxProb = D * NdotH / (4 * VdotH);
-
-        dir = L;
-        pdf = ggxProb;
+        float3 brdf = (D * F * G) / (4.0f * NdotV); // NdotLは分母と分子でキャンセルアウトする.
+ 
+        pdf = D * NdotH / (4.0f * VdotH);
         pdf *= (1.0f - p);
 
-        return ggxTerm;
-#else
-        // Phong. 
-        float3 R = normalize(reflect(-V, N));
-    
-        float shininess = ToSpecularPower(a);
-        float3 s = SamplePhong(u.xy, shininess);
-        float3 L = normalize(T * s.x + B * s.y + R * s.z);
-
-        float LoR = dot(L, R);
-        float normalizeTerm = (shininess + 1.0f) / (2.0f * F_PI);
-        float phongTerm = pow(LoR, shininess) * normalizeTerm;
-
         dir = L;
-        pdf = phongTerm;
-        pdf *= (1.0f - p);
 
-        return specularColor * phongTerm;
-#endif
+        return brdf * (1.0f.xxx - diffuseColor);
     }
 }
 

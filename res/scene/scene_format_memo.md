@@ -40,7 +40,7 @@ instance {
    -Mesh: name      // 省略不可. OBJファイル名の中に含まれるメッシュ名なので注意!  
    -Material: name  // 省略不可.  
    -Scale: x y z  
-   -Rotate: x y z  
+   -Rotation: x y z  
    -Translation: x y z  
 };  
 

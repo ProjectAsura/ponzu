@@ -7,34 +7,93 @@ ibl {
 };
 
 model {
+   -Tag: Sphere
+   -Path: ..\res\model\sphere.obj
+};
+
+model {
+   -Tag: Plane
+   -Path: ..\res\model\plane.obj
+};
+
+model {
    -Tag: Dosei
    -Path: ..\res\model\dosei_quad.obj
 };
 
 material {
-   -Tag: DoseiMat
-   -BaseColor: 1.0 1.0 1.0 1.0
+   -Tag: DoseiRibon
+   -BaseColor: 0.8 0.0 0.0 1.0
+   -Roughness: 0.0
+   -Metalness: 0.0
+   -Ior: 1.2
+};
+
+material {
+   -Tag: DoseiBody
+   -BaseColor: 0.8 0.68080 0.52080 1.0
+   -Roughness: 0.0
+   -Metalness: 0.0
+   -Ior: 1.2
+};
+
+material {
+   -Tag: DoseiEye
+   -BaseColor: 0.0 0.0 0.0 1.0
    -Roughness: 1.0
-   -Metalness: 1.0
+   -Metalness: 0.0
+};
+
+material {
+   -Tag: SphereMat
+   -BaseColor: 1.0 0.0 0.0 1.0
+   -Roughness: 0.2
+   -Metalness: 0.8
+};
+
+material {
+   -Tag: PlaneMat
+   -BaseColor: 0.1 0.2 0.1 1.0
+   -Roughness: 1.0
+   -Metalness: 0.0
 };
 
 instance {
-   -Mesh: mesh0
-   -Material: DoseiMat
+   -Mesh: group0
+   -Material: DoseiBody
+   -Translation: 0.0 0.0 50.0
+   -Rotation: 0.0 20.0 0.0
 };
 
 instance {
-   -Mesh: mesh1
-   -Material: DoseiMat
+   -Mesh: group1
+   -Material: DoseiEye
+   -Translation: 0.0 0.0 50.0
+   -Rotation: 0.0 20.0 0.0
 };
 
 instance {
-   -Mesh: mesh2
-   -Material: DoseiMat
+   -Mesh: group3
+   -Material: DoseiRibon
+   -Translation: 0.0 0.0 50.0
+   -Rotation: 0.0 20.0 0.0
+};
+
+instance {
+    -Mesh: sphere
+    -Material: SphereMat
+    -Translation: 0.0 0.0 -200.0
+};
+
+instance {
+    -Mesh: plane
+    -Material: PlaneMat
+    -Scale: 10.0 10.0 10.0
+    -Translation: 0.0 -100.0 0.0    
 };
 
 directional_light {
    -Direction: 0.0 -1.0 1.0
-   -Intensity: 2.0 2.0 .20
+   -Intensity: 2.0 2.0 2.0
 };
 

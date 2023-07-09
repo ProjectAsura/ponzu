@@ -50,6 +50,9 @@ static_assert(sizeof(r3d::ResVertex) == sizeof(VertexOBJ), "Vertex size not matc
 static const size_t     REQUEST_BIT_INDEX   = 0;
 static const size_t     RELOADED_BIT_INDEX  = 1;
 #define SCENE_SETTING_PATH     ("../res/scene/scene_setting.txt")
+#define RELOAD_SHADER_STATE_NONE    (0)
+#define RELOAD_SHADER_STATE_SUCCESS (1)
+#define RELOAD_SHADER_STATE_FAILED  (-1)
 #endif
 
 #ifdef ASDX_ENABLE_IMGUI
@@ -1658,7 +1661,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         asdx::DrawQuad(pCmd);
 
         // 2D描画.
-        Draw2D();
+        Draw2D(float(args.ElapsedTime));
 
         m_ColorTarget[idx].Transition(pCmd, D3D12_RESOURCE_STATE_PRESENT);
     }
@@ -1809,7 +1812,7 @@ void Renderer::OnTyping(uint32_t keyCode)
 //-----------------------------------------------------------------------------
 //      2D描画を行います.
 //-----------------------------------------------------------------------------
-void Renderer::Draw2D()
+void Renderer::Draw2D(float elapsedSec)
 {
 #if RTC_TARGET == RTC_DEVELOP
     #ifdef ASDX_ENABLE_IMGUI
@@ -1829,10 +1832,30 @@ void Renderer::Draw2D()
             ImGui::Text(u8"Camera : (%.2f, %.2f, %.2f)", pos.x, pos.y, pos.z);
             ImGui::Text(u8"Target : (%.2f, %.2f, %.2f)", target.x, target.y, target.z);
             ImGui::Text(u8"Upward : (%.2f, %.2f, %.2f)", upward.x, upward.y, upward.z);
+
+            if (m_ReloadShaderDisplaySec > 0.0f)
+            {
+                float alpha = (m_ReloadShaderDisplaySec > 1.0f) ? 1.0f : m_ReloadShaderDisplaySec;
+                if (m_ReloadShaderState == RELOAD_SHADER_STATE_SUCCESS)
+                {
+                    ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, alpha), u8"Shader Reload Success!!");
+                }
+                else if (m_ReloadShaderState == RELOAD_SHADER_STATE_FAILED)
+                {
+                    ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, alpha), u8"Shader Reload Failed...");
+                }
+                m_ReloadShaderDisplaySec -= elapsedSec;
+            }
+            else
+            {
+                ImGui::Text(u8"---");
+                m_ReloadShaderState = RELOAD_SHADER_STATE_NONE;
+                m_ReloadShaderDisplaySec = 0.0f;
+            }
         }
         ImGui::End();
 
-        ImGui::SetNextWindowPos(ImVec2(10, 130), ImGuiCond_Once);
+        ImGui::SetNextWindowPos(ImVec2(10, 140), ImGuiCond_Once);
         if (ImGui::Begin(u8"デバッグ設定", &m_DebugSetting))
         {
             int count = _countof(kBufferKindItems);
@@ -2049,6 +2072,7 @@ void Renderer::ReloadShader()
 {
     auto pDevice = asdx::GetD3D12Device();
 
+    auto failedCount  = 0;
     auto successCount = 0;
 
     if (m_RtShaderFlags.Get(REQUEST_BIT_INDEX))
@@ -2071,6 +2095,10 @@ void Renderer::ReloadShader()
                 successCount++;
             }
         }
+        else
+        {
+            failedCount++;
+        }
 
         // コンパイル要求フラグを下げる.
         m_RtShaderFlags.Set(REQUEST_BIT_INDEX, false);
@@ -2092,29 +2120,45 @@ void Renderer::ReloadShader()
             m_TonemapShaderFlags.Set(RELOADED_BIT_INDEX, true);
             successCount++;
         }
+        else
+        {
+            failedCount++;
+        }
 
         // コンパイル要求フラグを下げる.
         m_TonemapShaderFlags.Set(REQUEST_BIT_INDEX, false);
     }
 
-    if (successCount > 0) {
+    if (failedCount == 0 && successCount > 0) {
         // リロード完了時刻を取得.
         tm local_time = {};
         auto t   = time(nullptr);
         auto err = localtime_s( &local_time, &t );
 
         // 成功ログを出力.
-        ILOGA("Info : Shader Reload Successs!! [%04d/%02d/%02d %02d:%02d:%02d], successCount = %u",
+        ILOGA("Info : Shader Reload Successs!! [%04d/%02d/%02d %02d:%02d:%02d]",
             local_time.tm_year + 1900,
             local_time.tm_mon + 1,
             local_time.tm_mday,
             local_time.tm_hour,
             local_time.tm_min,
-            local_time.tm_sec,
-            successCount);
+            local_time.tm_sec);
 
         m_Dirty = true;
+        m_ReloadShaderState = RELOAD_SHADER_STATE_SUCCESS;
+
+        // 5秒間表示.
+        m_ReloadShaderDisplaySec = 5.0;
+
     }
+    else if (failedCount > 0)
+    {
+        m_ReloadShaderState = RELOAD_SHADER_STATE_FAILED;
+
+        // 5秒間表示.
+        m_ReloadShaderDisplaySec = 5.0;
+    }
+
 }
 #endif//(!CAMP_RELEASE)
 

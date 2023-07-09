@@ -33,16 +33,15 @@
 #define OUT_MATERIAL_ROUGHNESS      (15)    // マテリアル:ラフネス.
 #define OUT_MATERIAL_METALNESS      (16)    // マテリアル:メタルネス.
 #define OUT_MATERIAL_EMISSIVE       (17)    // マテリアル:エミッシブ.
-#define OUT_MATERIAL_INT_IOR        (18)    // マテリアル:内部屈折率.
-#define OUT_MATERIAL_EXT_IOR        (19)    // マテリアル:外部屈折率.
-#define OUT_SHADOW_RAY_HIT          (20)    // シャドウレイのヒット.
+#define OUT_MATERIAL_IOR            (18)    // マテリアル:内部屈折率.
+#define OUT_SHADOW_RAY_HIT          (19)    // シャドウレイのヒット.
 
 //------------------------------------------------
 // ここを書き換えて，HotReloadする.
 //#define DEBUG_DEPTH_INDEX   SceneParam.MaxBounce
 #define DEBUG_DEPTH_INDEX   0
 //#define DEBUG_OUT_FLAG      OUT_DEFAULT
-#define DEBUG_OUT_FLAG      OUT_NORMAL
+#define DEBUG_OUT_FLAG      OUT_RAY_DIR
 //------------------------------------------------
 #endif
 
@@ -176,6 +175,9 @@ void OnGenerateRay()
     float3 W  = float3(1.0f, 1.0f, 1.0f);
     float3 Lo = float3(0.0f, 0.0f, 0.0f);
     float4 output = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    #if FURNANCE_TEST
+    output.rgb = kFurnaceColor;
+    #endif
     
     uint  instanceId  = INVALID_ID;
     uint  primitiveId = INVALID_ID;
@@ -360,12 +362,8 @@ void OnGenerateRay()
                 output = float4(material.Metalness, 0.0f, 0.0f, 0.0f);
                 break;
 
-            case OUT_MATERIAL_INT_IOR:
-                output = float4(material.IntIor, 0.0f, 0.0f, 0.0f);
-                break;
-
-            case OUT_MATERIAL_EXT_IOR:
-                output = float4(material.ExtIor, 0.0f, 0.0f, 0.0f);
+            case OUT_MATERIAL_IOR:
+                output = float4(material.Ior, 0.0f, 0.0f, 0.0f);
                 break;
                 
             case OUT_SHADOW_RAY_HIT:
@@ -437,9 +435,11 @@ void OnGenerateRay()
     uint  instanceId  = INVALID_ID;
     uint  primitiveId = INVALID_ID;
     float ior         = 1.0f;       // 空気中.
+    
+    const int MaxBounce = (int)SceneParam.MaxBounce;
 
     [loop]
-    for(int bounce=0; bounce<SceneParam.MaxBounce; ++bounce)
+    for(int bounce=0; bounce<MaxBounce; ++bounce)
     {
         // ペイロードをクリア.
         payload.Clear();
@@ -489,75 +489,75 @@ void OnGenerateRay()
         // 自己発光による放射輝度.
         Lo += W * material.Emissive;
 
-//#if 0
-//        // Next Event Estimation.
-//        {
-//            // BSDFがデルタ関数を持たない場合のみ.
-//            if (!HasDelta(material))
-//            {
-//                // 物体からのレイの入出を考慮した法線.
-//                float3 Nm = dot(N, -V) < 0.0f ? N : -N;
+#if 0
+        // Next Event Estimation.
+        {
+            // BSDFがデルタ関数を持たない場合のみ.
+            if (!HasDelta(material))
+            {
+                // 物体からのレイの入出を考慮した法線.
+                float3 Nm = dot(N, -V) < 0.0f ? N : -N;
 
-//                // 光源をサンプリング.
-//                float lightWeight;
-//                float2 st = SampleMipMap(BackGround, float2(Random(seed), Random(seed)), lightWeight);
+                // 光源をサンプリング.
+                float lightWeight;
+                float2 st = SampleMipMap(BackGround, float2(Random(seed), Random(seed)), lightWeight);
 
-//                // 方向ベクトルに変換.
-//                float3 dir = -FromSphereMapCoord(st);
+                // 方向ベクトルに変換.
+                float3 dir = -FromSphereMapCoord(st);
 
-//                if (!CastShadowRay(vertex.Position, geometryNormal, dir, FLT_MAX, instanceId, primitiveId))
-//                {
-//                    // シャドウレイを飛ばして，光源上のサンプリングとレイ原点の間に遮断が無い場合.
-//                    float cosShadow = dot(Nm, dir);
-//                    float cosLight  = 1.0f;
+                if (!CastShadowRay(vertex.Position, geometryNormal, dir, FLT_MAX, instanceId, primitiveId))
+                {
+                    // シャドウレイを飛ばして，光源上のサンプリングとレイ原点の間に遮断が無い場合.
+                    float cosShadow = dot(Nm, dir);
+                    float cosLight  = 1.0f;
 
-//                    // BSDF.
-//                    float3 fs = SampleMaterial(V, Nm, dir, Random(seed), material);
+                    // BSDF.
+                    float3 fs = SampleMaterial(V, Nm, dir, Random(seed), material);
 
-//                    // 幾何項.
-//                    float G = (cosShadow * cosLight);
+                    // 幾何項.
+                    float G = (cosShadow * cosLight);
 
-//                    // ライト.
-//                #if FURNANCE_TEST
-//                    float3 Le = kFurnaceColor;
-//                #else
-//                    float3 Le = SampleIBL(dir);
-//                #endif
+                    // ライト.
+#if FURNANCE_TEST
+                    float3 Le = kFurnaceColor;
+#else
+                    float3 Le = SampleIBL(dir);
+#endif
 
-//                    Lo += W * (fs * Le * G) * lightWeight;
-//                }
-//            }
-//        }
-//#else
-//        // Next Event Estimation.
-//        if (!HasDelta(material))
-//        {
-//            Light light;
-//            float lightWeight;
-//            if (SampleLightRIS(seed, vertex.Position, N, light, lightWeight))
-//            {
-//                float3 lightVector;
-//                float  lightDistance;
-//                GetLightData(light, vertex.Position, lightVector, lightDistance);
+                    Lo += W * (fs * Le * G) * lightWeight;
+                }
+            }
+        }
+#else
+        // Next Event Estimation.
+        if (!HasDelta(material))
+        {
+            Light light;
+            float lightWeight;
+            if (SampleLightRIS(seed, vertex.Position, N, light, lightWeight))
+            {
+                float3 lightVector;
+                float lightDistance;
+                GetLightData(light, vertex.Position, lightVector, lightDistance);
 
-//                float3 dir = normalize(lightVector);
+                float3 dir = normalize(lightVector);
 
-//                if (!CastShadowRay(vertex.Position, geometryNormal, dir, lightDistance, instanceId, primitiveId))
-//                {
-//                    // BSDF.
-//                    float3 fs = SampleMaterial(V, N, dir, Random(seed), material);
+                if (!CastShadowRay(vertex.Position, geometryNormal, dir, lightDistance, instanceId, primitiveId))
+                {
+                    // BSDF.
+                    float3 fs = SampleMaterial(V, N, dir, Random(seed), ior, material);
 
-//                    // Light
-//                    float3 Le = GetLightIntensity(light, lightDistance);
+                    // Light
+                    float3 Le = GetLightIntensity(light, lightDistance);
 
-//                    Lo += W * fs * Le * lightWeight;
-//                }
-//            }
-//        }
-//#endif
+                    Lo += W * fs * Le * lightWeight;
+                }
+            }
+        }
+#endif
 
         // 最後のバウンスであれば早期終了(BRDFをサンプルしてもロジック的に反映されないため).
-        if (bounce == SceneParam.MaxBounce - 1)
+        if (bounce == MaxBounce - 1)
         { break; }
 
         // シェーディング処理.

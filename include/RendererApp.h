@@ -196,6 +196,8 @@ private:
 
     asdx::BitFlags8                 m_RtShaderFlags;
     asdx::BitFlags8                 m_TonemapShaderFlags;
+    int                             m_ReloadShaderState = 0;
+    float                           m_ReloadShaderDisplaySec = 0;
 #endif
 
     //=========================================================================
@@ -210,7 +212,7 @@ private:
     void OnMouse(const asdx::MouseEventArgs& args) override;
     void OnTyping(uint32_t keyCode) override;
 
-    void Draw2D();
+    void Draw2D(float elapsedSec);
 
     bool SystemSetup();
     bool BuildScene();
