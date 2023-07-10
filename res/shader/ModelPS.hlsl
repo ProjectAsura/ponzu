@@ -10,6 +10,8 @@
 #include <Math.hlsli>
 
 
+#define ENABLE_TEXTURED_MATERIAL (0)
+
 ///////////////////////////////////////////////////////////////////////////////
 // VSOutput structure
 ///////////////////////////////////////////////////////////////////////////////
@@ -52,6 +54,7 @@ struct Instance
     uint    MaterialId;
 };
 
+#if 0
 ///////////////////////////////////////////////////////////////////////////////
 // MeshMaterial structure
 ///////////////////////////////////////////////////////////////////////////////
@@ -66,6 +69,23 @@ struct MeshMaterial
     uint    LayerCount;     // Texture Layer Count.
     uint    LayerMask;      // Texture Layer Mask Map.
 };
+#else
+///////////////////////////////////////////////////////////////////////////////
+// ResMaterial structure
+///////////////////////////////////////////////////////////////////////////////
+struct ResMaterial
+{
+    uint4   TextureMaps;    // x:BaseColorMap, y:NormalMap, z:OrmMap, w:EmissiveMap.
+    float4  BaseColor;
+    float   Occlusion;
+    float   Roughness;
+    float   Metalness;
+    float   Ior;
+    float4  Emissive;
+};
+
+
+#endif
 
 #define INSTANCE_STRIDE (sizeof(Instance))
 
@@ -73,7 +93,7 @@ struct MeshMaterial
 // Resources
 //-----------------------------------------------------------------------------
 ConstantBuffer<ObjectParameter> ObjectParam : register(b1);
-StructuredBuffer<MeshMaterial>  Materials   : register(t1);
+StructuredBuffer<ResMaterial>   Materials   : register(t1);
 ByteAddressBuffer               Instances   : register(t2);
 SamplerState                    LinearWrap  : register(s0);
 
@@ -89,33 +109,20 @@ PSOutput main(const VSOutput input)
     float2 velocity  = (currPosCS - prevPosCS);
 
     uint materialId = Instances.Load(ObjectParam.InstanceId * INSTANCE_STRIDE + 8);
+    float2 uv = input.TexCoord;
 
-    MeshMaterial material = Materials[materialId];
+    ResMaterial material = Materials[materialId];
 
-    float2 uv0 = input.TexCoord * material.UvControl0.xy + material.UvControl0.zw;
-
+#if ENABLE_TEXTURED_MATERIAL
     Texture2D<float4> baseColorMap = ResourceDescriptorHeap[material.Textures0.x];
-    float4 bc = baseColorMap.Sample(LinearWrap, uv0);
+    float4 bc = baseColorMap.Sample(LinearWrap, uv);
 
     Texture2D<float4> normalMap = ResourceDescriptorHeap[material.Textures0.y];
-    float3 n = normalMap.Sample(LinearWrap, uv0).xyz;
+    float3 n = normalMap.Sample(LinearWrap, uv).xyz;
+    n = n * 2.0f - 1.0f;
 
     Texture2D<float4> ormMap = ResourceDescriptorHeap[material.Textures0.z];
-    float4 orm = ormMap.Sample(LinearWrap, uv0);
-
-    if (material.LayerCount > 1)
-    {
-        float2 uv1 = input.TexCoord * material.UvControl1.xy + material.UvControl1.zw;
-
-        Texture2D<float4> normalMap1 = ResourceDescriptorHeap[material.Textures1.y];
-        float3 n1 = normalMap1.Sample(LinearWrap, uv1).xyz;
-        n = BlendNormal(n, n1);
-    }
-    else
-    {
-        n = n * 2.0f - 1.0f;
-    }
-
+    float4 orm = ormMap.Sample(LinearWrap, uv);
 
     float3 bitangent = normalize(cross(input.Tangent, input.Normal));
     float3 normal = FromTangentSpaceToWorld(n, input.Tangent, bitangent, input.Normal);
@@ -124,6 +131,12 @@ PSOutput main(const VSOutput input)
     output.Normal    = PackNormal(normal);
     output.Roughness = orm.y;
     output.Velocity  = velocity;
+#else
+    output.Albedo    = material.BaseColor;
+    output.Normal    = PackNormal(input.Normal);
+    output.Roughness = material.Roughness;
+    output.Velocity  = velocity;
+#endif
 
     return output;
 }

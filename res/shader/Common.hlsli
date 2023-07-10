@@ -18,7 +18,7 @@
 #define INVALID_ID          (-1)
 #define STANDARD_RAY_INDEX  (0)
 #define SHADOW_RAY_INDEX    (1)
-#define T_MIN               (0.1f) // シーンの大きさによって適切な値が変わるので，適宜調整.
+#define T_MIN               (1e-6f) // シーンの大きさによって適切な値が変わるので，適宜調整.
 
 //-----------------------------------------------------------------------------
 // Type Definitions
@@ -197,7 +197,7 @@ uint4 SetSeed(uint2 pixelCoords, uint frameIndex)
 //-----------------------------------------------------------------------------
 //      疑似乱数を取得します.
 //-----------------------------------------------------------------------------
-float Random(uint4 seed)
+float Random(inout uint4 seed)
 {
     seed.w++;
     return ToFloat(PCG(seed).x);
@@ -698,13 +698,13 @@ float3 EvaluateMaterial
         {
             dir = reflection;
             pdf = p;
-            return material.BaseColor.rgb * Fr;
+            return SaturateFloat(material.BaseColor.rgb * Fr / p);
         }
         else
         {
             dir = refraction;
             pdf = (1.0f - p);
-            return material.BaseColor.rgb * Tr;
+            return SaturateFloat(material.BaseColor.rgb * Tr / (1.0f - p));
         }
     }
     // 完全拡散反射.
@@ -731,7 +731,7 @@ float3 EvaluateMaterial
     }
     else
     {
-        float3 diffuseColor  = ToKd(material.BaseColor.rgb, material.Metalness);
+        float3 diffuseColor = ToKd(material.BaseColor.rgb, material.Metalness);
         float3 specularColor = ToKs(material.BaseColor.rgb, material.Metalness);
 
         float p = ProbabilityToSampleDiffuse(diffuseColor, specularColor);
@@ -748,7 +748,7 @@ float3 EvaluateMaterial
             pdf = NoL / F_PI;
             pdf *= p;
 
-            return (diffuseColor / F_PI) * NoL * (1.0f.xxx - specularColor);
+            return SaturateFloat((diffuseColor / F_PI) * NoL * (1.0f.xxx - specularColor));
         }
 
         float a = max(Pow2(material.Roughness), 0.01f);
@@ -772,7 +772,7 @@ float3 EvaluateMaterial
 
         dir = L;
 
-        return brdf * (1.0f.xxx - diffuseColor);
+        return SaturateFloat(brdf * (1.0f.xxx - diffuseColor));
     }
 }
 
