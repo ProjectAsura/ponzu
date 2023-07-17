@@ -276,10 +276,11 @@
       <HeaderFileOutput>$(ProjectDir)..\res\shader\Compile\%(Filename).inc</HeaderFileOutput>
       <AdditionalIncludeDirectories>$(ProjectDir)..\res\shader;$(ProjectDir)..\external\asdx12\res\shaders;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </FxCompile>
-    <PostBuildEvent>
-      <Command>xcopy $(ProjectDir)..\external\dxc\bin\x64\dxcompiler.dll $(TargetDir) /E /Y
-xcopy $(ProjectDir)..\external\dxc\bin\x64\dxil.dll $(TargetDir) /E /Y</Command>
-    </PostBuildEvent>
+    <PostBuildEvent />
+    <PreBuildEvent>
+      <Command>xcopy $(ProjectDir)..\external\dxc\bin\x64\dxcompiler.dll $(TargetDir) /e /y /c
+xcopy $(ProjectDir)..\external\dxc\bin\x64\dxil.dll $(TargetDir) /e /y /c</Command>
+    </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -307,10 +308,11 @@ xcopy $(ProjectDir)..\external\dxc\bin\x64\dxil.dll $(TargetDir) /E /Y</Command>
       <VariableName>%(Filename)</VariableName>
       <HeaderFileOutput>$(ProjectDir)..\res\shader\Compile\%(Filename).inc</HeaderFileOutput>
     </FxCompile>
-    <PostBuildEvent>
-      <Command>xcopy $(ProjectDir)..\external\dxc\bin\x64\dxcompiler.dll $(TargetDir) /E /Y
-xcopy $(ProjectDir)..\external\dxc\bin\x64\dxil.dll $(TargetDir) /E /Y</Command>
-    </PostBuildEvent>
+    <PostBuildEvent />
+    <PreBuildEvent>
+      <Command>xcopy $(ProjectDir)..\external\dxc\bin\x64\dxcompiler.dll $(TargetDir) /e /y /c
+xcopy $(ProjectDir)..\external\dxc\bin\x64\dxil.dll $(TargetDir) /e /y /c</Command>
+    </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Master|x64'">
     <ClCompile>
@@ -338,10 +340,13 @@ xcopy $(ProjectDir)..\external\dxc\bin\x64\dxil.dll $(TargetDir) /E /Y</Command>
       <VariableName>%(Filename)</VariableName>
       <HeaderFileOutput>$(ProjectDir)..\res\shader\Compile\%(Filename).inc</HeaderFileOutput>
     </FxCompile>
+    <PostBuildEvent />
+    <PreBuildEvent>
+      <Command>xcopy $(ProjectDir)..\external\dxc\bin\x64\dxcompiler.dll $(TargetDir) /e /y /c
+xcopy $(ProjectDir)..\external\dxc\bin\x64\dxil.dll $(TargetDir) /e /y /c</Command>
+    </PreBuildEvent>
     <PostBuildEvent>
-      <Command>xcopy $(ProjectDir)..\external\dxc\bin\x64\dxcompiler.dll $(TargetDir) /E /Y
-xcopy $(ProjectDir)..\external\dxc\bin\x64\dxil.dll $(TargetDir) /E /Y
-call packaging.bat $(TargetDir) $(ProjectDir)..\bin $(ProjectDir)..\res</Command>
+      <Command>call $(ProjectDir)packaging.bat $(TargetDir) $(ProjectDir)..\bin $(ProjectDir)..\res</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

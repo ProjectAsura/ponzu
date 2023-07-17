@@ -620,7 +620,7 @@ float3 SampleMaterial
         float VdotH = abs(dot(V, H));
         float NdotV = abs(dot(Nm, V));
         
-        float  G = G2_Smith(a, NdotL, NdotV);
+        float  G = G2_Smith(a, NdotL, NdotV) * (4.0f * NdotH * NdotV);
         float3 F = F_Schlick(specularColor, VdotH);
 
         return (F * G * NdotH / (NdotV * VdotH)) * (1.0f.xxx - diffuseColor) / (1.0f - p) ;
@@ -698,13 +698,13 @@ float3 EvaluateMaterial
         {
             dir = reflection;
             pdf = p;
-            return SaturateFloat(material.BaseColor.rgb * Fr / p);
+            return SaturateFloat(material.BaseColor.rgb * Fr);
         }
         else
         {
             dir = refraction;
             pdf = (1.0f - p);
-            return SaturateFloat(material.BaseColor.rgb * Tr / (1.0f - p));
+            return SaturateFloat(material.BaseColor.rgb * Tr);
         }
     }
     // 完全拡散反射.
@@ -731,10 +731,13 @@ float3 EvaluateMaterial
     }
     else
     {
-        float3 diffuseColor = ToKd(material.BaseColor.rgb, material.Metalness);
+        float3 diffuseColor  = ToKd(material.BaseColor.rgb, material.Metalness);
         float3 specularColor = ToKs(material.BaseColor.rgb, material.Metalness);
 
         float p = ProbabilityToSampleDiffuse(diffuseColor, specularColor);
+
+        float3 diffuseScale  = (1.0f.xxx - specularColor);
+        float3 specularScale = (1.0f.xxx - diffuseColor);
 
         // Diffuse
         if (u.z < p)
@@ -748,7 +751,7 @@ float3 EvaluateMaterial
             pdf = NoL / F_PI;
             pdf *= p;
 
-            return SaturateFloat((diffuseColor / F_PI) * NoL * (1.0f.xxx - specularColor));
+            return (diffuseColor / F_PI) * NoL * diffuseScale;
         }
 
         float a = max(Pow2(material.Roughness), 0.01f);
@@ -757,22 +760,22 @@ float3 EvaluateMaterial
         float3 H = normalize(Tm * s.x + Bm * s.y + Nm * s.z);
         float3 L = normalize(reflect(-V, H));
 
-        float NdotL = saturate(dot(Nm, L));
-        float NdotH = saturate(dot(Nm, H));
-        float VdotH = saturate(dot(V, H));
-        float NdotV = saturate(dot(Nm, V));
+        float NdotL = abs(dot(Nm, L));
+        float NdotH = abs(dot(Nm, H));
+        float VdotH = abs(dot(V, H));
+        float NdotV = abs(dot(Nm, V));
 
         float  D = D_GGX(NdotH, a);
         float  G = G2_Smith(a, NdotL, NdotV);
         float3 F = F_Schlick(specularColor, VdotH);
-        float3 brdf = (D * F * G) / (4.0f * NdotV); // NdotLは分母と分子でキャンセルアウトする.
- 
+        float3 brdf = (D * F * G) * NdotL;
+
         pdf = D * NdotH / (4.0f * VdotH);
         pdf *= (1.0f - p);
 
         dir = L;
 
-        return SaturateFloat(brdf * (1.0f.xxx - diffuseColor));
+        return SaturateFloat(brdf) * specularScale;
     }
 }
 

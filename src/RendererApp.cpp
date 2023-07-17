@@ -1094,14 +1094,14 @@ bool Renderer::SystemSetup()
         //m_Camera.SetUpward(asdx::Vector3(0.313f, 0.899f, -0.308f));
         //m_Camera.Update();
         asdx::Camera::Param param;
-        param.Position = asdx::Vector3(-1325.207520, 995.419373, 1612.109253);
-        param.Target   = asdx::Vector3(56.435787, -34.221855, 128.971191);
-        param.Upward   = asdx::Vector3(0.308701, 0.891568, -0.331378);
-        param.Rotate   = asdx::Vector2(2.391608, -0.470002);
-        param.PanTilt  = asdx::Vector2(2.391608, -0.470002);
-        param.Twist    = 0.000000;
-        param.MinDist  = 0.100000;
-        param.MaxDist  = 10000.000000;
+        param.Position = asdx::Vector3(-1325.207520f, 995.419373f, 1612.109253f);
+        param.Target   = asdx::Vector3(56.435787f, -34.221855f, 128.971191f);
+        param.Upward   = asdx::Vector3(0.308701f, 0.891568f, -0.331378f);
+        param.Rotate   = asdx::Vector2(2.391608f, -0.470002f);
+        param.PanTilt  = asdx::Vector2(2.391608f, -0.470002f);
+        param.Twist    = 0.000000f;
+        param.MinDist  = 0.100000f;
+        param.MaxDist  = 10000.000000f;
         m_Camera.SetParam(param);
         m_Camera.Update();
     }
@@ -1165,7 +1165,7 @@ bool Renderer::BuildScene()
             return false;
         }
 
-        if (!m_Scene.Init(path.c_str(), m_GfxCmdList))
+        if (!m_Scene.Init(path.c_str(), m_GfxCmdList.GetCommandList()))
         {
             ELOGA("Error : Scene::Init() Failed.");
             return false;
@@ -1299,7 +1299,7 @@ void Renderer::OnFrameMove(asdx::FrameEventArgs& args)
         if (m_CaptureIndex <= totalFrame)
         {
             auto idx = (m_CaptureTargetIndex + 2) % 3; // 2フレーム前のインデックス.
-            CaptureScreen(m_CaptureTarget[idx].GetResource(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, true);
+            CaptureScreen(m_CaptureTarget[idx].GetResource());
         }
 
         PostQuitMessage(0);
@@ -1352,14 +1352,14 @@ void Renderer::ChangeFrame(uint32_t index)
     if (m_MyFrameCount >= 200 && m_MyFrameCount < 400)
     {
         asdx::Camera::Param param;
-        param.Position = asdx::Vector3(-8698.803711, 166.165710, 13402.062500);
-        param.Target   = asdx::Vector3(-6625.559082, 825.442749, 11306.008789);
-        param.Upward   = asdx::Vector3(-0.153466, 0.975897, 0.155155);
-        param.Rotate   = asdx::Vector2(2.361665, 0.220002);
-        param.PanTilt  = asdx::Vector2(2.361665, 0.220002);
-        param.Twist    = 0.000000;
-        param.MinDist  = 0.100000;
-        param.MaxDist  = 10000.000000;
+        param.Position = asdx::Vector3(-8698.803711f, 166.165710f, 13402.062500f);
+        param.Target   = asdx::Vector3(-6625.559082f, 825.442749f, 11306.008789f);
+        param.Upward   = asdx::Vector3(-0.153466f, 0.975897f, 0.155155f);
+        param.Rotate   = asdx::Vector2(2.361665f, 0.220002f);
+        param.PanTilt  = asdx::Vector2(2.361665f, 0.220002f);
+        param.Twist    = 0.000000f;
+        param.MinDist  = 0.100000f;
+        param.MaxDist  = 10000.000000f;
 
         m_Camera.SetParam(param);
         m_Camera.Update();
@@ -1367,14 +1367,14 @@ void Renderer::ChangeFrame(uint32_t index)
     else if (m_MyFrameCount >= 400)
     {
         asdx::Camera::Param param;
-        param.Position = asdx::Vector3(-6236.219238, 643.296875, 12190.804688);
-        param.Target   = asdx::Vector3(-6761.750977, 363.141693, 11173.848633);
-        param.Upward   = asdx::Vector3(-0.109136, 0.971333, -0.211189);
-        param.Rotate   = asdx::Vector2(3.618566, -0.240019);
-        param.PanTilt  = asdx::Vector2(3.618566, -0.240019);
-        param.Twist    = 0.000000;
-        param.MinDist  = 0.100000;
-        param.MaxDist  = 10000.000000;
+        param.Position = asdx::Vector3(-6236.219238f, 643.296875f, 12190.804688f);
+        param.Target   = asdx::Vector3(-6761.750977f, 363.141693f, 11173.848633f);
+        param.Upward   = asdx::Vector3(-0.109136f, 0.971333f, -0.211189f);
+        param.Rotate   = asdx::Vector2(3.618566f, -0.240019f);
+        param.PanTilt  = asdx::Vector2(3.618566f, -0.240019f);
+        param.Twist    = 0.000000f;
+        param.MinDist  = 0.100000f;
+        param.MaxDist  = 10000.000000f;
 
         m_Camera.SetParam(param);
         m_Camera.Update();
@@ -1550,6 +1550,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
             m_ModelPipe.SetState(pCmd);
         }
 #else
+        pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         m_ModelPipe.SetState(pCmd);
 #endif
 
@@ -1587,6 +1588,10 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
     auto threadX = (m_SceneDesc.Width  + 7) / 8;
     auto threadY = (m_SceneDesc.Height + 7) / 8;
 
+    // デノイザー実行.
+    {
+    }
+
     // トーンマップ実行.
     {
         m_Radiance  .Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -1602,6 +1607,14 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         pCmd->Dispatch(threadX, threadY, 1);
 
         asdx::UAVBarrier(pCmd, m_Tonemapped.GetResource());
+    }
+
+    // ポストエフェクト処理.
+    {
+    }
+
+    // TemporalAA実行.
+    {
     }
 
     // スワップチェインに描画.
@@ -1768,7 +1781,7 @@ void Renderer::OnKey(const asdx::KeyEventArgs& args)
 //-----------------------------------------------------------------------------
 void Renderer::OnMouse(const asdx::MouseEventArgs& args)
 {
-#if (!CAMP_RELEASE)
+#if RTC_TARGET == RTC_DEVELOP
     auto isAltDown = !!(GetKeyState(VK_MENU) & 0x8000);
 
     #if ASDX_ENABLE_IMGUI
