@@ -36,6 +36,8 @@ namespace {
 #include "../res/shader/Compile/ModelPS.inc"
 #include "../res/shader/Compile/DebugPS.inc"
 #include "../res/shader/Compile/DenoiserCS.inc"
+#include "../asdx12/res/shaders/Compiled/TaaCS.inc"
+#include "../asdx12/res/shaders/Compiled/CopyPS.inc"
 
 static const D3D12_INPUT_ELEMENT_DESC kModelElements[] = {
     { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
@@ -192,6 +194,18 @@ struct DenoiseParam
     float    OffsetY;
 };
 
+///////////////////////////////////////////////////////////////////////////////
+// TaaParam structure
+///////////////////////////////////////////////////////////////////////////////
+struct TaaParam
+{
+    float           Gamma;
+    float           BlendFactor;
+    asdx::Vector2   MapSize;
+    asdx::Vector2   InvMapSize;
+    asdx::Vector2   Jitter;
+};
+
 //-----------------------------------------------------------------------------
 //      画像に出力します.
 //-----------------------------------------------------------------------------
@@ -200,10 +214,6 @@ unsigned Export(void* args)
     auto data = reinterpret_cast<r3d::Renderer::ExportData*>(args);
     if (data == nullptr)
     { return -1; }
-
-    // コピーコマンドの完了を待機.
-    if (data->WaitPoint.IsValid())
-    { data->pQueue->Sync(data->WaitPoint); }
 
     // メモリマッピング.
     uint8_t* ptr = nullptr;
@@ -533,18 +543,13 @@ bool Renderer::SystemSetup()
         desc.SampleDesc.Quality = 0;
         desc.InitState          = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 
-        for(auto i=0; i<3; ++i)
+        if (!m_CaptureTarget.Init(&desc))
         {
-            if (!m_CaptureTarget[i].Init(&desc))
-            {
-                ELOGA("Error : CaptureTarget[%d] Init Failed.", i);
-                return false;
-            }
+            ELOGA("Error : CaptureTarget Init Failed.");
+            return false;
         }
 
-        m_CaptureTarget[0].SetName(L"CaptureTarget0");
-        m_CaptureTarget[1].SetName(L"CaptureTarget1");
-        m_CaptureTarget[2].SetName(L"CaptureTarget2");
+        m_CaptureTarget.SetName(L"CaptureTarget");
     }
 
     // リードバックテクスチャ生成.
@@ -565,21 +570,26 @@ bool Renderer::SystemSetup()
         D3D12_HEAP_PROPERTIES props = {};
         props.Type = D3D12_HEAP_TYPE_READBACK;
 
-        auto hr = pDevice->CreateCommittedResource(
-            &props,
-            D3D12_HEAP_FLAG_NONE,
-            &desc,
-            D3D12_RESOURCE_STATE_COPY_DEST,
-            nullptr,
-            IID_PPV_ARGS(m_ReadBackTexture.GetAddress()));
-
-        if (FAILED(hr))
+        for(auto i=0; i<3; ++i) 
         {
-            ELOGA("Error : ID3D12Device::CreateCommittedResource() Failed. errcode = 0x%x", hr);
-            return false;
+            auto hr = pDevice->CreateCommittedResource(
+                &props,
+                D3D12_HEAP_FLAG_NONE,
+                &desc,
+                D3D12_RESOURCE_STATE_COPY_DEST,
+                nullptr,
+                IID_PPV_ARGS(m_ReadBackTexture[i].GetAddress()));
+
+            if (FAILED(hr))
+            {
+                ELOGA("Error : ID3D12Device::CreateCommittedResource() Failed. errcode = 0x%x", hr);
+                return false;
+            }
         }
 
-        m_ReadBackTexture->SetName(L"ReadBackTexture");
+        m_ReadBackTexture[0]->SetName(L"ReadBackTexture0");
+        m_ReadBackTexture[1]->SetName(L"ReadBackTexture1");
+        m_ReadBackTexture[2]->SetName(L"ReadBackTexture2");
 
         UINT   rowCount     = 0;
         UINT64 pitchSize    = 0;
@@ -971,7 +981,67 @@ bool Renderer::SystemSetup()
 
         if (!m_ModelPipe.Init(pDevice, &desc))
         {
-            ELOGA("Error : PipelineState Failed.");
+            ELOGA("Error : Model Pipe Init Failed.");
+            return false;
+        }
+    }
+
+    // テンポラルAA用ルートシグニチャ生成.
+    {
+        auto cs = D3D12_SHADER_VISIBILITY_ALL;
+
+        D3D12_DESCRIPTOR_RANGE ranges[6] = {};
+        asdx::InitRangeAsSRV(ranges[0], 0);
+        asdx::InitRangeAsSRV(ranges[1], 1);
+        asdx::InitRangeAsSRV(ranges[2], 2);
+        asdx::InitRangeAsSRV(ranges[3], 3);
+        asdx::InitRangeAsUAV(ranges[4], 0);
+        asdx::InitRangeAsUAV(ranges[5], 1);
+
+        D3D12_ROOT_PARAMETER params[7] = {};
+        asdx::InitAsCBV  (params[0], 0, cs);
+        asdx::InitAsTable(params[1], 1, &ranges[0], cs);
+        asdx::InitAsTable(params[2], 1, &ranges[1], cs);
+        asdx::InitAsTable(params[3], 1, &ranges[2], cs);
+        asdx::InitAsTable(params[4], 1, &ranges[3], cs);
+        asdx::InitAsTable(params[5], 1, &ranges[4], cs);
+        asdx::InitAsTable(params[6], 1, &ranges[5], cs);
+
+        auto flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
+
+        D3D12_ROOT_SIGNATURE_DESC desc = {};
+        desc.pParameters        = params;
+        desc.NumParameters      = _countof(params);
+        desc.pStaticSamplers    = asdx::GetStaticSamplers();
+        desc.NumStaticSamplers  = asdx::GetStaticSamplerCounts();
+        desc.Flags              = flags;
+
+        if (!asdx::InitRootSignature(pDevice, &desc, m_TaaRootSig.GetAddress()))
+        {
+            ELOG("Error : TemporalAA Signature Init Failed.");
+            return false;
+        }
+    }
+
+    // テンポラルAA用パイプラインステート生成.
+    {
+        D3D12_COMPUTE_PIPELINE_STATE_DESC desc = {};
+        desc.pRootSignature = m_TaaRootSig.GetPtr();
+        desc.CS             = { TaaCS, sizeof(TaaCS) };
+
+        if (!m_TaaPipe.Init(pDevice, &desc))
+        {
+            ELOGA("Error : Taa Pipe Init Failed.");
+            return false;
+        }
+    }
+
+    // テンポラルAA用定数バッファ.
+    {
+        auto size = asdx::RoundUp(sizeof(TaaParam), 256);
+        if (!m_TaaParam.Init(size))
+        {
+            ELOGA("Error : Taa Constant Buffer Init Failed.");
             return false;
         }
     }
@@ -1055,6 +1125,73 @@ bool Renderer::SystemSetup()
         {
             ELOGA("Error : PipelineState Failed.");
             return false;
+        }
+    }
+    #else
+    if (m_CreateWindow)
+    {
+        // コピー用ルートシグニチャ.
+        {
+            auto ps = D3D12_SHADER_VISIBILITY_PIXEL;
+
+            D3D12_DESCRIPTOR_RANGE range = {};
+            asdx::InitRangeAsSRV(range, 0);
+
+            D3D12_ROOT_PARAMETER param[2] = {};
+            asdx::InitAsTable    (param[0], 1, &range, ps);
+
+            D3D12_STATIC_SAMPLER_DESC sampler = {};
+            sampler.Filter              = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+            sampler.AddressU            = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+            sampler.AddressV            = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+            sampler.AddressW            = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+            sampler.MipLODBias          = 0.0f;
+            sampler.ComparisonFunc      = D3D12_COMPARISON_FUNC_NEVER;
+            sampler.BorderColor         = D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE;
+            sampler.MinLOD              = 0.0f;
+            sampler.MaxLOD              = D3D12_FLOAT32_MAX;
+            sampler.ShaderRegister      = 0;
+            sampler.RegisterSpace       = 0;
+            sampler.ShaderVisibility    = ps;
+
+            auto flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+
+            D3D12_ROOT_SIGNATURE_DESC desc = {};
+            desc.pParameters        = param;
+            desc.NumParameters      = _countof(param);
+            desc.pStaticSamplers    = &sampler;
+            desc.NumStaticSamplers  = 1;
+            desc.Flags              = flags;
+
+            if (!asdx::InitRootSignature(pDevice, &desc, m_CopyRootSig.GetAddress()))
+            {
+                ELOG("Error : Copy Root Signature Init Failed.");
+                return false;
+            }
+        }
+
+        // コピー用パイプラインステート.
+        {
+            D3D12_GRAPHICS_PIPELINE_STATE_DESC desc = {};
+            desc.pRootSignature         = m_CopyRootSig.GetPtr();
+            desc.VS                     = { TonemapVS, sizeof(TonemapVS) };
+            desc.PS                     = { CopyPS, sizeof(CopyPS) };
+            desc.BlendState             = asdx::BLEND_DESC(asdx::BLEND_STATE_OPAQUE);
+            desc.DepthStencilState      = asdx::DEPTH_STENCIL_DESC(asdx::DEPTH_STATE_DEFAULT);
+            desc.RasterizerState        = asdx::RASTERIZER_DESC(asdx::RASTERIZER_STATE_CULL_NONE);
+            desc.SampleMask             = D3D12_DEFAULT_SAMPLE_MASK;
+            desc.PrimitiveTopologyType  = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+            desc.NumRenderTargets       = 1;
+            desc.RTVFormats[0]          = DXGI_FORMAT_R8G8B8A8_UNORM;
+            desc.InputLayout            = asdx::GetQuadLayout();
+            desc.SampleDesc.Count       = 1;
+            desc.SampleDesc.Quality     = 0;
+
+            if (!m_CopyPipe.Init(pDevice, &desc))
+            {
+                ELOGA("Error : PipelineState Failed.");
+                return false;
+            }
         }
     }
     #endif
@@ -1226,7 +1363,10 @@ void Renderer::OnTerm()
     }
     #endif
 
-    m_ReadBackTexture.Reset();
+    for(auto i=0; i<3; ++i) 
+    {
+        m_ReadBackTexture[i].Reset();
+    }
 
     // シーン関連.
     {
@@ -1235,8 +1375,7 @@ void Renderer::OnTerm()
 
     // レンダーターゲット関連.
     {
-        for(auto i=0; i<3; ++i)
-        { m_CaptureTarget[i].Term(); }
+        m_CaptureTarget.Term();
 
         for(auto i=0; i<2; ++i)
         {
@@ -1263,11 +1402,14 @@ void Renderer::OnTerm()
 
     // 定数バッファ関連.
     {
+        m_TaaParam  .Term();
         m_SceneParam.Term();
     }
 
     // パイプライン関連.
     {
+        m_CopyPipe   .Term();
+        m_TaaPipe    .Term();
         m_TonemapPipe.Term();
         m_ModelPipe  .Term();
         m_RtPipe     .Term();
@@ -1275,6 +1417,8 @@ void Renderer::OnTerm()
 
     // ルートシグニチャ関連.
     {
+        m_CopyRootSig   .Reset();
+        m_TaaRootSig    .Reset();
         m_TonemapRootSig.Reset();
         m_RtRootSig     .Reset();
         m_ModelRootSig  .Reset();
@@ -1298,8 +1442,7 @@ void Renderer::OnFrameMove(asdx::FrameEventArgs& args)
         uint32_t totalFrame = uint32_t(m_SceneDesc.FPS * m_SceneDesc.AnimationTimeSec);
         if (m_CaptureIndex <= totalFrame)
         {
-            auto idx = (m_CaptureTargetIndex + 2) % 3; // 2フレーム前のインデックス.
-            CaptureScreen(m_CaptureTarget[idx].GetResource());
+            CaptureScreen(m_ReadBackTexture[m_ReadBackTargetIndex].GetPtr());
         }
 
         PostQuitMessage(0);
@@ -1315,9 +1458,7 @@ void Renderer::OnFrameMove(asdx::FrameEventArgs& args)
     if (m_AnimationElapsedTime >= m_AnimationOneFrameTime && GetFrameCount() > 0)
     {
         // キャプチャー実行.
-        auto idx = (m_CaptureTargetIndex + 2) % 3; // 2フレーム前のインデックス.
-        assert(m_CaptureTarget[idx].GetState() == D3D12_RESOURCE_STATE_COPY_SOURCE);
-        CaptureScreen(m_CaptureTarget[idx].GetResource());
+        CaptureScreen(m_ReadBackTexture[m_ReadBackTargetIndex].GetPtr());
 
         // 次のフレームに切り替え.
         m_AnimationElapsedTime = 0.0;
@@ -1615,6 +1756,65 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
 
     // TemporalAA実行.
     {
+        TaaParam param = {};
+        param.Gamma         = 1.0f;
+        param.BlendFactor   = 0.9f;
+        param.MapSize       = asdx::Vector2(float(m_SceneDesc.Width), float(m_SceneDesc.Height));
+        param.InvMapSize    = asdx::Vector2(1.0f / float(m_SceneDesc.Width), 1.0f / float(m_SceneDesc.Height));
+        param.Jitter        = asdx::Vector2(0.0f, 0.0f);
+
+        m_TaaParam.SwapBuffer();
+        m_TaaParam.Update(&param, sizeof(param));
+
+        m_Tonemapped.Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        m_ColorHistory[m_PrevHistoryIndex].Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        m_ColorHistory[m_CurrHistoryIndex].Transition(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        m_CaptureTarget.Transition(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+        pCmd->SetComputeRootSignature(m_TaaRootSig.GetPtr());
+        m_TaaPipe.SetState(pCmd);
+
+        pCmd->SetComputeRootConstantBufferView(0, m_TaaParam.GetResource()->GetGPUVirtualAddress());
+        pCmd->SetComputeRootDescriptorTable(1, m_Tonemapped.GetSRV()->GetHandleGPU());
+        pCmd->SetComputeRootDescriptorTable(2, m_ColorHistory[m_PrevHistoryIndex].GetSRV()->GetHandleGPU());
+        pCmd->SetComputeRootDescriptorTable(3, m_Velocity.GetSRV()->GetHandleGPU());
+        pCmd->SetComputeRootDescriptorTable(4, m_Depth.GetSRV()->GetHandleGPU());
+        pCmd->SetComputeRootDescriptorTable(5, m_ColorHistory[m_CurrHistoryIndex].GetUAV()->GetHandleGPU());
+        pCmd->SetComputeRootDescriptorTable(6, m_CaptureTarget.GetUAV()->GetHandleGPU());
+
+        pCmd->Dispatch(threadX, threadY, 1);
+
+        asdx::UAVBarrier(pCmd, m_ColorHistory[m_CurrHistoryIndex].GetResource());
+        asdx::UAVBarrier(pCmd, m_CaptureTarget.GetResource());
+    }
+
+    // リードバックテクスチャにコピー.
+    {
+        m_CaptureTarget.Transition(pCmd, D3D12_RESOURCE_STATE_COPY_SOURCE);
+
+        D3D12_TEXTURE_COPY_LOCATION dst = {};
+        dst.Type                                = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+        dst.pResource                           = m_ReadBackTexture[m_CaptureTargetIndex].GetPtr();
+        dst.PlacedFootprint.Footprint.Width     = static_cast<UINT>(m_SceneDesc.Width);
+        dst.PlacedFootprint.Footprint.Height    = m_SceneDesc.Height;
+        dst.PlacedFootprint.Footprint.Depth     = 1;
+        dst.PlacedFootprint.Footprint.RowPitch  = m_ReadBackPitch;
+        dst.PlacedFootprint.Footprint.Format    = DXGI_FORMAT_R8G8B8A8_UNORM;
+
+        D3D12_TEXTURE_COPY_LOCATION src = {};
+        src.Type                = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+        src.pResource           = m_CaptureTarget.GetResource();
+        src.SubresourceIndex    = 0;
+
+        D3D12_BOX box = {};
+        box.left    = 0;
+        box.right   = m_SceneDesc.Width;
+        box.top     = 0;
+        box.bottom  = m_SceneDesc.Height;
+        box.front   = 0;
+        box.back    = 1;
+
+        pCmd->CopyTextureRegion(&dst, 0, 0, 0, &src, &box);
     }
 
     // スワップチェインに描画.
@@ -1628,8 +1828,8 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         switch(m_BufferKind)
         {
         case BUFFER_KIND_RENDERED:
-            m_Tonemapped.Transition(pCmd, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-            pSRV = m_Tonemapped.GetSRV();
+            m_CaptureTarget.Transition(pCmd, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            pSRV = m_CaptureTarget.GetSRV();
             type = SAMPLING_TYPE_DEFAULT;
             break;
 
@@ -1678,10 +1878,27 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
 
         m_ColorTarget[idx].Transition(pCmd, D3D12_RESOURCE_STATE_PRESENT);
     }
-    #endif
+    #else
+    // カラーターゲットにコピー.
+    if (m_CreateWindow)
+    {
+        m_CaptureTarget.Transition(pCmd, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+        m_ColorTarget[idx].Transition(pCmd, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-    // コピー可能状態に遷移させておく.
-    m_CaptureTarget[m_CaptureTargetIndex].Transition(pCmd, D3D12_RESOURCE_STATE_COPY_SOURCE);
+        auto pRTV = m_ColorTarget[idx].GetRTV()->GetHandleCPU();
+        pCmd->OMSetRenderTargets(1, &pRTV, FALSE, nullptr);
+        pCmd->RSSetViewports(1, &m_Viewport);
+        pCmd->RSSetScissorRects(1, &m_ScissorRect);
+        pCmd->SetGraphicsRootSignature(m_CopyRootSig.GetPtr());
+        m_CopyPipe.SetState(pCmd);
+        pCmd->SetGraphicsRootDescriptorTable(0, m_CaptureTarget.GetSRV()->GetHandleGPU());
+        pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+        asdx::DrawQuad(pCmd);
+
+        m_ColorTarget[idx].Transition(pCmd, D3D12_RESOURCE_STATE_PRESENT);
+    }
+    #endif
 
     // コマンド記録終了.
     pCmd->Close();
@@ -1711,7 +1928,11 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
     // シェーダをリロードします.
     RTC_DEBUG_CODE(ReloadShader());
 
+    m_ReadBackTargetIndex = (m_ReadBackTargetIndex + 1) % 3;
     m_CaptureTargetIndex = (m_CaptureTargetIndex + 1) % 3;
+
+    m_PrevHistoryIndex = m_CurrHistoryIndex;
+    m_CurrHistoryIndex = (m_CurrHistoryIndex + 1) & 0x1;
 }
 
 //-----------------------------------------------------------------------------
@@ -1921,60 +2142,9 @@ void Renderer::CaptureScreen(ID3D12Resource* pResource)
     if (pResource == nullptr)
     { return; }
 
-    auto pQueue = asdx::GetCopyQueue();
-    if (pQueue == nullptr)
-    { return; }
-
-    m_CopyCmdList.Reset();
-    auto pCmd = m_CopyCmdList.GetCommandList();
-
-    // 読み戻し実行.
-    {
-        D3D12_TEXTURE_COPY_LOCATION dst = {};
-        dst.Type                                = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-        dst.pResource                           = m_ReadBackTexture.GetPtr();
-        dst.PlacedFootprint.Footprint.Width     = static_cast<UINT>(m_SceneDesc.Width);
-        dst.PlacedFootprint.Footprint.Height    = m_SceneDesc.Height;
-        dst.PlacedFootprint.Footprint.Depth     = 1;
-        dst.PlacedFootprint.Footprint.RowPitch  = m_ReadBackPitch;
-        dst.PlacedFootprint.Footprint.Format    = DXGI_FORMAT_R8G8B8A8_UNORM;
-
-        D3D12_TEXTURE_COPY_LOCATION src = {};
-        src.Type                = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-        src.pResource           = pResource;
-        src.SubresourceIndex    = 0;
-
-        D3D12_BOX box = {};
-        box.left    = 0;
-        box.right   = m_SceneDesc.Width;
-        box.top     = 0;
-        box.bottom  = m_SceneDesc.Height;
-        box.front   = 0;
-        box.back    = 1;
-
-        pCmd->CopyTextureRegion(&dst, 0, 0, 0, &src, &box);
-    }
-
-    pCmd->Close();
-
-    ID3D12CommandList* pCmds[] = {
-        pCmd
-    };
-
-    // 基本的に2フレーム前のテクスチャを参照するため, 
-    // 実行前の同期は完了されていることが保証されているため必要ない.
-
-    // コマンドを実行.
-    pQueue->Execute(_countof(pCmds), pCmds);
-
-    // 待機点を発行.
-    auto waitPoint = pQueue->Signal();
-
     auto idx = m_ExportIndex;
     {
-        m_ExportData[idx].pResources = m_ReadBackTexture.GetPtr();
-        m_ExportData[idx].WaitPoint  = waitPoint;
-        m_ExportData[idx].pQueue     = pQueue;
+        m_ExportData[idx].pResources = pResource;
         m_ExportData[idx].FrameIndex = m_CaptureIndex;
 
         // 別スレッドで待機とファイル出力を実行.

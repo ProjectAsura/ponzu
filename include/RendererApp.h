@@ -77,8 +77,6 @@ public:
         uint32_t                Width;
         uint32_t                Height;
         ID3D12Resource*         pResources;
-        asdx::WaitPoint         WaitPoint;
-        asdx::CommandQueue*     pQueue;
         bool                    Processed;
     };
 
@@ -117,12 +115,17 @@ private:
     asdx::RefPtr<ID3D12RootSignature>   m_ModelRootSig;
     asdx::RefPtr<ID3D12RootSignature>   m_RtRootSig;
     asdx::RefPtr<ID3D12RootSignature>   m_TonemapRootSig;
+    asdx::RefPtr<ID3D12RootSignature>   m_TaaRootSig;
+    asdx::RefPtr<ID3D12RootSignature>   m_CopyRootSig;
 
     RayTracingPipe                  m_RtPipe;
     asdx::PipelineState             m_ModelPipe;
     asdx::PipelineState             m_TonemapPipe;
+    asdx::PipelineState             m_TaaPipe;
+    asdx::PipelineState             m_CopyPipe;
 
     asdx::ConstantBuffer            m_SceneParam;
+    asdx::ConstantBuffer            m_TaaParam;
 
     asdx::ComputeTarget             m_Radiance;         // 放射輝度.
     asdx::ColorTarget               m_Albedo;           // G-Buffer アルベド.
@@ -132,17 +135,17 @@ private:
     asdx::DepthTarget               m_Depth;            // 深度.
     asdx::ComputeTarget             m_Tonemapped;       // トーンマップ適用済み.
     asdx::ComputeTarget             m_ColorHistory[2];  // カラーヒストリーバッファ.
-    asdx::ComputeTarget             m_CaptureTarget[3];
+    asdx::ComputeTarget             m_CaptureTarget;    // キャプチャー用.
 
     Scene                           m_Scene;
     asdx::Camera                    m_Camera;
 
-
-    asdx::RefPtr<ID3D12Resource>    m_ReadBackTexture;
+    asdx::RefPtr<ID3D12Resource>    m_ReadBackTexture[3];
     uint32_t                        m_ReadBackPitch = 0;
     std::vector<ExportData>         m_ExportData;
     size_t                          m_ExportIndex   = 0;
     uint32_t                        m_CaptureIndex  = 0;
+    uint32_t                        m_ReadBackTargetIndex = 2;
     uint32_t                        m_CaptureTargetIndex = 0;
     uint32_t                        m_AccumulatedFrames = 0;
 

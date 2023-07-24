@@ -21,7 +21,8 @@ int main(int argc, char** argv)
     desc.Height             = 1440;
     desc.FPS                = 59.9;
     desc.AnimationTimeSec   = 10.0;
-    desc.Path               = "../res/scene/rtcamp.scn";
+    //desc.Path               = "../res/scene/rtcamp.scn";
+    desc.Path               = "../res/scene/test_scene.scn";
 
     r3d::Renderer app(desc);
     app.Run();
