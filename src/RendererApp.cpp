@@ -19,6 +19,10 @@
 #include "../external/asdx12/external/imgui/imgui.h"
 #endif
 
+#if RTC_TARGET == RTC_DEVELOP
+#include <pix3.h>
+#endif
+
 extern "C" { __declspec(dllexport) extern const UINT D3D12SDKVersion = 602;}
 extern "C" { __declspec(dllexport) extern const char* D3D12SDKPath = u8".\\D3D12\\"; }
 
@@ -55,6 +59,25 @@ static const size_t     RELOADED_BIT_INDEX  = 1;
 #define RELOAD_SHADER_STATE_NONE    (0)
 #define RELOAD_SHADER_STATE_SUCCESS (1)
 #define RELOAD_SHADER_STATE_FAILED  (-1)
+
+class ScopedMarker
+{
+public:
+    ScopedMarker(ID3D12GraphicsCommandList* pCmd, const char* tag)
+    {
+        m_pCmd = pCmd;
+        PIXBeginEvent(pCmd, 0, tag);
+    }
+
+    ~ScopedMarker()
+    {
+        PIXEndEvent(m_pCmd);
+        m_pCmd = nullptr;
+    }
+
+private:
+    ID3D12GraphicsCommandList* m_pCmd = nullptr;
+};
 #endif
 
 #ifdef ASDX_ENABLE_IMGUI
@@ -1646,6 +1669,8 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
     if (!m_Scene.IsReloading())
 #endif
     {
+        RTC_DEBUG_CODE(ScopedMarker marker(pCmd, "G-Buffer"));
+
         m_Albedo    .Transition(pCmd, D3D12_RESOURCE_STATE_RENDER_TARGET);
         m_Normal    .Transition(pCmd, D3D12_RESOURCE_STATE_RENDER_TARGET);
         m_Roughness .Transition(pCmd, D3D12_RESOURCE_STATE_RENDER_TARGET);
@@ -1709,6 +1734,8 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
     if (!m_Scene.IsReloading())
 #endif
     {
+        RTC_DEBUG_CODE(ScopedMarker marker(pCmd, "PathTracing"));
+
         m_Radiance.Transition(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
         pCmd->SetComputeRootSignature(m_RtRootSig.GetPtr());
@@ -1735,6 +1762,8 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
 
     // トーンマップ実行.
     {
+        RTC_DEBUG_CODE(ScopedMarker marker(pCmd, "ToneMapping"));
+
         m_Radiance  .Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         m_Tonemapped.Transition(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
@@ -1756,8 +1785,10 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
 
     // TemporalAA実行.
     {
+        RTC_DEBUG_CODE(ScopedMarker marker(pCmd, "TemporalAntiAliasing"));
+
         TaaParam param = {};
-        param.Gamma         = 1.0f;
+        param.Gamma         = 0.9f;
         param.BlendFactor   = 0.9f;
         param.MapSize       = asdx::Vector2(float(m_SceneDesc.Width), float(m_SceneDesc.Height));
         param.InvMapSize    = asdx::Vector2(1.0f / float(m_SceneDesc.Width), 1.0f / float(m_SceneDesc.Height));
@@ -1790,6 +1821,8 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
 
     // リードバックテクスチャにコピー.
     {
+        RTC_DEBUG_CODE(ScopedMarker marker(pCmd, "ReadBack"));
+
         m_CaptureTarget.Transition(pCmd, D3D12_RESOURCE_STATE_COPY_SOURCE);
 
         D3D12_TEXTURE_COPY_LOCATION dst = {};
@@ -1820,6 +1853,8 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
     // スワップチェインに描画.
     #if RTC_TARGET == RTC_DEVELOP
     {
+        RTC_DEBUG_CODE(ScopedMarker marker(pCmd, "DebugOutput"));
+
         m_ColorTarget[idx].Transition(pCmd, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
         const asdx::IShaderResourceView* pSRV = nullptr;
@@ -1882,6 +1917,8 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
     // カラーターゲットにコピー.
     if (m_CreateWindow)
     {
+        RTC_DEBUG_CODE(ScopedMarker marker(pCmd, "WindowOutput"));
+
         m_CaptureTarget.Transition(pCmd, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
         m_ColorTarget[idx].Transition(pCmd, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
