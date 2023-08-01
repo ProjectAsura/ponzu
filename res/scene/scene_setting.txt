@@ -3,7 +3,7 @@ export {
 };
 
 ibl {
-   -Path: ..\res\ibl\alps_field_2k.dds
+   -Path: ..\res\ibl\little_paris_eiffel_tower_2k.dds
 };
 
 model {
@@ -36,7 +36,7 @@ material {
    -BaseColor: 0.8 0.0 0.0 1.0
    -Roughness: 0.0
    -Metalness: 0.0
-   -Ior: 1.2
+   -Ior: 1.4
 };
 
 material {
@@ -44,7 +44,7 @@ material {
    -BaseColor: 0.8 0.68080 0.52080 1.0
    -Roughness: 0.0
    -Metalness: 0.0
-   -Ior: 1.2
+   -Ior: 1.4
 };
 
 material {
@@ -56,7 +56,7 @@ material {
 
 material {
    -Tag: SphereMat
-   -BaseColor: 1.0 0.5 0.5 1.0
+   -BaseColor: 1.0 0.0 0.0 1.0
    -Roughness: 0.2
    -Metalness: 1.0
 };
@@ -112,16 +112,16 @@ instance {
 instance {
     -Mesh: plane
     -Material: PlaneMat
-    -Scale: 5.0 5.0 5.0
+    -Scale: 2.0 2.0 2.0
     -Translation: 0.0 -100.0 0.0    
 };
 
-instance {
-    -Mesh: box
-    -Material: BoxMat
-    -Translation: -300.0 0.0 5.0
-    -Scale: 2.0 2.0 2.0  
-};
+#instance {
+#    -Mesh: box
+#    -Material: BoxMat
+#    -Translation: -300.0 0.0 5.0
+#    -Scale: 2.0 2.0 2.0  
+#};
 
 #instance {
 #    -Mesh: cylinder

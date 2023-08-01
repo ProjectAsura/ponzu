@@ -427,7 +427,7 @@ void Renderer::RayTracingPipe::Dispatch
 //      コンストラクタです.
 //-----------------------------------------------------------------------------
 Renderer::Renderer(const SceneDesc& desc)
-: asdx::Application(L"Ponzu", 1920, 1080, nullptr, nullptr, nullptr)
+: asdx::Application(L"Ponzu", desc.Width, desc.Height, nullptr, nullptr, nullptr)
 , m_SceneDesc(desc)
 {
     m_SwapChainFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -446,6 +446,13 @@ Renderer::Renderer(const SceneDesc& desc)
     m_DeviceDesc.EnableBreakOnWarning = false;
     m_DeviceDesc.EnableDRED           = true;
 #endif
+
+
+    m_Viewport.Width = float(m_SceneDesc.Width);
+    m_Viewport.Height = float(m_SceneDesc.Height);
+
+    m_ScissorRect.right = m_SceneDesc.Width;
+    m_ScissorRect.bottom = m_SceneDesc.Height;
 }
 
 //-----------------------------------------------------------------------------
@@ -1630,7 +1637,7 @@ void Renderer::ChangeFrame(uint32_t index)
         param.PrevInvProj           = m_PrevInvProj;
         param.PrevInvViewProj       = m_PrevInvViewProj;
         param.MaxBounce             = MAX_RECURSION_DEPTH;
-        param.MinBounce             = 3;
+        param.MinBounce             = 4;
         param.FrameIndex            = GetFrameCount();
         param.SkyIntensity          = 5.0f;
         param.EnableAccumulation    = enableAccumulation;

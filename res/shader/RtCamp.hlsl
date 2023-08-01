@@ -489,72 +489,71 @@ void OnGenerateRay()
         // 自己発光による放射輝度.
         Lo += W * material.Emissive;
 
-//#if 0
-//        // Next Event Estimation.
-//        {
-//            // BSDFがデルタ関数を持たない場合のみ.
-//            if (!HasDelta(material))
-//            {
-//                // 物体からのレイの入出を考慮した法線.
-//                float3 Nm = dot(N, -V) < 0.0f ? N : -N;
+#if 1
+        // Next Event Estimation.
+        {
+            // BSDFがデルタ関数を持たない場合のみ.
+            if (!HasDelta(material))
+            {
+                // 物体からのレイの入出を考慮した法線.
+                //float3 Nm = dot(N, -V) < 0.0f ? N : -N;
 
-//                // 光源をサンプリング.
-//                float lightWeight;
-//                float2 st = SampleMipMap(BackGround, float2(Random(seed), Random(seed)), lightWeight);
+                // 光源をサンプリング.
+                float lightWeight;
+                float2 st = SampleMipMap(BackGround, float2(Random(seed), Random(seed)), lightWeight);
 
-//                // 方向ベクトルに変換.
-//                float3 dir = -FromSphereMapCoord(st);
+                // 方向ベクトルに変換.
+                float3 dir = FromSphereMapCoord(st);
 
-//                if (!CastShadowRay(vertex.Position, geometryNormal, dir, FLT_MAX, instanceId, primitiveId))
-//                {
-//                    // シャドウレイを飛ばして，光源上のサンプリングとレイ原点の間に遮断が無い場合.
-//                    float cosShadow = dot(Nm, dir);
-//                    float cosLight  = 1.0f;
+                if (!CastShadowRay(vertex.Position, geometryNormal, dir, 1000.0f, instanceId, primitiveId))
+                {
+                    // シャドウレイを飛ばして，光源上のサンプリングとレイ原点の間に遮断が無い場合.
+                    float cosShadow = abs(dot(N, dir));
+                    float cosLight = 1.0f;
 
-//                    // BSDF.
-//                    float3 fs = SampleMaterial(V, Nm, dir, Random(seed), material);
+                    // BSDF.
+                    float3 fs = SampleMaterial(V, N, dir, Random(seed), ior, material);
 
-//                    // 幾何項.
-//                    float G = (cosShadow * cosLight);
+                    // 幾何項.
+                    float G = (cosShadow * cosLight);
 
-//                    // ライト.
-//#if FURNANCE_TEST
-//                    float3 Le = kFurnaceColor;
-//#else
-//                    float3 Le = SampleIBL(dir);
-//#endif
+                    // ライト.
+#if FURNANCE_TEST
+                    float3 Le = kFurnaceColor;
+#else
+                    float3 Le = SampleIBL(dir);
+#endif
+                    Lo += W * (fs * Le * G) * lightWeight;
+                }
+            }
+        }
+#else
+        // Next Event Estimation.
+        if (!HasDelta(material))
+        {
+            Light light;
+            float lightWeight;
+            if (SampleLightRIS(seed, vertex.Position, N, light, lightWeight))
+            {
+                float3 lightVector;
+                float lightDistance;
+                GetLightData(light, vertex.Position, lightVector, lightDistance);
 
-//                    Lo += W * (fs * Le * G) * lightWeight;
-//                }
-//            }
-//        }
-//#else
-//        // Next Event Estimation.
-//        if (!HasDelta(material))
-//        {
-//            Light light;
-//            float lightWeight;
-//            if (SampleLightRIS(seed, vertex.Position, N, light, lightWeight))
-//            {
-//                float3 lightVector;
-//                float lightDistance;
-//                GetLightData(light, vertex.Position, lightVector, lightDistance);
+                float3 dir = normalize(lightVector);
 
-//                float3 dir = normalize(lightVector);
+                if (!CastShadowRay(vertex.Position, geometryNormal, dir, lightDistance, instanceId, primitiveId))
+                {
+                    // BSDF.
+                    float3 fs = SampleMaterial(V, N, dir, Random(seed), ior, material);
 
-//                if (!CastShadowRay(vertex.Position, geometryNormal, dir, lightDistance, instanceId, primitiveId))
-//                {
-//                    // BSDF.
-//                    float3 fs = SampleMaterial(V, N, dir, Random(seed), ior, material);
+                    // Light
+                    float3 Le = GetLightIntensity(light, lightDistance);
 
-//                    // Light
-//                    float3 Le = GetLightIntensity(light, lightDistance);
-
-//                    Lo += W * fs * Le * lightWeight;
-//                }
-//            }
-//        }
-//#endif
+                    Lo += W * fs * Le * lightWeight;
+                }
+            }
+        }
+#endif
 
         // 最後のバウンスであれば早期終了(BRDFをサンプルしてもロジック的に反映されないため).
         if (bounce == MaxBounce - 1)

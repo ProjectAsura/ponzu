@@ -12,6 +12,7 @@
 #include <Math.hlsli>
 #include <BRDF.hlsli>
 #include <SceneParam.hlsli>
+#include <Samplers.hlsli>
 
 #define ENABLE_TEXTURED_MATERIAL    (0) // テクスチャ付きマテリアルを有効にする場合は 1.
 
@@ -158,7 +159,6 @@ RayTracingAS                    SceneAS     : register(t0);
 ByteAddressBuffer               Instances   : register(t1);
 StructuredBuffer<ResMaterial>   Materials   : register(t2);
 ByteAddressBuffer               Transforms  : register(t3);
-SamplerState                    LinearWrap  : register(s0);
 
 
 //-----------------------------------------------------------------------------
@@ -798,7 +798,9 @@ float2 SampleMipMap(Texture2D T, float2 u, out float weight) // weight = 1.0f / 
     // Load(x, y, mip) loads a texel (mip 0 is the largest power of two).
     int x = 0;
     int y = 0;
-    for (int mip=(int)mipLevels - 1; mip >=0; --mip)
+    int maxMip = (int)mipLevels - 1;
+    
+    for (int mip=maxMip; mip >=0; --mip)
     {
         x <<= 1;
         y <<= 1;
@@ -838,7 +840,7 @@ float2 SampleMipMap(Texture2D T, float2 u, out float weight) // weight = 1.0f / 
 
     // We have found a texel (x, y) with probability  proportional to 
     // its normalized value. Compute the PDF and return the coordinates.
-    float pdf = Load(T, x, y, 0) / Load(T, 0, 0, mipLevels - 1);
+    float pdf = Load(T, x, y, 0) / Load(T, 0, 0, maxMip);
     weight = SaturateFloat(1.0f / pdf);
     return float2((float)x / (float)width, (float)y / (float)height);
 }
