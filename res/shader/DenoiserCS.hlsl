@@ -35,6 +35,21 @@ cbuffer Parameter : register(b0)
     float2  Offset;
 };
 
+float KarisAntiFireflyWeight(float3 color)
+{ return 1.0f / (LuminanceBT709(color) + 4.0f); }
+
+//float CalcNormalWeight() 
+//{
+//}
+
+//float CalcDepthWeight()
+//{
+//}
+
+//float CalcRoughnessWeight()
+//{
+//}
+
 //-----------------------------------------------------------------------------
 //      現在ピクセルの周辺の 3x3 のガウスブラーの分散を求める.
 //-----------------------------------------------------------------------------
@@ -174,17 +189,17 @@ float4 BilateralFilter(float2 uv, float2 offset, float sqrtVarL)
 //-----------------------------------------------------------------------------
 //      メインエントリーポイントです.
 //-----------------------------------------------------------------------------
-[numthreads(THREAD_SIZE, THREAD_SIZE, 1)]
+[numthreads(8, 8, 1)]
 void main
 (
-    uint3 groupId       : SV_GroupID,
-    uint3 groupThreadId : SV_GroupThreadID
+    uint3 dispatchId : SV_DispatchThreadID,
+    uint  groupIndex : SV_GroupIndex
 )
 {
-    uint2 dispatchId = RemapThreadId(kThreadSize, DispatchArgs, 8, groupId.xy, groupThreadId.xy);
+    uint2 remappedId = RemapLane8x8(dispatchId.xy, groupIndex);
 
     // テクスチャ座標を求める.
-    float2 uv = (dispatchId.xy + 0.5f) * InvTargetSize;
+    float2 uv = (remappedId.xy + 0.5f) * InvTargetSize;
 
     // 3x3 のガウスの分散を求める.
     float var = ComputeVarianceCenter((int2)dispatchId);
@@ -196,5 +211,5 @@ void main
     if (Offset.y > 0.0f)
     { result.a = 1.0f; }
 
-    Output[dispatchId.xy] = result;
+    Output[remappedId.xy] = result;
 }

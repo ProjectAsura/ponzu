@@ -496,7 +496,7 @@ void OnGenerateRay()
             if (!HasDelta(material))
             {
                 // 物体からのレイの入出を考慮した法線.
-                //float3 Nm = dot(N, -V) < 0.0f ? N : -N;
+                float3 Nm = dot(N, V) < 0.0f ? N : -N;
 
                 // 光源をサンプリング.
                 float lightWeight;
@@ -508,11 +508,11 @@ void OnGenerateRay()
                 if (!CastShadowRay(vertex.Position, geometryNormal, dir, 1000.0f, instanceId, primitiveId))
                 {
                     // シャドウレイを飛ばして，光源上のサンプリングとレイ原点の間に遮断が無い場合.
-                    float cosShadow = abs(dot(N, dir));
+                    float cosShadow = abs(dot(Nm, dir));
                     float cosLight = 1.0f;
 
                     // BSDF.
-                    float3 fs = SampleMaterial(V, N, dir, Random(seed), ior, material);
+                    float3 fs = SampleMaterial(V, Nm, dir, Random(seed), ior, material);
 
                     // 幾何項.
                     float G = (cosShadow * cosLight);
@@ -523,7 +523,7 @@ void OnGenerateRay()
 #else
                     float3 Le = SampleIBL(dir);
 #endif
-                    Lo += W * (fs * Le * G) * lightWeight;
+                    Lo += W * (fs * Le * G) * lightWeight / (4.0f * F_PI);
                 }
             }
         }

@@ -737,7 +737,6 @@ float3 EvaluateMaterial
         float p = ProbabilityToSampleDiffuse(diffuseColor, specularColor);
 
         float3 diffuseScale  = (1.0f.xxx - specularColor);
-        float3 specularScale = (1.0f.xxx - diffuseColor);
 
         // Diffuse
         if (u.z < p)
@@ -775,7 +774,7 @@ float3 EvaluateMaterial
 
         dir = L;
 
-        return SaturateFloat(brdf) * specularScale;
+        return SaturateFloat(brdf);
     }
 }
 

@@ -103,6 +103,18 @@
     <FxCompile Include="..\res\shader\DebugPS.hlsl">
       <Filter>リソース ファイル</Filter>
     </FxCompile>
+    <FxCompile Include="..\res\shader\TemporalAccumulationCS.hlsl">
+      <Filter>リソース ファイル</Filter>
+    </FxCompile>
+    <FxCompile Include="..\res\shader\PreBlurCS.hlsl">
+      <Filter>リソース ファイル</Filter>
+    </FxCompile>
+    <FxCompile Include="..\res\shader\PostBlurCS.hlsl">
+      <Filter>リソース ファイル</Filter>
+    </FxCompile>
+    <FxCompile Include="..\res\shader\TemporalStabilizationCS.hlsl">
+      <Filter>リソース ファイル</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
@@ -113,6 +125,9 @@
       <Filter>リソース ファイル</Filter>
     </None>
     <None Include="..\res\shader\Reservoir.hlsli">
+      <Filter>リソース ファイル</Filter>
+    </None>
+    <None Include="..\res\shader\Denoiser.hlsli">
       <Filter>リソース ファイル</Filter>
     </None>
   </ItemGroup>
