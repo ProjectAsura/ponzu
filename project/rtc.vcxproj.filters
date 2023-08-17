@@ -106,13 +106,13 @@
     <FxCompile Include="..\res\shader\TemporalAccumulationCS.hlsl">
       <Filter>リソース ファイル</Filter>
     </FxCompile>
-    <FxCompile Include="..\res\shader\PreBlurCS.hlsl">
+    <FxCompile Include="..\res\shader\TemporalStabilizationCS.hlsl">
       <Filter>リソース ファイル</Filter>
     </FxCompile>
     <FxCompile Include="..\res\shader\PostBlurCS.hlsl">
       <Filter>リソース ファイル</Filter>
     </FxCompile>
-    <FxCompile Include="..\res\shader\TemporalStabilizationCS.hlsl">
+    <FxCompile Include="..\res\shader\PreBlurCS.hlsl">
       <Filter>リソース ファイル</Filter>
     </FxCompile>
   </ItemGroup>

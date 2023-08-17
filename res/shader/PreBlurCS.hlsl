@@ -24,12 +24,6 @@ cbuffer CbParam : register(b3)
 };
 
 //-----------------------------------------------------------------------------
-//      ファイアフライ除去の重みを求めます.
-//-----------------------------------------------------------------------------
-float KarisAntiFireflyWeight(float3 color, float exposure = 1.0f)
-{ return rcp(4.0f + LuminanceBT709(color) * exposure); }
-
-//-----------------------------------------------------------------------------
 //      メインエントリーポイントです.
 //-----------------------------------------------------------------------------
 [numthreads(8, 8, 1)]
@@ -39,7 +33,7 @@ void main
     uint  groupIndex : SV_GroupIndex
 )
 {
-    uint2 remappedId = RemapLane8x8(dispatchId, groupIndex);
+    uint2 remappedId = RemapLane8x8(dispatchId.xy, groupIndex);
 
     // スクリーン外なら処理しない.
     if (any(remappedId >= ScreenSize))
@@ -49,7 +43,7 @@ void main
 
     float4 c0 = InputBuffer.SampleLevel(LinearClamp, uv - float2(0.5f, 0.0f) * InvScreenSize, 0.0f);
     float4 c1 = InputBuffer.SampleLevel(LinearClamp, uv + float2(0.5f, 0.0f) * InvScreenSize, 0.0f);
-    float4 c2 = InputBuffer.SampleLevel(LienarClamp, uv - float2(0.0f, 0.5f) * InvScreenSize, 0.0f);
+    float4 c2 = InputBuffer.SampleLevel(LinearClamp, uv - float2(0.0f, 0.5f) * InvScreenSize, 0.0f);
     float4 c3 = InputBuffer.SampleLevel(LinearClamp, uv + float2(0.0f, 0.5f) * InvScreenSize, 0.0f);
 
     float4 result = 0.0f.xxxx;
