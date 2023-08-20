@@ -130,5 +130,8 @@
     <None Include="..\res\shader\Denoiser.hlsli">
       <Filter>リソース ファイル</Filter>
     </None>
+    <None Include="..\res\shader\DenoiseBlur.hlsli">
+      <Filter>リソース ファイル</Filter>
+    </None>
   </ItemGroup>
 </Project>

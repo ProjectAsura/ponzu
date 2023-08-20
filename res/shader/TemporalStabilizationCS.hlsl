@@ -36,44 +36,6 @@ float4 GetHistoryColor(float2 uv)
 { return BicubicSampleCatmullRom(HistoryColorMap, LinearClamp, uv, ScreenSize); }
 
 //-----------------------------------------------------------------------------
-//      速度ベクトルを取得します.
-//-----------------------------------------------------------------------------
-float2 GetVelocity(float2 uv)
-{
-    float2 result = VelocityMap.SampleLevel(PointClamp, uv, 0.0f);
-    float  currLengthSq = dot(result, result);
-
-    // 最も長い速度ベクトルを取得.
-    [unroll] for(uint i=0; i<8; ++i)
-    {
-        float2 velocity = VelocityMap.SampleLevel(PointClamp, uv, 0.0f, kOffsets[i]);
-        float  lengthSq = dot(velocity, velocity);
-        if (lengthSq > currLengthSq)
-        {
-            result       = velocity;
-            currLengthSq = lengthSq;
-        }
-    }
-
-    return result;
-}
-
-//-----------------------------------------------------------------------------
-//      隣接ピクセルを考慮した現在カラーを取得します.
-//-----------------------------------------------------------------------------
-float4 GetCurrentNeighborColor(float2 uv, float4 currentColor)
-{
-    const float centerWeight = 4.0f;
-    float4 accColor = currentColor * centerWeight;
-    [unroll] 
-    for(uint i=0; i<4; ++i)
-    { accColor += CurrColorMap.SampleLevel(PointClamp, uv, 0.0f, kOffsets[i]); }
-    const float kInvWeight = 1.0f / (4.0f + centerWeight);
-    accColor *= kInvWeight;
-    return accColor;
-}
-
-//-----------------------------------------------------------------------------
 //      メインエントリーポイントです.
 //-----------------------------------------------------------------------------
 [numthreads(8, 8, 1)]
@@ -95,7 +57,7 @@ void main
     const float kSizeScale = ScreenSize.x / 1920.0f;
 
     // 速度ベクトルを取得.
-    float2 velocity = GetVelocity(currUV);
+    float2 velocity = GetVelocity(VelocityMap, LinearClamp, currUV);
     float  velocityDelta = saturate(1.0f - length(velocity)) / (kFrameVelocityInPixelsDiff * kSizeScale);
     
     // 前フレームのテクスチャ座標を計算.
@@ -108,7 +70,7 @@ void main
     bool isValidHistory = (velocityDelta * inScreen) > 0.0f;
     if (!isValidHistory)
     {
-        float4 neighborColor = GetCurrentNeighborColor(currUV, currColor);
+        float4 neighborColor = GetCurrentNeighborColor(CurrColorMap, PointClamp, currUV, currColor);
         OutColorMap[remappedId] = neighborColor;
         return;
     }
