@@ -55,6 +55,7 @@ static const float3 kFurnaceColor = float3(0.5f, 0.5f, 0.5f);
 // Resources
 //-----------------------------------------------------------------------------
 RWTexture2D<float4>     Canvas      : register(u0);
+RWTexture2D<float>      HitDistance : register(u1);
 Texture2D<float4>       BackGround  : register(t4);
 StructuredBuffer<Light> Lights      : register(t5);
 
@@ -435,8 +436,11 @@ void OnGenerateRay()
     uint  instanceId  = INVALID_ID;
     uint  primitiveId = INVALID_ID;
     float ior         = 1.0f;       // 空気中.
-    
+
     const int MaxBounce = (int)SceneParam.MaxBounce;
+
+    float  hitDistance  = 0.0f;
+    float3 prevPosition = 0.0f.xxx;
 
     [loop]
     for(int bounce=0; bounce<MaxBounce; ++bounce)
@@ -485,6 +489,11 @@ void OnGenerateRay()
 
         if (dot(geometryNormal, V) < 0.0f)
         { geometryNormal = -geometryNormal; }
+        
+        if (bounce == 0)
+        { prevPosition = vertex.Position; }
+        else if (bounce == 1)
+        { hitDistance = distance(vertex.Position, prevPosition); }
 
         // 自己発光による放射輝度.
         Lo += W * material.Emissive;
@@ -594,7 +603,9 @@ void OnGenerateRay()
     float3 prevLo = Canvas[launchId].rgb;
     float3 color  = (SceneParam.EnableAccumulation) ? (prevLo + Lo) : Lo;
 
+    // 計算結果を出力.
     Canvas[launchId] = float4(color, 1.0f);
+    HitDistance[launchId] = hitDistance;
 }
 #endif
 

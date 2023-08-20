@@ -39,7 +39,11 @@ namespace {
 #include "../res/shader/Compile/ModelVS.inc"
 #include "../res/shader/Compile/ModelPS.inc"
 #include "../res/shader/Compile/DebugPS.inc"
+#include "../res/shader/Compile/PreBlurCS.inc"
+#include "../res/shader/Compile/TemporalAccumulationCS.inc"
 #include "../res/shader/Compile/DenoiserCS.inc"
+#include "../res/shader/Compile/TemporalStabilizationCS.inc"
+#include "../res/shader/Compile/PostBlurCS.inc"
 #include "../asdx12/res/shaders/Compiled/TaaCS.inc"
 #include "../asdx12/res/shaders/Compiled/CopyPS.inc"
 
@@ -718,12 +722,13 @@ bool Renderer::SystemSetup()
     {
         auto cs = D3D12_SHADER_VISIBILITY_ALL;
 
-        D3D12_DESCRIPTOR_RANGE ranges[3] = {};
+        D3D12_DESCRIPTOR_RANGE ranges[4] = {};
         asdx::InitRangeAsUAV(ranges[0], 0);
         asdx::InitRangeAsSRV(ranges[1], 4);
         asdx::InitRangeAsSRV(ranges[2], 5);
+        asdx::InitRangeAsUAV(ranges[3], 1);
 
-        D3D12_ROOT_PARAMETER params[8] = {};
+        D3D12_ROOT_PARAMETER params[9] = {};
         asdx::InitAsTable(params[0], 1, &ranges[0], cs);
         asdx::InitAsSRV  (params[1], 0, cs);
         asdx::InitAsSRV  (params[2], 1, cs);
@@ -732,6 +737,7 @@ bool Renderer::SystemSetup()
         asdx::InitAsTable(params[5], 1, &ranges[1], cs);
         asdx::InitAsCBV  (params[6], 0, cs);
         asdx::InitAsTable(params[7], 1, &ranges[2], cs);
+        asdx::InitAsTable(params[8], 1, &ranges[3], cs);
 
         D3D12_ROOT_SIGNATURE_DESC desc = {};
         desc.pParameters        = params;
@@ -957,6 +963,152 @@ bool Renderer::SystemSetup()
         m_Depth.SetName(L"DepthBuffer");
     }
 
+    // ヒット距離ターゲット生成.
+    {
+        asdx::TargetDesc desc;
+        desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        desc.Width              = m_SceneDesc.Width;
+        desc.Height             = m_SceneDesc.Height;
+        desc.DepthOrArraySize   = 1;
+        desc.MipLevels          = 1;
+        desc.Format             = DXGI_FORMAT_R32_FLOAT;
+        desc.SampleDesc.Count   = 1;
+        desc.SampleDesc.Quality = 0;
+        desc.InitState          = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+        desc.ClearColor[0]      = 0.0f;
+        desc.ClearColor[1]      = 0.0f;
+        desc.ClearColor[2]      = 0.0f;
+        desc.ClearColor[3]      = 0.0f;
+
+        if (!m_HitDistanceTarget.Init(&desc))
+        {
+            ELOGA("Error : Hit Distance Buffer Init Failed.");
+            return false;
+        }
+
+        m_HitDistanceTarget.SetName(L"HitDistanceBuffer");
+    }
+
+    // アキュムレーションカウントターゲット生成.
+    {
+        asdx::TargetDesc desc;
+        desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        desc.Width              = m_SceneDesc.Width;
+        desc.Height             = m_SceneDesc.Height;
+        desc.DepthOrArraySize   = 1;
+        desc.MipLevels          = 1;
+        desc.Format             = DXGI_FORMAT_R8_UINT;
+        desc.SampleDesc.Count   = 1;
+        desc.SampleDesc.Quality = 0;
+        desc.InitState          = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+        desc.ClearColor[0]      = 0.0f;
+        desc.ClearColor[1]      = 0.0f;
+        desc.ClearColor[2]      = 0.0f;
+        desc.ClearColor[3]      = 0.0f;
+
+        for(auto i=0; i<2; ++i)
+        {
+            if (!m_AccumulationCountHistory[i].Init(&desc))
+            {
+                ELOGA("Error : Accumulation Count History Init Failed.");
+                return false;
+            }
+        }
+
+        m_AccumulationCountHistory[0].SetName(L"AccumulationCount0");
+        m_AccumulationCountHistory[1].SetName(L"AccumulationCount1");
+    }
+
+    // アキュムレーションカラーターゲット生成.
+    {
+        asdx::TargetDesc desc;
+        desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        desc.Width              = m_SceneDesc.Width;
+        desc.Height             = m_SceneDesc.Height;
+        desc.DepthOrArraySize   = 1;
+        desc.MipLevels          = 1;
+        desc.Format             = DXGI_FORMAT_R32G32B32A32_FLOAT;
+        desc.SampleDesc.Count   = 1;
+        desc.SampleDesc.Quality = 0;
+        desc.InitState          = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+        desc.ClearColor[0]      = 0.0f;
+        desc.ClearColor[1]      = 0.0f;
+        desc.ClearColor[2]      = 0.0f;
+        desc.ClearColor[3]      = 0.0f;
+
+        for(auto i=0; i<2; ++i)
+        {
+            if (!m_AccumulationColorHistory[i].Init(&desc))
+            {
+                ELOGA("Error : Accumulation Color History Init Failed.");
+                return false;
+            }
+        }
+
+        m_AccumulationColorHistory[0].SetName(L"AccumulationColor0");
+        m_AccumulationColorHistory[1].SetName(L"AccumulationColor1");
+    }
+
+    // スタビライゼーションカラーターゲット生成.
+    {
+        asdx::TargetDesc desc;
+        desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        desc.Width              = m_SceneDesc.Width;
+        desc.Height             = m_SceneDesc.Height;
+        desc.DepthOrArraySize   = 1;
+        desc.MipLevels          = 1;
+        desc.Format             = DXGI_FORMAT_R32G32B32A32_FLOAT;
+        desc.SampleDesc.Count   = 1;
+        desc.SampleDesc.Quality = 0;
+        desc.InitState          = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+        desc.ClearColor[0]      = 0.0f;
+        desc.ClearColor[1]      = 0.0f;
+        desc.ClearColor[2]      = 0.0f;
+        desc.ClearColor[3]      = 0.0f;
+
+        for(auto i=0; i<2; ++i)
+        {
+            if (!m_StabilizationColorHistory[i].Init(&desc))
+            {
+                ELOGA("Error : Stabilization Color History Init Failed.");
+                return false;
+            }
+        }
+
+        m_StabilizationColorHistory[0].SetName(L"StabilizationColor0");
+        m_StabilizationColorHistory[1].SetName(L"StabilizationColor1");
+    }
+
+    // ブラーターゲット生成.
+    {
+        asdx::TargetDesc desc;
+        desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        desc.Width              = m_SceneDesc.Width;
+        desc.Height             = m_SceneDesc.Height;
+        desc.DepthOrArraySize   = 1;
+        desc.MipLevels          = 1;
+        desc.Format             = DXGI_FORMAT_R32G32B32A32_FLOAT;
+        desc.SampleDesc.Count   = 1;
+        desc.SampleDesc.Quality = 0;
+        desc.InitState          = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+        desc.ClearColor[0]      = 0.0f;
+        desc.ClearColor[1]      = 0.0f;
+        desc.ClearColor[2]      = 0.0f;
+        desc.ClearColor[3]      = 0.0f;
+
+        if (!m_BlurTarget0.Init(&desc))
+        {
+            ELOGA("Error : BlurTarget Init Failed.");
+            return false;
+        }
+
+        if (!m_BlurTarget1.Init(&desc))
+        {
+            ELOGA("Error : BlurTarget Init Failed.");
+            return false;
+        }
+    }
+
     // G-Buffer ルートシグニチャ生成.
     {
         auto vs    = D3D12_SHADER_VISIBILITY_VERTEX;
@@ -1072,6 +1224,110 @@ bool Renderer::SystemSetup()
         if (!m_TaaParam.Init(size))
         {
             ELOGA("Error : Taa Constant Buffer Init Failed.");
+            return false;
+        }
+    }
+
+    // デノイザー用ルートシグニチャ生成.
+    {
+        auto cs = D3D12_SHADER_VISIBILITY_ALL;
+
+        D3D12_DESCRIPTOR_RANGE ranges[7] = {};
+        asdx::InitRangeAsSRV(ranges[0], 0);
+        asdx::InitRangeAsSRV(ranges[1], 1);
+        asdx::InitRangeAsSRV(ranges[2], 2);
+        asdx::InitRangeAsSRV(ranges[3], 3);
+        asdx::InitRangeAsSRV(ranges[4], 4);
+        asdx::InitRangeAsUAV(ranges[5], 0);
+        asdx::InitRangeAsUAV(ranges[6], 1);
+
+        D3D12_ROOT_PARAMETER params[8] = {};
+        asdx::InitAsCBV  (params[0], 0, cs);
+        asdx::InitAsTable(params[1], 1, &ranges[0], cs);
+        asdx::InitAsTable(params[2], 1, &ranges[1], cs);
+        asdx::InitAsTable(params[3], 1, &ranges[2], cs);
+        asdx::InitAsTable(params[4], 1, &ranges[3], cs);
+        asdx::InitAsTable(params[5], 1, &ranges[4], cs);
+        asdx::InitAsTable(params[6], 1, &ranges[5], cs);
+        asdx::InitAsTable(params[7], 1, &ranges[6], cs);
+
+        auto flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
+
+        D3D12_ROOT_SIGNATURE_DESC desc = {};
+        desc.pParameters        = params;
+        desc.NumParameters      = _countof(params);
+        desc.pStaticSamplers    = asdx::GetStaticSamplers();
+        desc.NumStaticSamplers  = asdx::GetStaticSamplerCounts();
+        desc.Flags              = flags;
+
+        if (!asdx::InitRootSignature(pDevice, &desc, m_DenoiserRootSig.GetAddress()))
+        {
+            ELOG("Error : Denoiser Signature Init Failed.");
+            return false;
+        }
+    }
+
+    // プレブラー用パイプラインステート.
+    {
+        D3D12_COMPUTE_PIPELINE_STATE_DESC desc = {};
+        desc.pRootSignature = m_DenoiserRootSig.GetPtr();
+        desc.CS             = { PreBlurCS, sizeof(PreBlurCS) };
+
+        if (!m_PreBlurPipe.Init(pDevice, &desc))
+        {
+            ELOGA("Error : PreBlur Pipe Init Failed.");
+            return false;
+        }
+    }
+
+    // テンポラルアキュムレーション用パイプラインステート.
+    {
+        D3D12_COMPUTE_PIPELINE_STATE_DESC desc = {};
+        desc.pRootSignature = m_DenoiserRootSig.GetPtr();
+        desc.CS             = { TemporalAccumulationCS, sizeof(TemporalAccumulationCS) };
+
+        if (!m_TemporalAccumulationPipe.Init(pDevice, &desc))
+        {
+            ELOGA("Error : TemporalAccumulation Pipe Init Failed.");
+            return false;
+        }
+    }
+
+    // デノイズブラー用パイプラインステート.
+    {
+        D3D12_COMPUTE_PIPELINE_STATE_DESC desc = {};
+        desc.pRootSignature = m_DenoiserRootSig.GetPtr();
+        desc.CS             = { DenoiserCS, sizeof(DenoiserCS) };
+
+        if (!m_DenoiserPipe.Init(pDevice, &desc))
+        {
+            ELOGA("Error : Denoiser Pipe Init Failed.");
+            return false;
+        }
+    }
+
+    // テンポラルスタビライゼーション用パイプラインステート.
+    {
+        D3D12_COMPUTE_PIPELINE_STATE_DESC desc = {};
+        desc.pRootSignature = m_DenoiserRootSig.GetPtr();
+        desc.CS             = { TemporalStabilizationCS, sizeof(TemporalStabilizationCS) };
+
+        if (!m_TemporalStabilizationPipe.Init(pDevice, &desc))
+        {
+            ELOGA("Error : TemporalStabilization Pipe Init Failed.");
+            return false;
+        }
+    }
+
+    // ポストブラー用パイプラインステート.
+    {
+        D3D12_COMPUTE_PIPELINE_STATE_DESC desc = {};
+        desc.pRootSignature = m_DenoiserRootSig.GetPtr();
+        desc.CS             = { PostBlurCS, sizeof(PostBlurCS) };
+
+        if (!m_PostBlurPipe.Init(pDevice, &desc))
+        {
+            ELOGA("Error : PostBlur Pipe Init Failed.");
             return false;
         }
     }
@@ -1409,16 +1665,22 @@ void Renderer::OnTerm()
 
         for(auto i=0; i<2; ++i)
         {
-            m_ColorHistory[i].Term();
+            m_ColorHistory[i]               .Term();
+            m_AccumulationColorHistory [i]  .Term();
+            m_AccumulationCountHistory [i]  .Term();
+            m_StabilizationColorHistory[i]  .Term();
         }
 
-        m_Tonemapped.Term();
-        m_Depth     .Term();
-        m_Velocity  .Term();
-        m_Roughness .Term();
-        m_Normal    .Term();
-        m_Albedo    .Term();
-        m_Radiance  .Term();
+        m_BlurTarget0       .Term();
+        m_BlurTarget1       .Term();
+        m_HitDistanceTarget .Term();
+        m_Tonemapped        .Term();
+        m_Depth             .Term();
+        m_Velocity          .Term();
+        m_Roughness         .Term();
+        m_Normal            .Term();
+        m_Albedo            .Term();
+        m_Radiance          .Term();
     }
 
     // 出力データ関連.
@@ -1438,6 +1700,12 @@ void Renderer::OnTerm()
 
     // パイプライン関連.
     {
+        m_PostBlurPipe              .Term();
+        m_TemporalStabilizationPipe .Term();
+        m_DenoiserPipe              .Term();
+        m_TemporalAccumulationPipe  .Term();
+        m_PreBlurPipe               .Term();
+
         m_CopyPipe   .Term();
         m_TaaPipe    .Term();
         m_TonemapPipe.Term();
@@ -1447,11 +1715,12 @@ void Renderer::OnTerm()
 
     // ルートシグニチャ関連.
     {
-        m_CopyRootSig   .Reset();
-        m_TaaRootSig    .Reset();
-        m_TonemapRootSig.Reset();
-        m_RtRootSig     .Reset();
-        m_ModelRootSig  .Reset();
+        m_DenoiserRootSig   .Reset();
+        m_CopyRootSig       .Reset();
+        m_TaaRootSig        .Reset();
+        m_TonemapRootSig    .Reset();
+        m_RtRootSig         .Reset();
+        m_ModelRootSig      .Reset();
     }
  
     timer.End();
@@ -1754,6 +2023,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         pCmd->SetComputeRootDescriptorTable(5, m_Scene.GetIBL()->GetHandleGPU());
         pCmd->SetComputeRootConstantBufferView(6, m_SceneParam.GetResource()->GetGPUVirtualAddress());
         pCmd->SetComputeRootDescriptorTable(7, m_Scene.GetLB()->GetHandleGPU());
+        pCmd->SetComputeRootDescriptorTable(8, m_HitDistanceTarget.GetUAV()->GetHandleGPU());
 
         DispatchRays(pCmd);
 
@@ -1763,8 +2033,34 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
     auto threadX = (m_SceneDesc.Width  + 7) / 8;
     auto threadY = (m_SceneDesc.Height + 7) / 8;
 
-    // デノイザー実行.
+    // プレブラー処理.
     {
+        // Output : BlurTarget0
+    }
+
+    // テンポラルアキュムレーション処理.
+    {
+        // Output : AccumulationCount
+        //          AccumulationColor
+    }
+
+    // Mip Generation and History Fix.
+    {
+    }
+
+    // ブラー処理.
+    {
+        // Output : BlurTarget1
+    }
+
+    // ポストブラー処理.
+    {
+        // Output : BlurTarget0
+    }
+
+    // テンポラルスタビライゼーション処理.
+    {
+        // Output: StabilizationColor
     }
 
     // トーンマップ実行.
@@ -2290,6 +2586,71 @@ void Renderer::OnUpdate
 
         CheckModify(relativePath, m_TonemapShaderFlags, paths, _countof(paths));
     }
+
+    {
+        const char* paths[] = {
+            "Math.hlsli",
+            "BRDF.hlsli",
+            "TextureUtil.hlsli",
+            "Denoiser.hlsli",
+            "DenoiserBlur.hlsli",
+            "PreBlurCS.hlsl"
+        };
+
+        CheckModify(relativePath, m_PreBlurShaderFlags, paths, _countof(paths));
+    }
+
+    {
+        const char* paths[] = {
+            "Math.hlsli",
+            "BRDF.hlsli",
+            "TextureUtil.hlsli",
+            "Denoiser.hlsli",
+            "TemporalAccumulationCS.hlsl",
+        };
+
+        CheckModify(relativePath, m_TemporalAccumulationShaderFlags, paths, _countof(paths));
+    }
+
+    // デノイザーシェーダ.
+    {
+        const char* paths[] = {
+            "Math.hlsli",
+            "BRDF.hlsli",
+            "TextureUtil.hlsli",
+            "Denoiser.hlsli",
+            "DenoiserBlur.hlsli",
+            "DenoiserCS.hlsl",
+        };
+
+        CheckModify(relativePath, m_DenoiserShaderFlags, paths, _countof(paths));
+    }
+
+    {
+        const char* paths[] = {
+            "Math.hlsli",
+            "BRDF.hlsli",
+            "TextureUtil.hlsli",
+            "Denoiser.hlsli",
+            "DenoiserBlur.hlsli",
+            "TemporalStabilizationCS.hlsl",
+        };
+
+        CheckModify(relativePath, m_TemporalStabilizationShaderFlags, paths, _countof(paths));
+    }
+
+    {
+        const char* paths[] = {
+            "Math.hlsli",
+            "BRDF.hlsli",
+            "TextureUtil.hlsli",
+            "Denoiser.hlsli",
+            "DenoiserBlur.hlsli",
+            "PostBlurCS.hlsl",
+        };
+
+        CheckModify(relativePath, m_PostBlurShaderFlags, paths, _countof(paths));
+    }
 }
 
 //-----------------------------------------------------------------------------
@@ -2329,6 +2690,117 @@ void Renderer::ReloadShader()
 
         // コンパイル要求フラグを下げる.
         m_RtShaderFlags.Set(REQUEST_BIT_INDEX, false);
+    }
+
+    if (m_PreBlurShaderFlags.Get(REQUEST_BIT_INDEX))
+    {
+        asdx::RefPtr<asdx::IBlob> blob;
+        if (CompileShader(L"../res/shader/PreBlurCS.hlsl", "main", "cs_6_6", blob.GetAddress()))
+        {
+            m_PreBlurShaderFlags.Set(RELOADED_BIT_INDEX, false);
+
+            m_PreBlurPipe.ReplaceShader(
+                asdx::SHADER_TYPE_CS,
+                blob->GetBufferPointer(),
+                blob->GetBufferSize());
+            m_PreBlurPipe.Rebuild();
+
+            m_PreBlurShaderFlags.Set(RELOADED_BIT_INDEX, true);
+            successCount++;
+        }
+        else
+        {
+            failedCount++;
+        }
+        m_PreBlurShaderFlags.Set(REQUEST_BIT_INDEX, false);
+    }
+
+    if (m_TemporalAccumulationShaderFlags.Get(REQUEST_BIT_INDEX))
+    {
+        asdx::RefPtr<asdx::IBlob> blob;
+        if (CompileShader(L"../res/shader/TemporalAccumulationCS.hlsl", "main", "cs_6_6", blob.GetAddress()))
+        {
+            m_TemporalAccumulationShaderFlags.Set(RELOADED_BIT_INDEX, false);
+
+            m_TemporalAccumulationPipe.ReplaceShader(
+                asdx::SHADER_TYPE_CS,
+                blob->GetBufferPointer(),
+                blob->GetBufferSize());
+            m_TemporalAccumulationPipe.Rebuild();
+
+            m_TemporalAccumulationShaderFlags.Set(RELOADED_BIT_INDEX, true);
+            successCount++;
+        }
+        else
+        {
+            failedCount++;
+        }
+    }
+
+    if (m_DenoiserShaderFlags.Get(REQUEST_BIT_INDEX))
+    {
+        asdx::RefPtr<asdx::IBlob> blob;
+        if (CompileShader(L"../res/shader/DenoiserCS.hlsl", "main", "cs_6_6", blob.GetAddress()))
+        {
+            m_DenoiserShaderFlags.Set(RELOADED_BIT_INDEX, false);
+
+            m_DenoiserPipe.ReplaceShader(
+                asdx::SHADER_TYPE_CS,
+                blob->GetBufferPointer(),
+                blob->GetBufferSize());
+            m_DenoiserPipe.Rebuild();
+
+            m_DenoiserShaderFlags.Set(RELOADED_BIT_INDEX, true);
+            successCount++;
+        }
+        else
+        {
+            failedCount++;
+        }
+    }
+
+    if (m_TemporalStabilizationShaderFlags.Get(REQUEST_BIT_INDEX))
+    {
+        asdx::RefPtr<asdx::IBlob> blob;
+        if (CompileShader(L"../res/shader/TemporalStabilizationCS.hlsl", "main", "cs_6_6", blob.GetAddress()))
+        {
+            m_TemporalStabilizationShaderFlags.Set(RELOADED_BIT_INDEX, false);
+
+            m_TemporalAccumulationPipe.ReplaceShader(
+                asdx::SHADER_TYPE_CS,
+                blob->GetBufferPointer(),
+                blob->GetBufferSize());
+            m_TemporalAccumulationPipe.Rebuild();
+
+            m_TemporalAccumulationShaderFlags.Set(RELOADED_BIT_INDEX, true);
+            successCount++;
+        }
+        else
+        {
+            failedCount++;
+        }
+    }
+
+    if (m_PostBlurShaderFlags.Get(REQUEST_BIT_INDEX))
+    {
+        asdx::RefPtr<asdx::IBlob> blob;
+        if (CompileShader(L"../res/shader/PostBlurCS.hlsl", "main", "cs_6_6", blob.GetAddress()))
+        {
+            m_PostBlurShaderFlags.Set(RELOADED_BIT_INDEX, false);
+
+            m_PostBlurPipe.ReplaceShader(
+                asdx::SHADER_TYPE_CS,
+                blob->GetBufferPointer(),
+                blob->GetBufferSize());
+            m_PostBlurPipe.Rebuild();
+
+            m_PostBlurShaderFlags.Set(RELOADED_BIT_INDEX, true);
+            successCount++;
+        }
+        else
+        {
+            failedCount++;
+        }
     }
 
     if (m_TonemapShaderFlags.Get(REQUEST_BIT_INDEX))

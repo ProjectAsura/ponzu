@@ -117,25 +117,37 @@ private:
     asdx::RefPtr<ID3D12RootSignature>   m_TonemapRootSig;
     asdx::RefPtr<ID3D12RootSignature>   m_TaaRootSig;
     asdx::RefPtr<ID3D12RootSignature>   m_CopyRootSig;
+    asdx::RefPtr<ID3D12RootSignature>   m_DenoiserRootSig;
 
     RayTracingPipe                  m_RtPipe;
     asdx::PipelineState             m_ModelPipe;
     asdx::PipelineState             m_TonemapPipe;
     asdx::PipelineState             m_TaaPipe;
     asdx::PipelineState             m_CopyPipe;
+    asdx::PipelineState             m_PreBlurPipe;
+    asdx::PipelineState             m_TemporalAccumulationPipe;
+    asdx::PipelineState             m_DenoiserPipe;
+    asdx::PipelineState             m_TemporalStabilizationPipe;
+    asdx::PipelineState             m_PostBlurPipe;
 
     asdx::ConstantBuffer            m_SceneParam;
     asdx::ConstantBuffer            m_TaaParam;
 
-    asdx::ComputeTarget             m_Radiance;         // 放射輝度.
-    asdx::ColorTarget               m_Albedo;           // G-Buffer アルベド.
-    asdx::ColorTarget               m_Normal;           // G-Buffer 法線.
-    asdx::ColorTarget               m_Roughness;        // G-Buffer ラフネス.
-    asdx::ColorTarget               m_Velocity;         // G-Buffer 速度.
-    asdx::DepthTarget               m_Depth;            // 深度.
-    asdx::ComputeTarget             m_Tonemapped;       // トーンマップ適用済み.
-    asdx::ComputeTarget             m_ColorHistory[2];  // カラーヒストリーバッファ.
-    asdx::ComputeTarget             m_CaptureTarget;    // キャプチャー用.
+    asdx::ComputeTarget             m_Radiance;                     // 放射輝度.
+    asdx::ColorTarget               m_Albedo;                       // G-Buffer アルベド.
+    asdx::ColorTarget               m_Normal;                       // G-Buffer 法線.
+    asdx::ColorTarget               m_Roughness;                    // G-Buffer ラフネス.
+    asdx::ColorTarget               m_Velocity;                     // G-Buffer 速度.
+    asdx::DepthTarget               m_Depth;                        // 深度.
+    asdx::ComputeTarget             m_Tonemapped;                   // トーンマップ適用済み.
+    asdx::ComputeTarget             m_ColorHistory[2];              // カラーヒストリーバッファ.
+    asdx::ComputeTarget             m_CaptureTarget;                // キャプチャー用.
+    asdx::ComputeTarget             m_HitDistanceTarget;            // プライマリーヒットからセカンダリ―ヒットまでの距離.
+    asdx::ComputeTarget             m_AccumulationCountHistory[2];  // アキュムレーション数ヒストリー.
+    asdx::ComputeTarget             m_AccumulationColorHistory[2];  // アキュムレーションカラーヒストリー.
+    asdx::ComputeTarget             m_StabilizationColorHistory[2]; // スタビライゼーションカラーヒストリー.
+    asdx::ComputeTarget             m_BlurTarget0;                  // ブラーターゲット0
+    asdx::ComputeTarget             m_BlurTarget1;                  // ブラーターゲット1.
 
     Scene                           m_Scene;
     asdx::Camera                    m_Camera;
@@ -145,9 +157,9 @@ private:
     std::vector<ExportData>         m_ExportData;
     size_t                          m_ExportIndex   = 0;
     uint32_t                        m_CaptureIndex  = 0;
-    uint32_t                        m_ReadBackTargetIndex = 2;
-    uint32_t                        m_CaptureTargetIndex = 0;
-    uint32_t                        m_AccumulatedFrames = 0;
+    uint32_t                        m_ReadBackTargetIndex   = 2;
+    uint32_t                        m_CaptureTargetIndex    = 0;
+    uint32_t                        m_AccumulatedFrames     = 0;
 
     double                          m_AnimationOneFrameTime = 0;
     double                          m_AnimationElapsedTime  = 0;
@@ -199,6 +211,11 @@ private:
 
     asdx::BitFlags8                 m_RtShaderFlags;
     asdx::BitFlags8                 m_TonemapShaderFlags;
+    asdx::BitFlags8                 m_PreBlurShaderFlags;
+    asdx::BitFlags8                 m_TemporalAccumulationShaderFlags;
+    asdx::BitFlags8                 m_DenoiserShaderFlags;
+    asdx::BitFlags8                 m_TemporalStabilizationShaderFlags;
+    asdx::BitFlags8                 m_PostBlurShaderFlags;
     int                             m_ReloadShaderState = 0;
     float                           m_ReloadShaderDisplaySec = 0;
 #endif
