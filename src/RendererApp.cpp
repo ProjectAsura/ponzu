@@ -115,6 +115,19 @@ static const char* kBufferKindItems[] = {
 };
 #endif
 
+enum DENOISER_PARAM
+{
+    DENOISER_PARAM_CBV0,
+    DENOISER_PARAM_CBV1,
+    DENOISER_PARAM_SRV0,
+    DENOISER_PARAM_SRV1,
+    DENOISER_PARAM_SRV2,
+    DENOISER_PARAM_SRV3,
+    DENOISER_PARAM_SRV4,
+    DENOISER_PARAM_UAV0,
+    DENOISER_PARAM_UAV1,
+};
+
 ///////////////////////////////////////////////////////////////////////////////
 // Payload structure
 ///////////////////////////////////////////////////////////////////////////////
@@ -213,12 +226,24 @@ struct ShadeParam
 ///////////////////////////////////////////////////////////////////////////////
 struct DenoiseParam
 {
-    uint32_t DispathArgsX;
-    uint32_t DispathArgsY;
-    float    InvTargetSizeX;
-    float    InvTargetSizeY;
-    float    OffsetX;
-    float    OffsetY;
+    uint32_t        ScreenWidth;
+    uint32_t        ScreenHeight;
+    float           MinRectDimMulUnproject;
+    float           PlaneDistSensitivity;
+    float           OrthoMode;
+    float           LobeAngleFraction;
+    float           RoughnessFraction;
+    float           Unproject;
+    float           BlurRadius;
+    asdx::Vector2   InvScreenSize;
+    float           Reserved;
+    asdx::Vector4   Rotator;
+    asdx::Matrix    Proj;
+    asdx::Matrix    View;
+    float           NearClip;
+    float           FarClip;
+    asdx::Vector2   UVToViewParam;
+    asdx::Vector4   HitDistanceParams;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -980,13 +1005,13 @@ bool Renderer::SystemSetup()
         desc.ClearColor[2]      = 0.0f;
         desc.ClearColor[3]      = 0.0f;
 
-        if (!m_HitDistanceTarget.Init(&desc))
+        if (!m_HitDistance.Init(&desc))
         {
             ELOGA("Error : Hit Distance Buffer Init Failed.");
             return false;
         }
 
-        m_HitDistanceTarget.SetName(L"HitDistanceBuffer");
+        m_HitDistance.SetName(L"HitDistanceBuffer");
     }
 
     // アキュムレーションカウントターゲット生成.
@@ -1006,17 +1031,13 @@ bool Renderer::SystemSetup()
         desc.ClearColor[2]      = 0.0f;
         desc.ClearColor[3]      = 0.0f;
 
-        for(auto i=0; i<2; ++i)
+        if (!m_AccumulationCount.Init(&desc))
         {
-            if (!m_AccumulationCountHistory[i].Init(&desc))
-            {
-                ELOGA("Error : Accumulation Count History Init Failed.");
-                return false;
-            }
+            ELOG("Error : Accumulation Count Init Failed.");
+            return false;
         }
 
-        m_AccumulationCountHistory[0].SetName(L"AccumulationCount0");
-        m_AccumulationCountHistory[1].SetName(L"AccumulationCount1");
+        m_AccumulationCount.SetName(L"AccumulationCount");
     }
 
     // アキュムレーションカラーターゲット生成.
@@ -1241,15 +1262,16 @@ bool Renderer::SystemSetup()
         asdx::InitRangeAsUAV(ranges[5], 0);
         asdx::InitRangeAsUAV(ranges[6], 1);
 
-        D3D12_ROOT_PARAMETER params[8] = {};
-        asdx::InitAsCBV  (params[0], 0, cs);
-        asdx::InitAsTable(params[1], 1, &ranges[0], cs);
-        asdx::InitAsTable(params[2], 1, &ranges[1], cs);
-        asdx::InitAsTable(params[3], 1, &ranges[2], cs);
-        asdx::InitAsTable(params[4], 1, &ranges[3], cs);
-        asdx::InitAsTable(params[5], 1, &ranges[4], cs);
-        asdx::InitAsTable(params[6], 1, &ranges[5], cs);
-        asdx::InitAsTable(params[7], 1, &ranges[6], cs);
+        D3D12_ROOT_PARAMETER params[9] = {};
+        asdx::InitAsCBV      (params[DENOISER_PARAM_CBV0], 0, cs);
+        asdx::InitAsConstants(params[DENOISER_PARAM_CBV1], 1, 4, cs);
+        asdx::InitAsTable    (params[DENOISER_PARAM_SRV0], 1, &ranges[0], cs);
+        asdx::InitAsTable    (params[DENOISER_PARAM_SRV1], 1, &ranges[1], cs);
+        asdx::InitAsTable    (params[DENOISER_PARAM_SRV2], 1, &ranges[2], cs);
+        asdx::InitAsTable    (params[DENOISER_PARAM_SRV3], 1, &ranges[3], cs);
+        asdx::InitAsTable    (params[DENOISER_PARAM_SRV4], 1, &ranges[4], cs);
+        asdx::InitAsTable    (params[DENOISER_PARAM_UAV0], 1, &ranges[5], cs);
+        asdx::InitAsTable    (params[DENOISER_PARAM_UAV1], 1, &ranges[6], cs);
 
         auto flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
 
@@ -1328,6 +1350,16 @@ bool Renderer::SystemSetup()
         if (!m_PostBlurPipe.Init(pDevice, &desc))
         {
             ELOGA("Error : PostBlur Pipe Init Failed.");
+            return false;
+        }
+    }
+
+    // デノイズ用定数バッファ.
+    {
+        auto size = asdx::RoundUp(sizeof(DenoiseParam), 256);
+        if (!m_DenoiseParam.Init(size))
+        {
+            ELOG("Error : DenoiseParam Init Failed.");
             return false;
         }
     }
@@ -1667,13 +1699,13 @@ void Renderer::OnTerm()
         {
             m_ColorHistory[i]               .Term();
             m_AccumulationColorHistory [i]  .Term();
-            m_AccumulationCountHistory [i]  .Term();
             m_StabilizationColorHistory[i]  .Term();
         }
 
         m_BlurTarget0       .Term();
         m_BlurTarget1       .Term();
-        m_HitDistanceTarget .Term();
+        m_HitDistance       .Term();
+        m_AccumulationCount .Term();
         m_Tonemapped        .Term();
         m_Depth             .Term();
         m_Velocity          .Term();
@@ -1694,8 +1726,9 @@ void Renderer::OnTerm()
 
     // 定数バッファ関連.
     {
-        m_TaaParam  .Term();
-        m_SceneParam.Term();
+        m_DenoiseParam  .Term();
+        m_TaaParam      .Term();
+        m_SceneParam    .Term();
     }
 
     // パイプライン関連.
@@ -2023,7 +2056,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         pCmd->SetComputeRootDescriptorTable(5, m_Scene.GetIBL()->GetHandleGPU());
         pCmd->SetComputeRootConstantBufferView(6, m_SceneParam.GetResource()->GetGPUVirtualAddress());
         pCmd->SetComputeRootDescriptorTable(7, m_Scene.GetLB()->GetHandleGPU());
-        pCmd->SetComputeRootDescriptorTable(8, m_HitDistanceTarget.GetUAV()->GetHandleGPU());
+        pCmd->SetComputeRootDescriptorTable(8, m_HitDistance.GetUAV()->GetHandleGPU());
 
         DispatchRays(pCmd);
 
@@ -2035,13 +2068,51 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
 
     // プレブラー処理.
     {
-        // Output : BlurTarget0
+        //RTC_DEBUG_CODE(ScopedMarker marker(pCmd, "PreBlur"));
+
+        //m_BlurTarget0.Transition(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        //m_Depth      .Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        //m_Normal     .Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        //m_Roughness  .Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        //m_HitDistance.Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        //m_Radiance   .Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+
+        //pCmd->SetComputeRootSignature(m_DenoiserRootSig.GetPtr());
+        //m_PreBlurPipe.SetState(pCmd);
+        ////pCmd->SetComputeRootConstantBufferView(DENOISER_PARAM_CBV0, 0);
+        //pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV0, m_Depth.GetSRV()->GetHandleGPU());
+        //pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV1, m_Normal.GetSRV()->GetHandleGPU());
+        //pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV2, m_Roughness.GetSRV()->GetHandleGPU());
+        //pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV3, m_HitDistance.GetSRV()->GetHandleGPU());
+        //pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV4, m_Radiance.GetSRV()->GetHandleGPU());
+        //pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_UAV0, m_BlurTarget0.GetUAV()->GetHandleGPU());
+        //pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_UAV1, m_AccumulationCount.GetUAV()->GetHandleGPU());
+
+        //pCmd->Dispatch(threadX, threadY, 1);
+
+        //asdx::UAVBarrier(pCmd, m_BlurTarget0.GetResource());
     }
 
     // テンポラルアキュムレーション処理.
     {
-        // Output : AccumulationCount
-        //          AccumulationColor
+        //RTC_DEBUG_CODE(ScopedMarker marker(pCmd, "TemporalAccumulation"));
+
+        //m_AccumulationColorHistory[m_PrevHistoryIndex].Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        //m_AccumulationColorHistory[m_CurrHistoryIndex].Transition(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        //m_Velocity.Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        //m_BlurTarget0.Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+
+        //pCmd->SetComputeRootSignature(m_DenoiserRootSig.GetPtr());
+        //m_TemporalAccumulationPipe.SetState(pCmd);
+        //pCmd->SetComputeRoot32BitConstants(DENOISER_PARAM_CBV1, 4, &constants, 0);
+        //pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV0, m_BlurTarget0.GetSRV()->GetHandleGPU());
+        //pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV1, m_AccumulationColorHistory[m_PrevHistoryIndex].GetSRV()->GetHandleGPU());
+        //pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV2, m_Velocity.GetSRV()->GetHandleGPU());
+        //pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_UAV0, m_AccumulationColorHistory[m_CurrHistoryIndex].GetUAV()->GetHandleGPU());
+
+        //pCmd->Dispatch(threadX, threadY, 1);
+
+        //asdx::UAVBarrier(pCmd, m_AccumulationColorHistory[m_CurrHistoryIndex].GetResource());
     }
 
     // Mip Generation and History Fix.
@@ -2050,30 +2121,85 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
 
     // ブラー処理.
     {
-        // Output : BlurTarget1
+        //RTC_DEBUG_CODE(ScopedMarker marker(pCmd, "DenoiseBlur"));
+
+        //pCmd->SetComputeRootSignature(m_DenoiserRootSig.GetPtr());
+        //m_DenoiserPipe.SetState(pCmd);
+        //pCmd->SetComputeRootConstantBufferView(DENOISER_PARAM_CBV0, 0);
+        //pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV0, m_Depth.GetSRV()->GetHandleGPU());
+        //pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV1, m_Normal.GetSRV()->GetHandleGPU());
+        //pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV2, m_Roughness.GetSRV()->GetHandleGPU());
+        //pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV3, m_HitDistance.GetSRV()->GetHandleGPU());
+        //pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV4, m_AccumulationColorHistory[m_CurrHistoryIndex].GetSRV()->GetHandleGPU());
+        //pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_UAV0, m_BlurTarget1.GetUAV()->GetHandleGPU());
+
+        //pCmd->Dispatch(threadX, threadY, 1);
+
+        //asdx::UAVBarrier(pCmd, m_BlurTarget1.GetResource());
     }
 
     // ポストブラー処理.
     {
-        // Output : BlurTarget0
+        //RTC_DEBUG_CODE(ScopedMarker marker(pCmd, "PostBlur"));
+
+        //m_BlurTarget0.Transition(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        //m_BlurTarget1.Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+
+        //pCmd->SetComputeRootSignature(m_DenoiserRootSig.GetPtr());
+        //m_PostBlurPipe.SetState(pCmd);
+        //pCmd->SetComputeRootConstantBufferView(DENOISER_PARAM_CBV0, 0);
+        //pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV0, m_Depth.GetSRV()->GetHandleGPU());
+        //pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV1, m_Normal.GetSRV()->GetHandleGPU());
+        //pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV2, m_Roughness.GetSRV()->GetHandleGPU());
+        //pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV3, m_HitDistance.GetSRV()->GetHandleGPU());
+        //pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV4, m_BlurTarget1.GetSRV()->GetHandleGPU());
+        //pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_UAV0, m_BlurTarget0.GetUAV()->GetHandleGPU());
+
+        //pCmd->Dispatch(threadX, threadY, 1);
+
+        //asdx::UAVBarrier(pCmd, m_BlurTarget0.GetResource());
     }
 
     // テンポラルスタビライゼーション処理.
     {
-        // Output: StabilizationColor
+        //RTC_DEBUG_CODE(ScopedMarker marker(pCmd, "TemporalStabilization"));
+
+        //m_StabilizationColorHistory[m_PrevHistoryIndex].Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        //m_StabilizationColorHistory[m_CurrHistoryIndex].Transition(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        //m_BlurTarget0.Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+
+        //pCmd->SetComputeRootSignature(m_DenoiserRootSig.GetPtr());
+        //m_TemporalStabilizationPipe.SetState(pCmd);
+        //pCmd->SetComputeRoot32BitConstants(DENOISER_PARAM_CBV1, 4, &constants, 0);
+        //pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV0, m_BlurTarget0.GetSRV()->GetHandleGPU());
+        //pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV1, m_StabilizationColorHistory[m_PrevHistoryIndex].GetSRV()->GetHandleGPU());
+        //pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV2, m_Velocity.GetSRV()->GetHandleGPU());
+        //pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_UAV0, m_StabilizationColorHistory[m_CurrHistoryIndex].GetUAV()->GetHandleGPU());
+
+        //pCmd->Dispatch(threadX, threadY, 1);
+
+        //asdx::UAVBarrier(pCmd, m_StabilizationColorHistory[m_CurrHistoryIndex].GetResource());
     }
 
     // トーンマップ実行.
     {
         RTC_DEBUG_CODE(ScopedMarker marker(pCmd, "ToneMapping"));
 
+#if 0
         m_Radiance  .Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+#else
+        m_StabilizationColorHistory[m_CurrHistoryIndex].Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+#endif
         m_Tonemapped.Transition(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
         pCmd->SetComputeRootSignature(m_TonemapRootSig.GetPtr());
         m_TonemapPipe.SetState(pCmd);
 
+#if 0
         pCmd->SetComputeRootDescriptorTable(0, m_Radiance.GetSRV()->GetHandleGPU());
+#else
+        pCmd->SetComputeRootDescriptorTable(0, m_StabilizationColorHistory[m_CurrHistoryIndex].GetSRV()->GetHandleGPU());
+#endif
         pCmd->SetComputeRootConstantBufferView(1, m_SceneParam.GetResource()->GetGPUVirtualAddress());
         pCmd->SetComputeRootDescriptorTable(2, m_Tonemapped.GetUAV()->GetHandleGPU());
 
@@ -2086,7 +2212,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
     {
     }
 
-    // TemporalAA実行.
+    // テンポラルアンチエリアス実行.
     {
         RTC_DEBUG_CODE(ScopedMarker marker(pCmd, "TemporalAntiAliasing"));
 

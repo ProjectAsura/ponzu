@@ -132,6 +132,7 @@ private:
 
     asdx::ConstantBuffer            m_SceneParam;
     asdx::ConstantBuffer            m_TaaParam;
+    asdx::ConstantBuffer            m_DenoiseParam;
 
     asdx::ComputeTarget             m_Radiance;                     // 放射輝度.
     asdx::ColorTarget               m_Albedo;                       // G-Buffer アルベド.
@@ -142,8 +143,8 @@ private:
     asdx::ComputeTarget             m_Tonemapped;                   // トーンマップ適用済み.
     asdx::ComputeTarget             m_ColorHistory[2];              // カラーヒストリーバッファ.
     asdx::ComputeTarget             m_CaptureTarget;                // キャプチャー用.
-    asdx::ComputeTarget             m_HitDistanceTarget;            // プライマリーヒットからセカンダリ―ヒットまでの距離.
-    asdx::ComputeTarget             m_AccumulationCountHistory[2];  // アキュムレーション数ヒストリー.
+    asdx::ComputeTarget             m_HitDistance;                  // プライマリーヒットからセカンダリ―ヒットまでの距離.
+    asdx::ComputeTarget             m_AccumulationCount;            // アキュムレーション数ヒストリー.
     asdx::ComputeTarget             m_AccumulationColorHistory[2];  // アキュムレーションカラーヒストリー.
     asdx::ComputeTarget             m_StabilizationColorHistory[2]; // スタビライゼーションカラーヒストリー.
     asdx::ComputeTarget             m_BlurTarget0;                  // ブラーターゲット0

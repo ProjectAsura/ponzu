@@ -18,24 +18,24 @@ cbuffer Parameters : register(b0)
     uint2       ScreenSize;
     float       MinRectDimMulUnproject;
     float       PlaneDistSensitivity;
-    
+
     float       OrthoMode;
     float       LobeAngleFraction;
     float       RoughnessFraction;
     float       Unproject;
-    
+
     float       BlurRadius;
     float2      InvScreenSize;
     float       Reserved;
-    
+
     float4      Rotator;
-    
+
     float4x4    Proj;
     float4x4    View;
     float       NearClip;
     float       FarClip;
     float2      UVToViewParam;
-    
+
     float4      HitDistanceParams;
 };
 

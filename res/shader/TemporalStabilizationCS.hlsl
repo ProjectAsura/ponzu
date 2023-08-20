@@ -23,7 +23,10 @@ Texture2D<float2>   VelocityMap     : register(t2);
 RWTexture2D<float4> OutColorMap     : register(u0);
 
 
-cbuffer CbParam : register(b0)
+///////////////////////////////////////////////////////////////////////////////
+// CbParam
+///////////////////////////////////////////////////////////////////////////////
+cbuffer CbParam : register(b1)
 {
     uint2  ScreenSize;
     float2 InvScreenSize;
