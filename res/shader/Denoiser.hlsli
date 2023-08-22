@@ -157,6 +157,12 @@ float ComputeExponentialWeight(float x, float px, float py)
 { return exp(-3.0f * abs(x * px + py)); }
 
 //-----------------------------------------------------------------------------
+//      指数ウェイトを計算します.
+//-----------------------------------------------------------------------------
+float3 ComputeExponentialWeight(float3 x, float3 px, float3 py)
+{ return exp(-3.0f * abs(x * px + py)); }
+
+//-----------------------------------------------------------------------------
 //      錐台サイズを計算します.
 //-----------------------------------------------------------------------------
 float CalcFrustumSize(float minRectDimMulUnproject, float orthoMode, float viewZ)
@@ -248,7 +254,7 @@ float CalcNormalWeightParams(float nonLinearAccumSpeed, float fraction, float ro
 //      ラフネスウェイトを計算します.
 //-----------------------------------------------------------------------------
 float CalcRoughnessWeight(float2 params, float roughness)
-{ return ComputeNonExponentialWeight(roughness, params.x, params.y); }
+{ return ComputeExponentialWeight(roughness, params.x, params.y); }
 
 //-----------------------------------------------------------------------------
 //      ヒット距離ウェイトを計算します.
@@ -262,7 +268,7 @@ float CalcHitDistanceWeight(float2 params, float hitDist)
 float CalcGeometryWeight(float2 params, float3 n0, float3 p)
 {
     float d = dot(n0, p);
-    return ComputeNonExponentialWeight(d, params.x, params.y);
+    return ComputeExponentialWeight(d, params.x, params.y);
 }
 
 //-----------------------------------------------------------------------------
@@ -272,7 +278,7 @@ float CalcNormalWeight(float param, float3 N, float3 n)
 {
     float cosA = saturate(dot(N, n));
     float angle = acos(cosA);
-    return ComputeNonExponentialWeight(angle, param, 0.0f);
+    return ComputeExponentialWeight(angle, param, 0.0f);
 }
 
 //-----------------------------------------------------------------------------
@@ -304,7 +310,7 @@ float CalcCombinedWeight
     t.y = acos(saturate(dot(N, Ns.xyz)));
     t.z = rS;
  
-    float3 w = ComputeNonExponentialWeight(t, a, b);
+    float3 w = ComputeExponentialWeight(t, a, b);
     return w.x * w.y * w.z;
 }
 

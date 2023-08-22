@@ -20,6 +20,7 @@ static const float kMaxHistoryLength          = 64.0f;
 Texture2D<float4>   CurrColorMap    : register(t0);
 Texture2D<float4>   HistoryColorMap : register(t1);
 Texture2D<float2>   VelocityMap     : register(t2);
+Texture2D<uint>     AccumCountMap   : register(t3);
 RWTexture2D<float4> OutColorMap     : register(u0);
 
 
@@ -68,14 +69,16 @@ void main
 
     // スクリーン内かどうかチェック.
     float inScreen = all(saturate(prevUV) == prevUV) ? 1.0f : 0.0f;
+    
+    uint historyLength = AccumCountMap.Load(int3(remappedId, 0));
+    float isAccumValid = (historyLength > 1) ? 1.0f : 0.0f;
 
     // ヒストリーが有効かどうかチェック.
-    bool isValidHistory = (velocityDelta * inScreen) > 0.0f;
+    bool isValidHistory = (velocityDelta * inScreen * isAccumValid) > 0.0f;
     if (!isValidHistory)
     {
-        float3 neighborColor = GetCurrentNeighborColor(CurrColorMap, PointClamp, currUV, currColor).rgb;
-        float4 finalColor    = SaturateFloat(float4(neighborColor, 1.0f));
-        OutColorMap[remappedId] = finalColor;
+        float4 neighborColor = GetCurrentNeighborColor(CurrColorMap, PointClamp, currUV, currColor);
+        OutColorMap[remappedId] = SaturateFloat(neighborColor);
         return;
     }
 
@@ -95,14 +98,8 @@ void main
     prevColor = lerp (prevColor, currColor, saturate(t));
     prevColor = clamp(prevColor, minColor, maxColor);
  
-    float historyLength = prevColor.a;
-
-    // ヒストリー成功回数をカウントアップ.
-    historyLength += 1.0f;
-    historyLength = min(historyLength, kMaxHistoryLength);
- 
     // 重みを求める.
-    float  blend      = saturate(1.0f / historyLength);
+    float  blend      = saturate(1.0f / (float)historyLength);
     float  currWeight = CalcHdrWeightY(currColor.rgb);
     float  prevWeight = CalcHdrWeightY(prevColor.rgb);
     float2 weights    = CalcBlendWeight(prevWeight, currWeight, blend);
@@ -110,7 +107,6 @@ void main
 
     // RGBに戻す.
     finalColor   = YCoCgToRGB(finalColor);
-    finalColor.a = historyLength;
 
     // NaNを潰しておく.
     finalColor = SaturateFloat(finalColor);

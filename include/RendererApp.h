@@ -191,6 +191,8 @@ private:
     bool                m_ForceChanged = false;
     uint64_t            m_MyFrameCount = 0;
 
+    asdx::PCG           m_PcgRandom;
+
 #if RTC_TARGET == RTC_DEVELOP
     //+++++++++++++++++++
     //      開発用.

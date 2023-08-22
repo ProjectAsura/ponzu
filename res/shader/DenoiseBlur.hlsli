@@ -26,9 +26,7 @@ cbuffer Parameters : register(b0)
 
     float       BlurRadius;
     float2      InvScreenSize;
-    float       Reserved;
-
-    float4      Rotator;
+    uint        IgnoreHistory;
 
     float4x4    Proj;
     float4x4    View;
@@ -37,6 +35,14 @@ cbuffer Parameters : register(b0)
     float2      UVToViewParam;
 
     float4      HitDistanceParams;
+};
+
+///////////////////////////////////////////////////////////////////////////////
+// Constants
+///////////////////////////////////////////////////////////////////////////////
+cbuffer Constants : register(b1)
+{
+    float4  Rotator;
 };
 
 //-----------------------------------------------------------------------------
@@ -64,14 +70,21 @@ void main
 
     // スクリーン範囲外なら処理しない.
     if (any(remappedId >= ScreenSize))
-    { return; }
+    {
+        return;
+    }
 
     float2 uv = (float2(remappedId) + 0.5f.xx) / float2(ScreenSize);
     float  d  = DepthBuffer.SampleLevel(PointClamp, uv, 0.0f);
 
     // 背景なら処理しない.
     if (d >= 1.0f)
-    { return; }
+    {
+        // ブラー結果を出力.
+        DenoisedBuffer[remappedId] = InputBuffer.SampleLevel(PointClamp, uv, 0.0f);
+        AccumCountBuffer[remappedId] = 0;
+        return;
+    }
  
     // ビュー空間深度を求める.
     float z = ToViewDepth(d, NearClip, FarClip);
@@ -82,6 +95,10 @@ void main
     // アキュムレーションフレーム数.
     uint accumCount = AccumCountBuffer[remappedId];
     accumCount = min(accumCount, MaxAccumCount);
+
+    // ヒストリーが無効な場合.
+    if (IgnoreHistory & 0x1)
+    { accumCount = 1; }
 
     // アキュムレーションスピード.
     float accumSpeed = 1.0f / (1.0f + float(accumCount));
