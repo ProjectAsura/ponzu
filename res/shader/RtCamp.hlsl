@@ -514,7 +514,7 @@ void OnGenerateRay()
                 // 方向ベクトルに変換.
                 float3 dir = FromSphereMapCoord(st);
 
-                if (!CastShadowRay(vertex.Position, geometryNormal, dir, 1000.0f, instanceId, primitiveId))
+                if (!CastShadowRay(vertex.Position, geometryNormal, dir, SceneParam.FarClip, instanceId, primitiveId))
                 {
                     // シャドウレイを飛ばして，光源上のサンプリングとレイ原点の間に遮断が無い場合.
                     float cosShadow = abs(dot(Nm, dir));

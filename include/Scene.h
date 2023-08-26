@@ -12,6 +12,7 @@
 #include <gfx/asdxBuffer.h>
 #include <gfx/asdxCommandList.h>
 #include <vector>
+#include <map>
 #include <ModelManager.h>
 
 
@@ -31,6 +32,7 @@ enum LIGHT_TYPE
 ///////////////////////////////////////////////////////////////////////////////
 struct Light
 {
+    uint32_t        HashTag;
     uint32_t        Type;
     asdx::Vector3   Position;
     asdx::Vector3   Intensity;
@@ -42,6 +44,7 @@ struct Light
 ///////////////////////////////////////////////////////////////////////////////
 struct PinholeCamera
 {
+    uint32_t            HashTag;
     asdx::Vector3       Position;
     asdx::Vector3       Target;
     asdx::Vector3       Upward;
@@ -49,6 +52,24 @@ struct PinholeCamera
     float               NearClip;
     float               FarClip;
 };
+
+//-----------------------------------------------------------------------------
+//! @brief      ハッシュタグを計算します.
+//! 
+//! @param[in]      name            文字列
+//! @param[in]      nameLength      文字列の長さ.
+//! @return     ハッシュ値を返却します.
+//-----------------------------------------------------------------------------
+uint32_t CalcHashTag(const char* name, size_t nameLength);
+
+//-----------------------------------------------------------------------------
+//! @brief      ハッシュタグを計算します.
+//! 
+//! @param[in]      name            文字列
+//! @return     ハッシュ値を返却します.
+//-----------------------------------------------------------------------------
+uint32_t CalcHashTag(const std::string& name);
+
 
 ///////////////////////////////////////////////////////////////////////////////
 // SceneTexture class
@@ -122,17 +143,19 @@ public:
     bool Init(const char* path, ID3D12GraphicsCommandList6* pCmdList);
     void Term();
 
-    asdx::IConstantBufferView* GetParamCBV() const;
-    asdx::IShaderResourceView* GetIB() const;
-    asdx::IShaderResourceView* GetTB() const;
-    asdx::IShaderResourceView* GetMB() const;
-    asdx::IShaderResourceView* GetIBL() const;
-    asdx::IShaderResourceView* GetLB() const;
-    ID3D12Resource*            GetTLAS() const;
+    asdx::IConstantBufferView* GetParamCBV  () const;
+    asdx::IShaderResourceView* GetIB        () const;
+    asdx::IShaderResourceView* GetTB        () const;
+    asdx::IShaderResourceView* GetMB        () const;
+    asdx::IShaderResourceView* GetIBL       () const;
+    asdx::IShaderResourceView* GetLB        () const;
+    ID3D12Resource*            GetTLAS      () const;
+    uint32_t                   GetLightCount() const;
 
     void Draw(ID3D12GraphicsCommandList6* pCmdList);
 
-    uint32_t GetLightCount() const;
+    uint32_t FindLightIndex   (uint32_t hashTag) const;
+    uint32_t FindInstanceIndex(uint32_t hashTag) const;
 
 #if !CAMP_RELEASE
     void Reload(const char* path);
@@ -172,10 +195,13 @@ private:
     std::vector<asdx::Blas>                 m_BLAS;
     asdx::Tlas                              m_TLAS;
     SceneTexture                            m_IBL;
+    ModelMgr                                m_ModelMgr;
     std::vector<SceneTexture>               m_Textures;
     asdx::ConstantBuffer                    m_Param;
-    ModelMgr                                m_ModelMgr;
     asdx::StructuredBuffer                  m_LB;
+    std::map<uint32_t, uint32_t>            m_LightDict;
+    std::map<uint32_t, uint32_t>            m_InstanceDict;
+
 #if !CAMP_RELEASE
     bool                                    m_RequestTerm = false;
     uint8_t                                 m_WaitCount   = 0;

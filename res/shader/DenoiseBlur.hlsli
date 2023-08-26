@@ -161,7 +161,7 @@ void main
 
         // テクスチャ座標を計算.
     #ifdef PRE_BLUR
-        float2 st = uv + RotateVector(Rotator, offset.xy) * InvScreenSize * blurRadius;
+        float2 st = uv + RotateVector(Rotator, offset.xy) * (InvScreenSize * blurRadius);
     #else
         float2 st = CalcKernelSampleCoord(Proj, offset.xy, Xv, kernelBasis[0], kernelBasis[1], Rotator);
     #endif

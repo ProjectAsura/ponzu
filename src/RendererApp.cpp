@@ -9,7 +9,6 @@
 //-----------------------------------------------------------------------------
 #include <RendererApp.h>
 #include <fnd/asdxLogger.h>
-#include <fnd/asdxStopWatch.h>
 #include <fnd/asdxMisc.h>
 #include <process.h>
 #include <fpng.h>
@@ -172,7 +171,9 @@ struct SceneParam
     uint32_t        MaxIteration;
 
     float           AnimationTime;
-    float           Reserved[3];
+    float           FovY;
+    float           NearClip;
+    float           FarClip;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -524,7 +525,10 @@ Renderer::Renderer(const SceneDesc& desc)
 , m_SceneDesc(desc)
 , m_PcgRandom(1234567)
 {
+    m_RenderingTimer.Start();
+
     m_SwapChainFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
+    m_FovY            = asdx::ToRadian(37.5f);
 
 #if RTC_TARGET == RTC_RELEASE
     m_DeviceDesc.EnableBreakOnError   = false;
@@ -576,6 +580,8 @@ bool Renderer::OnInit()
         auto totalFrame = double(m_SceneDesc.FPS * m_SceneDesc.AnimationTimeSec);
         m_AnimationOneFrameTime = renderTime / totalFrame;
         m_AnimationElapsedTime  = 0.0f;
+
+        DLOG("Animation One Frame Time = %lf", m_AnimationOneFrameTime);
 
         ChangeFrame(0);
     }
@@ -1113,7 +1119,7 @@ bool Renderer::SystemSetup()
         desc.Height             = m_SceneDesc.Height;
         desc.DepthOrArraySize   = 1;
         desc.MipLevels          = 1;
-        desc.Format             = DXGI_FORMAT_R32G32B32A32_FLOAT;
+        desc.Format             = DXGI_FORMAT_R8G8B8A8_UNORM;//DXGI_FORMAT_R32G32B32A32_FLOAT;
         desc.SampleDesc.Count   = 1;
         desc.SampleDesc.Quality = 0;
         desc.InitState          = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
@@ -1143,7 +1149,7 @@ bool Renderer::SystemSetup()
         desc.Height             = m_SceneDesc.Height;
         desc.DepthOrArraySize   = 1;
         desc.MipLevels          = 1;
-        desc.Format             = DXGI_FORMAT_R32G32B32A32_FLOAT;
+        desc.Format             = DXGI_FORMAT_R8G8B8A8_UNORM;//DXGI_FORMAT_R32G32B32A32_FLOAT;
         desc.SampleDesc.Count   = 1;
         desc.SampleDesc.Quality = 0;
         desc.InitState          = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
@@ -1173,7 +1179,7 @@ bool Renderer::SystemSetup()
         desc.Height             = m_SceneDesc.Height;
         desc.DepthOrArraySize   = 1;
         desc.MipLevels          = 1;
-        desc.Format             = DXGI_FORMAT_R32G32B32A32_FLOAT;
+        desc.Format             = DXGI_FORMAT_R8G8B8A8_UNORM;//DXGI_FORMAT_R32G32B32A32_FLOAT;
         desc.SampleDesc.Count   = 1;
         desc.SampleDesc.Quality = 0;
         desc.InitState          = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
@@ -1593,12 +1599,11 @@ bool Renderer::SystemSetup()
 
     // 初回フレーム計算用に設定しておく.
     {
-        auto fovY   = asdx::ToRadian(37.5f);
         auto aspect = float(m_SceneDesc.Width) / float(m_SceneDesc.Height);
 
         auto view = m_AppCamera.GetView();
         auto proj = asdx::Matrix::CreatePerspectiveFieldOfView(
-            fovY,
+            m_FovY,
             aspect,
             m_AppCamera.GetNearClip(),
             m_AppCamera.GetFarClip());
@@ -1631,15 +1636,14 @@ bool Renderer::SystemSetup()
 
     // 初回フレーム計算用に設定しておく.
     {
-        auto fovY   = asdx::ToRadian(37.5f);
         auto aspect = float(m_SceneDesc.Width) / float(m_SceneDesc.Height);
 
         auto view = m_Camera.GetView();
         auto proj = asdx::Matrix::CreatePerspectiveFieldOfView(
-            fovY,
+            m_FovY,
             aspect,
-            0.1f,
-            10000.0f);
+            m_Camera.GetMinDist(),
+            m_Camera.GetMaxDist());
 
         m_PrevView          = view;
         m_PrevProj          = proj;
@@ -1845,6 +1849,8 @@ void Renderer::OnFrameMove(asdx::FrameEventArgs& args)
             CaptureScreen(m_ReadBackTexture[m_ReadBackTargetIndex].GetPtr());
         }
 
+        ILOG("Rendering Finished.");
+
         PostQuitMessage(0);
         m_EndRequest = true;
 
@@ -1882,6 +1888,9 @@ void Renderer::ChangeFrame(uint32_t index)
     m_PrevProj          = m_CurrProj;
     m_PrevInvView       = m_CurrInvView;
     m_PrevInvViewProj   = m_CurrInvProj * m_CurrInvView;
+
+    float nearClip;
+    float farClip;
 
 #if RTC_TARGET == RTC_RELEASE
     //asdx::CameraEvent camEvent = {};
@@ -1924,10 +1933,10 @@ void Renderer::ChangeFrame(uint32_t index)
 
     m_CurrView = m_Camera.GetView();
     m_CurrProj = asdx::Matrix::CreatePerspectiveFieldOfView(
-        asdx::ToRadian(37.5f),
+        m_FovY,
         float(m_SceneDesc.Width) / float(m_SceneDesc.Height),
-        0.1f,
-        10000.0f);
+        m_Camera.GetMinDist(),
+        m_Camera.GetMaxDist());
     m_CameraZAxis = m_Camera.GetAxisZ();
 
     if (m_MyFrameCount < 400)
@@ -1936,11 +1945,14 @@ void Renderer::ChangeFrame(uint32_t index)
         m_ForceChanged = true;
     }
 
+    nearClip = m_Camera.GetMinDist();
+    farClip  = m_Camera.GetMaxDist();
+
     m_MyFrameCount++;
 #else
     m_CurrView = m_AppCamera.GetView();
     m_CurrProj = asdx::Matrix::CreatePerspectiveFieldOfView(
-        asdx::ToRadian(37.5f),
+        m_FovY,
         float(m_SceneDesc.Width) / float(m_SceneDesc.Height),
         m_AppCamera.GetNearClip(),
         m_AppCamera.GetFarClip());
@@ -1950,6 +1962,9 @@ void Renderer::ChangeFrame(uint32_t index)
     {
         m_AnimationTime = float(m_Timer.GetRelativeSec());
     }
+
+    nearClip = m_AppCamera.GetNearClip();
+    farClip  = m_AppCamera.GetFarClip ();
 #endif
 
     m_CurrInvView = asdx::Matrix::Invert(m_CurrView);
@@ -1990,6 +2005,7 @@ void Renderer::ChangeFrame(uint32_t index)
         {
             enableAccumulation  = false;
             m_AccumulatedFrames = 0;
+            m_RenderingTimer.Start();
         }
 
         m_AccumulatedFrames++;
@@ -2020,6 +2036,9 @@ void Renderer::ChangeFrame(uint32_t index)
         param.CameraDir             = m_CameraZAxis;
         param.MaxIteration          = MAX_RECURSION_DEPTH;
         param.AnimationTime         = m_AnimationTime;
+        param.FovY                  = m_FovY;
+        param.NearClip              = nearClip;
+        param.FarClip               = farClip;
 
         m_SceneParam.SwapBuffer();
         m_SceneParam.Update(&param, sizeof(param));
@@ -2068,13 +2087,13 @@ void Renderer::ChangeFrame(uint32_t index)
         param.LobeAngleFraction         = 0.15f;
         param.RoughnessFraction         = 0.15f;
         param.Unproject                 = unproject;
-        param.BlurRadius                = 32.0f;
+        param.BlurRadius                = 8.0f;
         param.InvScreenSize             = asdx::Vector2(1.0f / float(m_SceneDesc.Width), 1.0f / float(m_SceneDesc.Height));
         param.IgnoreHistory             = (changed) ? 1 : 0;
         param.View                      = m_CurrView;
         param.Proj                      = m_CurrProj;
-        param.NearClip                  = m_AppCamera.GetNearClip();
-        param.FarClip                   = m_AppCamera.GetFarClip();
+        param.NearClip                  = nearClip;
+        param.FarClip                   = farClip;
         param.UVToViewParam             = asdx::Vector2(1.0f / m_CurrProj._11, 1.0f / m_CurrProj._22);
         param.HitDistanceParams         = asdx::Vector4(3.0f, 0.1f, 20.0f, -25.0f);
 
@@ -2408,8 +2427,8 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         pCmd->SetComputeRootDescriptorTable(2, m_ColorHistory[m_PrevHistoryIndex].GetSRV()->GetHandleGPU());
         pCmd->SetComputeRootDescriptorTable(3, m_Velocity.GetSRV()->GetHandleGPU());
         pCmd->SetComputeRootDescriptorTable(4, m_Depth.GetSRV()->GetHandleGPU());
-        pCmd->SetComputeRootDescriptorTable(5, m_ColorHistory[m_CurrHistoryIndex].GetUAV()->GetHandleGPU());
-        pCmd->SetComputeRootDescriptorTable(6, m_CaptureTarget.GetUAV()->GetHandleGPU());
+        pCmd->SetComputeRootDescriptorTable(5, m_CaptureTarget.GetUAV()->GetHandleGPU());
+        pCmd->SetComputeRootDescriptorTable(6, m_ColorHistory[m_CurrHistoryIndex].GetUAV()->GetHandleGPU());
 
         pCmd->Dispatch(threadX, threadY, 1);
 
@@ -2702,9 +2721,13 @@ void Renderer::Draw2D(float elapsedSec)
         ImGui::SetNextWindowSize(ImVec2(250, 0));
         if (ImGui::Begin(u8"フレーム情報", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoTitleBar))
         {
+            m_RenderingTimer.End();
+            auto renderingSec = m_RenderingTimer.GetElapsedSec();
+
             ImGui::Text(u8"FPS   : %.3lf", GetFPS());
             ImGui::Text(u8"Frame : %ld", GetFrameCount());
             ImGui::Text(u8"Accum : %ld", m_AccumulatedFrames);
+            ImGui::Text(u8"Render : %.2lf [sec]", renderingSec);
             ImGui::Text(u8"Camera : (%.2f, %.2f, %.2f)", pos.x, pos.y, pos.z);
             ImGui::Text(u8"Target : (%.2f, %.2f, %.2f)", target.x, target.y, target.z);
             ImGui::Text(u8"Upward : (%.2f, %.2f, %.2f)", upward.x, upward.y, upward.z);
@@ -3042,6 +3065,7 @@ void Renderer::ReloadShader()
         {
             failedCount++;
         }
+        m_TemporalAccumulationShaderFlags.Set(REQUEST_BIT_INDEX, false);
     }
 
     if (m_DenoiserShaderFlags.Get(REQUEST_BIT_INDEX))
@@ -3064,6 +3088,7 @@ void Renderer::ReloadShader()
         {
             failedCount++;
         }
+        m_DenoiserShaderFlags.Set(REQUEST_BIT_INDEX, false);
     }
 
     if (m_TemporalStabilizationShaderFlags.Get(REQUEST_BIT_INDEX))
@@ -3086,6 +3111,7 @@ void Renderer::ReloadShader()
         {
             failedCount++;
         }
+        m_TemporalStabilizationShaderFlags.Set(REQUEST_BIT_INDEX, false);
     }
 
     if (m_PostBlurShaderFlags.Get(REQUEST_BIT_INDEX))
@@ -3108,6 +3134,7 @@ void Renderer::ReloadShader()
         {
             failedCount++;
         }
+        m_PostBlurShaderFlags.Set(REQUEST_BIT_INDEX, false);
     }
 
     if (m_TonemapShaderFlags.Get(REQUEST_BIT_INDEX))

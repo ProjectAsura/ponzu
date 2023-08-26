@@ -683,7 +683,9 @@ struct ResScene FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
     VT_INSTANCES = 18,
     VT_TEXTURES = 20,
     VT_MATERIALS = 22,
-    VT_LIGHTS = 24
+    VT_LIGHTS = 24,
+    VT_INSTANCETAGS = 26,
+    VT_LIGHTTAGS = 28
   };
   uint32_t MeshCount() const {
     return GetField<uint32_t>(VT_MESHCOUNT, 0);
@@ -718,6 +720,12 @@ struct ResScene FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   const flatbuffers::Vector<const r3d::ResLight *> *Lights() const {
     return GetPointer<const flatbuffers::Vector<const r3d::ResLight *> *>(VT_LIGHTS);
   }
+  const flatbuffers::Vector<uint32_t> *InstanceTags() const {
+    return GetPointer<const flatbuffers::Vector<uint32_t> *>(VT_INSTANCETAGS);
+  }
+  const flatbuffers::Vector<uint32_t> *LightTags() const {
+    return GetPointer<const flatbuffers::Vector<uint32_t> *>(VT_LIGHTTAGS);
+  }
   bool Verify(flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
            VerifyField<uint32_t>(verifier, VT_MESHCOUNT) &&
@@ -739,6 +747,10 @@ struct ResScene FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
            verifier.VerifyVector(Materials()) &&
            VerifyOffset(verifier, VT_LIGHTS) &&
            verifier.VerifyVector(Lights()) &&
+           VerifyOffset(verifier, VT_INSTANCETAGS) &&
+           verifier.VerifyVector(InstanceTags()) &&
+           VerifyOffset(verifier, VT_LIGHTTAGS) &&
+           verifier.VerifyVector(LightTags()) &&
            verifier.EndTable();
   }
 };
@@ -780,6 +792,12 @@ struct ResSceneBuilder {
   void add_Lights(flatbuffers::Offset<flatbuffers::Vector<const r3d::ResLight *>> Lights) {
     fbb_.AddOffset(ResScene::VT_LIGHTS, Lights);
   }
+  void add_InstanceTags(flatbuffers::Offset<flatbuffers::Vector<uint32_t>> InstanceTags) {
+    fbb_.AddOffset(ResScene::VT_INSTANCETAGS, InstanceTags);
+  }
+  void add_LightTags(flatbuffers::Offset<flatbuffers::Vector<uint32_t>> LightTags) {
+    fbb_.AddOffset(ResScene::VT_LIGHTTAGS, LightTags);
+  }
   explicit ResSceneBuilder(flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
@@ -803,8 +821,12 @@ inline flatbuffers::Offset<ResScene> CreateResScene(
     flatbuffers::Offset<flatbuffers::Vector<const r3d::ResInstance *>> Instances = 0,
     flatbuffers::Offset<flatbuffers::Vector<flatbuffers::Offset<r3d::ResTexture>>> Textures = 0,
     flatbuffers::Offset<flatbuffers::Vector<const r3d::ResMaterial *>> Materials = 0,
-    flatbuffers::Offset<flatbuffers::Vector<const r3d::ResLight *>> Lights = 0) {
+    flatbuffers::Offset<flatbuffers::Vector<const r3d::ResLight *>> Lights = 0,
+    flatbuffers::Offset<flatbuffers::Vector<uint32_t>> InstanceTags = 0,
+    flatbuffers::Offset<flatbuffers::Vector<uint32_t>> LightTags = 0) {
   ResSceneBuilder builder_(_fbb);
+  builder_.add_LightTags(LightTags);
+  builder_.add_InstanceTags(InstanceTags);
   builder_.add_Lights(Lights);
   builder_.add_Materials(Materials);
   builder_.add_Textures(Textures);
@@ -831,12 +853,16 @@ inline flatbuffers::Offset<ResScene> CreateResSceneDirect(
     const std::vector<r3d::ResInstance> *Instances = nullptr,
     const std::vector<flatbuffers::Offset<r3d::ResTexture>> *Textures = nullptr,
     const std::vector<r3d::ResMaterial> *Materials = nullptr,
-    const std::vector<r3d::ResLight> *Lights = nullptr) {
+    const std::vector<r3d::ResLight> *Lights = nullptr,
+    const std::vector<uint32_t> *InstanceTags = nullptr,
+    const std::vector<uint32_t> *LightTags = nullptr) {
   auto Meshes__ = Meshes ? _fbb.CreateVector<flatbuffers::Offset<r3d::ResMesh>>(*Meshes) : 0;
   auto Instances__ = Instances ? _fbb.CreateVectorOfStructs<r3d::ResInstance>(*Instances) : 0;
   auto Textures__ = Textures ? _fbb.CreateVector<flatbuffers::Offset<r3d::ResTexture>>(*Textures) : 0;
   auto Materials__ = Materials ? _fbb.CreateVectorOfStructs<r3d::ResMaterial>(*Materials) : 0;
   auto Lights__ = Lights ? _fbb.CreateVectorOfStructs<r3d::ResLight>(*Lights) : 0;
+  auto InstanceTags__ = InstanceTags ? _fbb.CreateVector<uint32_t>(*InstanceTags) : 0;
+  auto LightTags__ = LightTags ? _fbb.CreateVector<uint32_t>(*LightTags) : 0;
   return r3d::CreateResScene(
       _fbb,
       MeshCount,
@@ -849,7 +875,9 @@ inline flatbuffers::Offset<ResScene> CreateResSceneDirect(
       Instances__,
       Textures__,
       Materials__,
-      Lights__);
+      Lights__,
+      InstanceTags__,
+      LightTags__);
 }
 
 inline const r3d::ResScene *GetResScene(const void *buf) {

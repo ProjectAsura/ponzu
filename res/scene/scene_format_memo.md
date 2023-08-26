@@ -37,6 +37,7 @@ model {
 
 # インスタンス設定.
 instance {  
+   -Tag: name  
    -Mesh: name      // 省略不可. OBJファイル名の中に含まれるメッシュ名なので注意!  
    -Material: name  // 省略不可.  
    -Scale: x y z  
@@ -46,12 +47,14 @@ instance {
 
 # ディレクショナルライト設定.
 directional_light {  
+   -Tag: name
    -Direction: x y z  
    -Intensity: r g b
 };  
 
 # ポイントライト設定.
 point_light {  
+   -Tag: name
    -Position: x y z  
    -Radius: value  
    -Intensity: r g b  

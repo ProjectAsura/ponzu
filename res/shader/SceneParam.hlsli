@@ -38,7 +38,9 @@ struct SceneParameter
     uint    MaxIteration;
 
     float   AnimationTime;
-    float3  Reserved;
+    float   FovY;
+    float   NearClip;
+    float   FarClip;
 };
 
 #endif//SCENE_PARAM_HLSLI

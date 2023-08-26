@@ -88,6 +88,7 @@ struct GeometryHandle
 ///////////////////////////////////////////////////////////////////////////////
 struct CpuInstance
 {
+    uint32_t            HashTag;        //!< ハッシュタグ.
     uint32_t            MeshId;         //!< メッシュ番号.
     uint32_t            MaterialId;     //!< マテリアル番号.
     asdx::Transform3x4  Transform;      //!< 変換行列.

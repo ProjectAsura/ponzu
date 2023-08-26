@@ -306,7 +306,7 @@ float CalcCombinedWeight
     float3 b = float3(geometryParams.y, 0.0f,         roughnessParams.y);
 
     float3 t;
-    t.x = dot(Nv, Xvs);
+    t.x = saturate(dot(Nv, Xvs));
     t.y = acos(saturate(dot(N, Ns.xyz)));
     t.z = rS;
  

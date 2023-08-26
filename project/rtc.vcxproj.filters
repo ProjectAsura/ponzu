@@ -31,6 +31,9 @@
     <Filter Include="ヘッダー ファイル\generated">
       <UniqueIdentifier>{8c1e7af1-3f6a-4e7f-ad7e-ead4c7682535}</UniqueIdentifier>
     </Filter>
+    <Filter Include="ソース ファイル\external\xxhash">
+      <UniqueIdentifier>{9ba7e71c-e482-46c9-8f11-507e5b258e15}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\main.cpp">
@@ -53,6 +56,9 @@
     </ClCompile>
     <ClCompile Include="..\src\Scene.cpp">
       <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="..\external\xxhash\xxhash.c">
+      <Filter>ソース ファイル\external\xxhash</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -79,6 +85,9 @@
     </ClInclude>
     <ClInclude Include="..\include\generated\scene_format.h">
       <Filter>ヘッダー ファイル\generated</Filter>
+    </ClInclude>
+    <ClInclude Include="..\external\xxhash\xxhash.h">
+      <Filter>ソース ファイル\external\xxhash</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

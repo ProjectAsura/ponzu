@@ -26,6 +26,7 @@
 #include <gfx/asdxCommandQueue.h>
 #include <ModelManager.h>
 #include <Scene.h>
+#include <fnd/asdxStopWatch.h>
 
 #if RTC_TARGET == RTC_DEVELOP
 #include <gfx/asdxShaderCompiler.h>
@@ -56,7 +57,8 @@ struct SceneDesc
 ///////////////////////////////////////////////////////////////////////////////
 // Renderer class
 ///////////////////////////////////////////////////////////////////////////////
-class Renderer : public asdx::Application
+class Renderer 
+    : public asdx::Application
 #if RTC_TARGET == RTC_TARGET_DEVELOP
     , public asdx::IFileUpdateListener
 #endif
@@ -88,7 +90,7 @@ public:
     //=========================================================================
     // public methods.
     //=========================================================================
-    Renderer(const SceneDesc& desc);
+    Renderer (const SceneDesc& desc);
     ~Renderer();
 
 private:
@@ -102,9 +104,9 @@ private:
         asdx::ShaderTable               Miss;
         asdx::ShaderTable               HitGroup;
 
-        bool Init(ID3D12RootSignature* pRootSig, const void* binary, size_t binarySize);
-        void Term();
-        void Dispatch(ID3D12GraphicsCommandList6* pCmd, uint32_t width, uint32_t height);
+        bool Init       (ID3D12RootSignature* pRootSig, const void* binary, size_t binarySize);
+        void Term       ();
+        void Dispatch   (ID3D12GraphicsCommandList6* pCmd, uint32_t width, uint32_t height);
     };
 
     //=========================================================================
@@ -154,23 +156,26 @@ private:
     asdx::Camera                    m_Camera;
 
     asdx::RefPtr<ID3D12Resource>    m_ReadBackTexture[3];
-    uint32_t                        m_ReadBackPitch = 0;
+    uint32_t                        m_ReadBackPitch         = 0;
     std::vector<ExportData>         m_ExportData;
-    size_t                          m_ExportIndex   = 0;
-    uint32_t                        m_CaptureIndex  = 0;
+    size_t                          m_ExportIndex           = 0;
+    uint32_t                        m_CaptureIndex          = 0;
     uint32_t                        m_ReadBackTargetIndex   = 2;
     uint32_t                        m_CaptureTargetIndex    = 0;
     uint32_t                        m_AccumulatedFrames     = 0;
 
     double                          m_AnimationOneFrameTime = 0;
     double                          m_AnimationElapsedTime  = 0;
-    float                           m_AnimationTime = 0.0f;
+    float                           m_AnimationTime         = 0.0f;
+
+    asdx::StopWatch     m_RenderingTimer;
 
     asdx::Matrix        m_CurrView;
     asdx::Matrix        m_CurrProj;
     asdx::Matrix        m_CurrInvView;
     asdx::Matrix        m_CurrInvProj;
     asdx::Vector3       m_CameraZAxis;
+    float               m_FovY;
 
     asdx::Matrix        m_PrevView;
     asdx::Matrix        m_PrevProj;
@@ -227,27 +232,27 @@ private:
     //=========================================================================
     // private methods.
     //=========================================================================
-    bool OnInit() override;
-    void OnTerm() override;
-    void OnFrameMove(asdx::FrameEventArgs& args) override;
-    void OnFrameRender(asdx::FrameEventArgs& args) override;
-    void OnResize(const asdx::ResizeEventArgs& args) override;
-    void OnKey(const asdx::KeyEventArgs& args) override;
-    void OnMouse(const asdx::MouseEventArgs& args) override;
-    void OnTyping(uint32_t keyCode) override;
+    bool OnInit         ()                                  override;
+    void OnTerm         ()                                  override;
+    void OnFrameMove    (asdx::FrameEventArgs& args)        override;
+    void OnFrameRender  (asdx::FrameEventArgs& args)        override;
+    void OnResize       (const asdx::ResizeEventArgs& args) override;
+    void OnKey          (const asdx::KeyEventArgs& args)    override;
+    void OnMouse        (const asdx::MouseEventArgs& args)  override;
+    void OnTyping       (uint32_t keyCode)                  override;
 
-    void Draw2D(float elapsedSec);
+    void Draw2D         (float elapsedSec);
 
-    bool SystemSetup();
-    bool BuildScene();
-    void DispatchRays(ID3D12GraphicsCommandList6* pCmd);
+    bool SystemSetup    ();
+    bool BuildScene     ();
+    void DispatchRays   (ID3D12GraphicsCommandList6* pCmd);
 
-    void ChangeFrame(uint32_t index);
-    void CaptureScreen(ID3D12Resource* pResource);
+    void ChangeFrame    (uint32_t index);
+    void CaptureScreen  (ID3D12Resource* pResource);
 
 #if RTC_TARGET == RTC_DEVELOP
-    bool BuildTestScene();
-    void ReloadShader();
+    bool BuildTestScene ();
+    void ReloadShader   ();
 
     // ファイル更新コールバック.
     void OnUpdate(

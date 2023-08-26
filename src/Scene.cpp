@@ -12,6 +12,7 @@
 #include <fnd/asdxMisc.h>
 #include <gfx/asdxDevice.h>
 #include <generated/scene_format.h>
+#include <xxhash.h>
 #include <Windows.h>
 
 #if !CAMP_RELEASE
@@ -244,6 +245,18 @@ r3d::Vector2 ToBinaryFormat(const asdx::Vector2& value)
 
 
 namespace r3d {
+
+//-----------------------------------------------------------------------------
+//      ハッシュタグを計算します.
+//-----------------------------------------------------------------------------
+uint32_t CalcHashTag(const char* name, size_t nameLength)
+{ return XXH32(name, nameLength, 12345); }
+
+//-----------------------------------------------------------------------------
+//      ハッシュタグを計算します.
+//-----------------------------------------------------------------------------
+uint32_t CalcHashTag(const std::string& name)
+{ return CalcHashTag(name.c_str(), name.length()); }
 
 ///////////////////////////////////////////////////////////////////////////////
 // SceneTexture
@@ -612,6 +625,8 @@ bool Scene::Init(const char* path, ID3D12GraphicsCommandList6* pCmdList)
         auto resMeshes = resScene->Meshes();
         assert(resMeshes != nullptr);
 
+        auto resInstanceTags = resScene->InstanceTags();
+
         for(auto i=0u; i<count; ++i)
         {
             auto srcInstance = resInstances->Get(i);
@@ -680,6 +695,12 @@ bool Scene::Init(const char* path, ID3D12GraphicsCommandList6* pCmdList)
             m_DrawCalls[i].IndexVB    = geometryHandle.IndexVB;
             m_DrawCalls[i].IndexIB    = geometryHandle.IndexIB;
             m_DrawCalls[i].MaterialId = matId;
+
+            // データバインディング用辞書を作成しておく.
+            auto hashTag = resInstanceTags->Get(i);
+            auto itr = m_InstanceDict.find(hashTag);
+            assert(itr == m_InstanceDict.end());
+            m_InstanceDict[hashTag] = i;
         }
 
         if (!m_TLAS.Init(pDevice, resScene->InstanceCount(), instanceDescs.data(), buildFlag))
@@ -694,16 +715,28 @@ bool Scene::Init(const char* path, ID3D12GraphicsCommandList6* pCmdList)
     // ライトバッファ構築.
     {
         auto count  = resScene->LightCount();
-        auto stride = uint32_t(sizeof(r3d::ResLight));
+        auto stride = uint32_t(sizeof(ResLight));
+
+        auto srcLights = resScene->Lights();
+        auto srcLightTags = resScene->LightTags();
 
         // ライトがあれば初期化.
         if (count > 0)
         {
-            if (!m_LB.Init(pCmdList, count, stride, resScene->Lights()->data()))
+            if (!m_LB.Init(pCmdList, count, stride, srcLights->data()))
             {
                 ELOGA("Error : LB::Init() Failed.");
                 return false;
             }
+        }
+
+        // データバインディング用辞書を作成しておく.
+        for(auto i=0u; i<count; ++i)
+        {
+            auto hashTag = srcLightTags->Get(i);
+            auto itr = m_LightDict.find(hashTag);
+            assert(itr == m_LightDict.end());
+            m_LightDict[hashTag] = i;
         }
     }
 
@@ -737,6 +770,9 @@ void Scene::Term()
         free(m_pBinary);
         m_pBinary = nullptr;
     }
+
+    m_LightDict   .clear();
+    m_InstanceDict.clear();
 }
 
 //-----------------------------------------------------------------------------
@@ -824,6 +860,31 @@ uint32_t Scene::GetLightCount() const
 
     return resScene->LightCount();
 }
+
+//-----------------------------------------------------------------------------
+//      ハッシュタグに対応するライトインデックスを検索します.
+//-----------------------------------------------------------------------------
+uint32_t Scene::FindLightIndex(uint32_t hashTag) const
+{
+    auto itr = m_LightDict.find(hashTag);
+    if (itr == m_LightDict.end())
+    { return UINT32_MAX; }
+
+    return itr->second;
+}
+
+//-----------------------------------------------------------------------------
+//      ハッシュタグに対応するインスタンスインデックスを検索します.
+//-----------------------------------------------------------------------------
+uint32_t Scene::FindInstanceIndex(uint32_t hashTag) const
+{
+    auto itr = m_InstanceDict.find(hashTag);
+    if (itr == m_InstanceDict.end())
+    { return UINT32_MAX; }
+
+    return itr->second;
+}
+
 
 #if !CAMP_RELEASE
 //-----------------------------------------------------------------------------
@@ -1089,6 +1150,7 @@ bool SceneExporter::LoadFromTXT(const char* path, std::string& exportPath)
         }
         else if (0 == _stricmp(buf, "instance"))
         {
+            std::string   instanceTag;
             std::string   meshTag;
             std::string   materialTag;
             asdx::Vector3 scale         = asdx::Vector3(1.0f, 1.0f, 1.0f);
@@ -1105,6 +1167,8 @@ bool SceneExporter::LoadFromTXT(const char* path, std::string& exportPath)
                 { break; }
                 else if (0 == strcmp(buf, "#") || 0 == strcmp(buf, "//"))
                 { /* DO_NOTHING */ }
+                else if (0 == _stricmp(buf, "-Tag:"))
+                { stream >> instanceTag; }
                 else if (0 == _stricmp(buf, "-Mesh:"))
                 { stream >> meshTag; }
                 else if (0 == _stricmp(buf, "-Material:"))
@@ -1117,6 +1181,12 @@ bool SceneExporter::LoadFromTXT(const char* path, std::string& exportPath)
                 { stream >> translation.x >> translation.y >> translation.z; }
 
                 stream.ignore(BUFFER_SIZE, '\n');
+            }
+
+            if (instanceTag.empty() || instanceTag == "")
+            {
+                instanceTag = "r3d::Instance";
+                instanceTag += std::to_string(m_Instances.size());
             }
 
             assert(meshTag.empty() == false);
@@ -1134,6 +1204,7 @@ bool SceneExporter::LoadFromTXT(const char* path, std::string& exportPath)
                     * asdx::Matrix::CreateTranslation(translation);
 
                 r3d::CpuInstance instance;
+                instance.HashTag    = CalcHashTag(instanceTag);
                 instance.MaterialId = materialDic[materialTag];
                 instance.MeshId     = meshDic[meshTag];
                 instance.Transform  = asdx::FromMatrix(matrix);
@@ -1179,6 +1250,7 @@ bool SceneExporter::LoadFromTXT(const char* path, std::string& exportPath)
         {
             asdx::Vector3 direction = asdx::Vector3(0.0f, -1.0f, 0.0f);
             asdx::Vector3 intensity = asdx::Vector3(1.0f, 1.0f, 1.0f);
+            std::string   tag;
 
             for(;;)
             {
@@ -1190,6 +1262,8 @@ bool SceneExporter::LoadFromTXT(const char* path, std::string& exportPath)
                 { break; }
                 else if (0 == strcmp(buf, "#") || 0 == strcmp(buf, "//"))
                 { /* DO_NOTHING */ }
+                else if (0 == _stricmp(buf, "-Tag:"))
+                { stream >> tag; }
                 else if (0 == _stricmp(buf, "-Direction:"))
                 { stream >> direction.x >> direction.y >> direction.z; }
                 else if (0 == _stricmp(buf, "-Intensity:"))
@@ -1198,7 +1272,14 @@ bool SceneExporter::LoadFromTXT(const char* path, std::string& exportPath)
                 stream.ignore(BUFFER_SIZE, '\n');
             }
 
+            if (tag.empty() || tag =="")
+            {
+                tag = "r3d::DirectionalLight";
+                tag += std::to_string(m_Lights.size());
+            }
+
             Light light;
+            light.HashTag   = CalcHashTag(tag);
             light.Type      = LIGHT_TYPE_DIRECTIONAL;
             light.Position  = direction;
             light.Intensity = intensity;
@@ -1211,6 +1292,7 @@ bool SceneExporter::LoadFromTXT(const char* path, std::string& exportPath)
             asdx::Vector3 position  = asdx::Vector3(0.0f, 0.0f, 0.0f);
             float         radius    = 1.0f;
             asdx::Vector3 intensity = asdx::Vector3(0.0f, 0.0f, 0.0f);
+            std::string   tag;
 
             for(;;)
             {
@@ -1222,6 +1304,8 @@ bool SceneExporter::LoadFromTXT(const char* path, std::string& exportPath)
                 { break; }
                 else if (0 == strcmp(buf, "#") || 0 == strcmp(buf, "//"))
                 { /* DO_NOTHING */ }
+                else if (0 == _stricmp(buf, "-Tag:"))
+                { stream >> tag; }
                 else if (0 == _stricmp(buf, "-Position:"))
                 { stream >> position.x >> position.y >> position.z; }
                 else if (0 == _stricmp(buf, "-Radius:"))
@@ -1232,7 +1316,14 @@ bool SceneExporter::LoadFromTXT(const char* path, std::string& exportPath)
                 stream.ignore(BUFFER_SIZE, '\n');
             }
 
+            if (tag.empty() || tag == "")
+            {
+                tag = "r3d::PointLight";
+                tag += std::to_string(m_Lights.size());
+            }
+
             Light light;
+            light.HashTag   = CalcHashTag(tag);
             light.Type      = LIGHT_TYPE_POINT;
             light.Position  = position;
             light.Radius    = radius;
@@ -1309,6 +1400,8 @@ bool SceneExporter::Export(const char* path)
     std::vector<r3d::ResLight>                          dstLights;
     std::vector<r3d::ResInstance>                       dstInstances;
     flatbuffers::Offset<r3d::ResTexture>                dstIBL;
+    std::vector<uint32_t>                               instanceTags;
+    std::vector<uint32_t>                               lightTags;
 
     ImTextureMemory srcIBL;
     std::vector<ImTextureMemory> srcTextures;
@@ -1507,6 +1600,9 @@ bool SceneExporter::Export(const char* path)
                 m_Lights[i].Radius);
 
             dstLights.push_back(item);
+
+            auto hashTag = m_Lights[i].HashTag;
+            lightTags.push_back(hashTag);
         }
     }
 
@@ -1526,6 +1622,9 @@ bool SceneExporter::Export(const char* path)
                 dstMtx);
 
             dstInstances.push_back(item);
+
+            auto hashTag = m_Instances[i].HashTag;
+            instanceTags.push_back(hashTag);
         }
     }
 
@@ -1549,7 +1648,9 @@ bool SceneExporter::Export(const char* path)
             &dstInstances,
             &dstTextures,
             &dstMaterials,
-            &dstLights);
+            &dstLights,
+            &instanceTags,
+            &lightTags);
 
         builder.Finish(dstScene);
 
@@ -1678,13 +1779,16 @@ bool LoadMesh(const char* path, std::vector<Mesh>& result, std::vector<MeshInfo>
         infos[i].MeshName     = srcMesh.Name;
         infos[i].MaterialName = srcMesh.MaterialName;
 
-        dstMesh.VertexCount = uint32_t(srcMesh.Vertices.size());
-        dstMesh.IndexCount  = uint32_t(srcMesh.Indices .size());
+        auto vertexCount = uint32_t(srcMesh.Vertices.size());
+        auto indexCount  = uint32_t(srcMesh.Indices.size());
 
-        dstMesh.Vertices = new ResVertex[dstMesh.VertexCount];
-        dstMesh.Indices  = new uint32_t [dstMesh.IndexCount];
+        dstMesh.VertexCount = vertexCount;
+        dstMesh.IndexCount  = indexCount;
 
-        for(size_t j=0; j<srcMesh.Vertices.size(); ++j)
+        dstMesh.Vertices = new ResVertex[vertexCount];
+        dstMesh.Indices  = new uint32_t [indexCount];
+
+        for(uint32_t j=0; j<vertexCount; ++j)
         {
             auto& srcVtx = srcMesh.Vertices[j];
             dstMesh.Vertices[j] = ResVertex(
@@ -1695,7 +1799,7 @@ bool LoadMesh(const char* path, std::vector<Mesh>& result, std::vector<MeshInfo>
             );
         }
 
-        for(size_t j=0; j<srcMesh.Indices.size(); ++j)
+        for(uint32_t j=0; j<indexCount; ++j)
         { dstMesh.Indices[j] = srcMesh.Indices[j]; }
     }
 

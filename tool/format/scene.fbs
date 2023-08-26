@@ -115,6 +115,8 @@ table ResScene
     Textures      : [ResTexture];
     Materials     : [ResMaterial];
     Lights        : [ResLight];
+    InstanceTags  : [uint];
+    LightTags     : [uint];
 }
 
 root_type ResScene;
