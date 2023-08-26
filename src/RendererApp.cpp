@@ -313,6 +313,55 @@ unsigned Export(void* args)
     return 0;
 }
 
+//-----------------------------------------------------------------------------
+//      Radical Inverse Function of Sobol.
+//-----------------------------------------------------------------------------
+double Sobol(uint32_t i, uint32_t r=0)
+{
+    // [Kollig 2002] Thomas Kollig, Alexander Keller
+    // "Efficient Multidimensional Sampling",
+    // Eurographics 2002, Vol.21, No.3.
+    // Section 7. Appendix: Algorithms.
+
+    for(uint32_t v = 1 << 31; i; i >> 1, v ^= v >> 1)
+    {
+        if (i & 1)
+        { r ^= v; }
+    }
+
+    return (double)r / (double)0x100000000LL;
+}
+
+//-----------------------------------------------------------------------------
+//      Radical Inverse Function of Larcher and Pillichshammer
+//-----------------------------------------------------------------------------
+double LarcherPillichshammer(uint32_t i, uint32_t r=0)
+{
+    // [Kollig 2002] Thomas Kollig, Alexander Keller
+    // "Efficient Multidimensional Sampling",
+    // Eurographics 2002, Vol.21, No.3.
+    // Section 7. Appendix: Algorithms.
+
+    for(uint32_t v = 1 << 31; i; i >>= 1, v |= v >> 1)
+    {
+        if (i & 1)
+        { r ^= v; }
+    }
+
+    return (double)r / (double)0x100000000LL;
+}
+
+//-----------------------------------------------------------------------------
+//      テンポラルジッタ―オフセットを計算します.
+//-----------------------------------------------------------------------------
+asdx::Vector2 CalcTemporalJitterOffset(uint8_t index)
+{
+    auto sampleX = LarcherPillichshammer(index + 1, 2) - 0.5;
+    auto sampleY = LarcherPillichshammer(index + 1, 3) - 0.5;
+
+    return asdx::Vector2(float(sampleX), float(sampleY));
+}
+
 } // namespace
 
 
@@ -2172,6 +2221,8 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
     randomScale.y = 1.0f + (m_PcgRandom.GetAsF32() * 2.0f - 1.0f) * 0.25f;
     randomScale.z = 1.0f + (m_PcgRandom.GetAsF32() * 2.0f - 1.0f) * 0.25f;
 
+    auto jitterOffset = CalcTemporalJitterOffset(m_TemporalJitterIndex);
+
     // プレブラー処理.
     {
         RTC_DEBUG_CODE(ScopedMarker marker(pCmd, "PreBlur"));
@@ -2212,13 +2263,12 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         {
             uint32_t        ScreenWidth;
             uint32_t        ScreenHeight;
-            asdx::Vector2   InvScreenSize;
+            asdx::Vector2   Jitter;
         };
         Constants constants = {};
-        constants.ScreenWidth       = m_SceneDesc.Width;
-        constants.ScreenHeight      = m_SceneDesc.Height;
-        constants.InvScreenSize.x   = 1.0f / float(m_SceneDesc.Width);
-        constants.InvScreenSize.y   = 1.0f / float(m_SceneDesc.Height);
+        constants.ScreenWidth   = m_SceneDesc.Width;
+        constants.ScreenHeight  = m_SceneDesc.Height;
+        constants.Jitter        = jitterOffset;
 
         m_AccumulationColorHistory[m_PrevHistoryIndex].Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         m_AccumulationColorHistory[m_CurrHistoryIndex].Transition(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -2301,13 +2351,12 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         {
             uint32_t        ScreenWidth;
             uint32_t        ScreenHeight;
-            asdx::Vector2   InvScreenSize;
+            asdx::Vector2   Jitter;
         };
         Constants constants = {};
-        constants.ScreenWidth       = m_SceneDesc.Width;
-        constants.ScreenHeight      = m_SceneDesc.Height;
-        constants.InvScreenSize.x   = 1.0f / float(m_SceneDesc.Width);
-        constants.InvScreenSize.y   = 1.0f / float(m_SceneDesc.Height);
+        constants.ScreenWidth   = m_SceneDesc.Width;
+        constants.ScreenHeight  = m_SceneDesc.Height;
+        constants.Jitter        = jitterOffset;
 
         m_StabilizationColorHistory[m_PrevHistoryIndex].Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         m_StabilizationColorHistory[m_CurrHistoryIndex].Transition(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -2341,7 +2390,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         param.BlendFactor   = 0.9f;
         param.MapSize       = asdx::Vector2(float(m_SceneDesc.Width), float(m_SceneDesc.Height));
         param.InvMapSize    = asdx::Vector2(1.0f / float(m_SceneDesc.Width), 1.0f / float(m_SceneDesc.Height));
-        param.Jitter        = asdx::Vector2(0.0f, 0.0f);
+        param.Jitter        = jitterOffset;
 
         m_TaaParam.SwapBuffer();
         m_TaaParam.Update(&param, sizeof(param));
@@ -2519,6 +2568,8 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
 
     m_PrevHistoryIndex = m_CurrHistoryIndex;
     m_CurrHistoryIndex = (m_CurrHistoryIndex + 1) & 0x1;
+
+    m_TemporalJitterIndex = (m_TemporalJitterIndex + 1) % 8;
 }
 
 //-----------------------------------------------------------------------------

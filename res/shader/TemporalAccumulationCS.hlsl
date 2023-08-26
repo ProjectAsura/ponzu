@@ -30,7 +30,7 @@ RWTexture2D<float4> OutColorMap     : register(u0);
 cbuffer CbParam : register(b1)
 {
     uint2  ScreenSize;
-    float2 InvScreenSize;
+    float2 Jitter;
 };
 
 //-----------------------------------------------------------------------------
@@ -54,23 +54,25 @@ void main
     if (any(remappedId >= ScreenSize)) 
     { return; }
 
+    const float2 kInvScreenSize = 1.0f.xx / float2(ScreenSize);
+
     // 現在フレームのカラーを取得.
-    float2 currUV = (float2(remappedId) + 0.5.xx) * InvScreenSize;
-    float4 currColor = CurrColorMap.SampleLevel(PointClamp, currUV, 0.0f);
+    float2 currUV = (float2(remappedId) + 0.5.xx) * kInvScreenSize;
+    float4 currColor = CurrColorMap.SampleLevel(PointClamp, currUV + Jitter * kInvScreenSize, 0.0f);
 
     const float kSizeScale = ScreenSize.x / 1920.0f;
 
     // 速度ベクトルを取得.
     float2 velocity = GetVelocity(VelocityMap, LinearClamp, currUV);
     float  velocityDelta = saturate(1.0f - length(velocity)) / (kFrameVelocityInPixelsDiff * kSizeScale);
-    
+
     // 前フレームのテクスチャ座標を計算.
-    float2 prevUV = currUV + (velocity * InvScreenSize);
+    float2 prevUV = currUV + (velocity * kInvScreenSize);
 
     // スクリーン内かどうかチェック.
     float inScreen = all(saturate(prevUV) == prevUV) ? 1.0f : 0.0f;
-    
-    uint historyLength = AccumCountMap.Load(int3(remappedId, 0));
+
+    uint historyLength = AccumCountMap.Load(int3(saturate(prevUV) * ScreenSize, 0));
     float isAccumValid = (historyLength > 1) ? 1.0f : 0.0f;
 
     // ヒストリーが有効かどうかチェック.
@@ -110,7 +112,7 @@ void main
 
     // NaNを潰しておく.
     finalColor = SaturateFloat(finalColor);
-    
+
     // 出力.
     OutColorMap[remappedId] = finalColor;
 }

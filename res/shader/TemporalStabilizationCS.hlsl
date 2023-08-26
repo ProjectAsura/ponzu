@@ -29,7 +29,7 @@ RWTexture2D<float4> OutColorMap     : register(u0);
 cbuffer CbParam : register(b1)
 {
     uint2  ScreenSize;
-    float2 InvScreenSize;
+    float2 Jitter;
 };
 
 //-----------------------------------------------------------------------------
@@ -53,9 +53,11 @@ void main
     if (any(remappedId >= ScreenSize)) 
     { return; }
 
+    const float2 kInvScreenSize = 1.0f.xx / float2(ScreenSize);
+
     // 現在フレームのカラーを取得.
-    float2 currUV = (float2(remappedId) + 0.5.xx) * InvScreenSize;
-    float4 currColor = CurrColorMap.SampleLevel(PointClamp, currUV, 0.0f);
+    float2 currUV = (float2(remappedId) + 0.5.xx) * kInvScreenSize;
+    float4 currColor = CurrColorMap.SampleLevel(PointClamp, currUV + Jitter * kInvScreenSize, 0.0f);
 
     const float kSizeScale = ScreenSize.x / 1920.0f;
 
@@ -64,7 +66,7 @@ void main
     float  velocityDelta = saturate(1.0f - length(velocity)) / (kFrameVelocityInPixelsDiff * kSizeScale);
     
     // 前フレームのテクスチャ座標を計算.
-    float2 prevUV = currUV + (velocity * InvScreenSize);
+    float2 prevUV = currUV + (velocity * kInvScreenSize);
 
     // スクリーン内かどうかチェック.
     float inScreen = all(saturate(prevUV) == prevUV) ? 1.0f : 0.0f;
@@ -93,8 +95,7 @@ void main
     float t = IntersectAABB(currColor.rgb - prevColor.rgb, prevColor.rgb, minColor.rgb, maxColor.rgb);
     prevColor = lerp (prevColor, currColor, saturate(t));
     prevColor = clamp(prevColor, minColor, maxColor);
- 
- 
+
     // 重みを求める.
     float  blend      = saturate(max(0.1f, saturate(0.01f * prevColor.x / abs(currColor.x - prevColor.x))));
     float  currWeight = CalcHdrWeightY(currColor.rgb);
@@ -103,7 +104,7 @@ void main
     float4 finalColor = prevColor * weights.x + currColor * weights.y;
 
     // RGBに戻す.
-    finalColor   = YCoCgToRGB(finalColor);
+    finalColor = YCoCgToRGB(finalColor);
 
     // NaNを潰しておく.
     finalColor = SaturateFloat(finalColor);

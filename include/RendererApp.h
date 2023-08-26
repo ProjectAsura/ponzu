@@ -184,14 +184,15 @@ private:
     D3D12_VIEWPORT      m_RendererViewport = {};
     D3D12_RECT          m_RendererScissor  = {};
 
-
     bool                m_Dirty = false;
 
-    bool                m_EndRequest = false;
-    bool                m_ForceChanged = false;
-    uint64_t            m_MyFrameCount = 0;
+    bool                m_EndRequest    = false;
+    bool                m_ForceChanged  = false;
+    uint64_t            m_MyFrameCount  = 0;
 
     asdx::PCG           m_PcgRandom;
+    uint8_t             m_TemporalJitterIndex = 0;
+
 
 #if RTC_TARGET == RTC_DEVELOP
     //+++++++++++++++++++
