@@ -33,6 +33,12 @@ cbuffer CbParam : register(b1)
     float2 Jitter;
 };
 
+cbuffer CbFlags : register(b2)
+{
+    uint    Flags;
+    uint3   Reserved;
+};
+
 //-----------------------------------------------------------------------------
 //      ヒストリーカラーを取得します.
 //-----------------------------------------------------------------------------
@@ -74,9 +80,10 @@ void main
 
     uint historyLength = AccumCountMap.Load(int3(saturate(prevUV) * ScreenSize, 0));
     float isAccumValid = (historyLength > 1) ? 1.0f : 0.0f;
+    float resetHistory = (Flags & 0x1) ? 0.0f : 1.0f;
 
     // ヒストリーが有効かどうかチェック.
-    bool isValidHistory = (velocityDelta * inScreen * isAccumValid) > 0.0f;
+    bool isValidHistory = (velocityDelta * inScreen * isAccumValid * resetHistory) > 0.0f;
     if (!isValidHistory)
     {
         float4 neighborColor = GetCurrentNeighborColor(CurrColorMap, PointClamp, currUV, currColor);
@@ -93,7 +100,7 @@ void main
 
     // AABBを取得.
     float4 minColor, maxColor;
-    CalcColorBoundingBox(CurrColorMap, PointClamp, prevUV, currColor, 0.95f, minColor, maxColor);
+    CalcColorBoundingBox(CurrColorMap, LinearClamp, prevUV, currColor, 0.95f, minColor, maxColor);
 
     // AABBでクリップ.
     float t = IntersectAABB(currColor.rgb - prevColor.rgb, prevColor.rgb, minColor.rgb, maxColor.rgb);

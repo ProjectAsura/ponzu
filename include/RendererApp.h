@@ -46,11 +46,13 @@ namespace r3d {
 struct SceneDesc
 {
     double      RenderTimeSec;      // 描画時間[sec]
-    uint32_t    Width;              // 横幅[px]
-    uint32_t    Height;             // 縦幅[px]
+    uint32_t    OutputWidth;        // 出力サイズ横幅[px]
+    uint32_t    OutputHeight;       // 出力サイズ縦幅[px]
+    uint32_t    RenderWidth;        // 描画内部解像度横幅[px]
+    uint32_t    RenderHeight;       // 描画内部解像度縦幅[px]
     double      FPS;                // Frame Per Second.
     double      AnimationTimeSec;   // 総アニメーション時間.
-    const char* Path;
+    const char* SceneFilePath;      // シーンファイルパス.
 };
 
 
@@ -160,7 +162,7 @@ private:
     std::vector<ExportData>         m_ExportData;
     size_t                          m_ExportIndex           = 0;
     uint32_t                        m_CaptureIndex          = 0;
-    uint32_t                        m_ReadBackTargetIndex   = 2;
+    uint32_t                        m_ReadBackTargetIndex   = 1;
     uint32_t                        m_CaptureTargetIndex    = 0;
     uint32_t                        m_AccumulatedFrames     = 0;
 
@@ -190,6 +192,7 @@ private:
     D3D12_RECT          m_RendererScissor  = {};
 
     bool                m_Dirty = false;
+    bool                m_ResetHistory = true;
 
     bool                m_EndRequest    = false;
     bool                m_ForceChanged  = false;

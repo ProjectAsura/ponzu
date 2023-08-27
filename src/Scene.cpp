@@ -478,8 +478,6 @@ bool Scene::Init(const char* path, ID3D12GraphicsCommandList6* pCmdList)
         return false;
     }
 
-    ILOGA("scene path %s", path);
-
     // ファイル読み込み.
     {
         auto hFile = CreateFileA(
@@ -717,7 +715,7 @@ bool Scene::Init(const char* path, ID3D12GraphicsCommandList6* pCmdList)
         auto count  = resScene->LightCount();
         auto stride = uint32_t(sizeof(ResLight));
 
-        auto srcLights = resScene->Lights();
+        auto srcLights    = resScene->Lights();
         auto srcLightTags = resScene->LightTags();
 
         // ライトがあれば初期化.

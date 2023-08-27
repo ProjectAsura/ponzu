@@ -118,6 +118,7 @@ enum DENOISER_PARAM
 {
     DENOISER_PARAM_CBV0,
     DENOISER_PARAM_CBV1,
+    DENOISER_PARAM_CBV2,
     DENOISER_PARAM_SRV0,
     DENOISER_PARAM_SRV1,
     DENOISER_PARAM_SRV2,
@@ -125,6 +126,7 @@ enum DENOISER_PARAM
     DENOISER_PARAM_SRV4,
     DENOISER_PARAM_UAV0,
     DENOISER_PARAM_UAV1,
+    MAX_DENOISER_PARAM_COUNT,
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -256,6 +258,8 @@ struct TaaParam
     asdx::Vector2   MapSize;
     asdx::Vector2   InvMapSize;
     asdx::Vector2   Jitter;
+    uint32_t        Flags;
+    uint32_t        Reserved[3];
 };
 
 //-----------------------------------------------------------------------------
@@ -283,11 +287,17 @@ unsigned Export(void* args)
     if (data == nullptr)
     { return -1; }
 
+    // 解放されると不味いので参照カウンタを上げる.
+    data->pResources->AddRef();
+
     // メモリマッピング.
     uint8_t* ptr = nullptr;
     auto hr = data->pResources->Map(0, nullptr, reinterpret_cast<void**>(&ptr));
     if (FAILED(hr))
-    { return -1; }
+    {
+        data->pResources->Release();
+        return -1;
+    }
 
     if (fpng::fpng_encode_image_to_memory(
         ptr,
@@ -310,6 +320,9 @@ unsigned Export(void* args)
 
     // メモリマッピング解除.
     data->pResources->Unmap(0, nullptr);
+
+    // 参照カウンタを下げる.
+    data->pResources->Release();
 
     return 0;
 }
@@ -521,7 +534,7 @@ void Renderer::RayTracingPipe::Dispatch
 //      コンストラクタです.
 //-----------------------------------------------------------------------------
 Renderer::Renderer(const SceneDesc& desc)
-: asdx::Application(L"Ponzu", desc.Width, desc.Height, nullptr, nullptr, nullptr)
+: asdx::Application(L"Ponzu Renderer", desc.OutputWidth, desc.OutputHeight, nullptr, nullptr, nullptr)
 , m_SceneDesc(desc)
 , m_PcgRandom(1234567)
 {
@@ -546,11 +559,11 @@ Renderer::Renderer(const SceneDesc& desc)
 #endif
 
 
-    m_Viewport.Width = float(m_SceneDesc.Width);
-    m_Viewport.Height = float(m_SceneDesc.Height);
+    m_Viewport.Width  = float(m_SceneDesc.OutputWidth);
+    m_Viewport.Height = float(m_SceneDesc.OutputHeight);
 
-    m_ScissorRect.right = m_SceneDesc.Width;
-    m_ScissorRect.bottom = m_SceneDesc.Height;
+    m_ScissorRect.right  = m_SceneDesc.OutputWidth;
+    m_ScissorRect.bottom = m_SceneDesc.OutputHeight;
 }
 
 //-----------------------------------------------------------------------------
@@ -581,7 +594,7 @@ bool Renderer::OnInit()
         m_AnimationOneFrameTime = renderTime / totalFrame;
         m_AnimationElapsedTime  = 0.0f;
 
-        DLOG("Animation One Frame Time = %lf", m_AnimationOneFrameTime);
+        DLOG("Animation One Frame Time = %lf[sec]", m_AnimationOneFrameTime);
 
         ChangeFrame(0);
     }
@@ -650,22 +663,22 @@ bool Renderer::SystemSetup()
 
     m_RendererViewport.TopLeftX = 0.0f;
     m_RendererViewport.TopLeftY = 0.0f;
-    m_RendererViewport.Width    = FLOAT(m_SceneDesc.Width);
-    m_RendererViewport.Height   = FLOAT(m_SceneDesc.Height);
+    m_RendererViewport.Width    = FLOAT(m_SceneDesc.RenderWidth);
+    m_RendererViewport.Height   = FLOAT(m_SceneDesc.RenderHeight);
     m_RendererViewport.MinDepth = 0.0f;
     m_RendererViewport.MaxDepth = 1.0f;
 
     m_RendererScissor.left      = 0;
-    m_RendererScissor.right     = m_SceneDesc.Width;
+    m_RendererScissor.right     = m_SceneDesc.RenderWidth;
     m_RendererScissor.top       = 0;
-    m_RendererScissor.bottom    = m_SceneDesc.Height;
+    m_RendererScissor.bottom    = m_SceneDesc.RenderHeight;
 
-    // キャプチャー用ダブルバッファ.
+    // キャプチャー用ターゲット.
     {
         asdx::TargetDesc desc;
         desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-        desc.Width              = m_SceneDesc.Width;
-        desc.Height             = m_SceneDesc.Height;
+        desc.Width              = m_SceneDesc.OutputWidth;
+        desc.Height             = m_SceneDesc.OutputHeight;
         desc.DepthOrArraySize   = 1;
         desc.Format             = DXGI_FORMAT_R8G8B8A8_UNORM;
         desc.MipLevels          = 1;
@@ -687,7 +700,7 @@ bool Renderer::SystemSetup()
         D3D12_RESOURCE_DESC desc = {};
         desc.Dimension          = D3D12_RESOURCE_DIMENSION_BUFFER;
         desc.Alignment          = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
-        desc.Width              = m_SceneDesc.Width * m_SceneDesc.Height * 4;
+        desc.Width              = m_SceneDesc.OutputWidth * m_SceneDesc.OutputHeight * 4;
         desc.Height             = 1;
         desc.DepthOrArraySize   = 1;
         desc.MipLevels          = 1;
@@ -728,8 +741,8 @@ bool Renderer::SystemSetup()
         D3D12_RESOURCE_DESC dstDesc = {};
         dstDesc.Dimension           = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
         dstDesc.Alignment           = 0;
-        dstDesc.Width               = m_SceneDesc.Width;
-        dstDesc.Height              = m_SceneDesc.Height;
+        dstDesc.Width               = m_SceneDesc.OutputWidth;
+        dstDesc.Height              = m_SceneDesc.OutputHeight;
         dstDesc.DepthOrArraySize    = 1;
         dstDesc.MipLevels           = 1;
         dstDesc.Format              = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -753,8 +766,8 @@ bool Renderer::SystemSetup()
         for(auto i=0; i<m_ExportData.size(); ++i)
         {
             m_ExportData[i].FrameIndex  = 0;
-            m_ExportData[i].Width       = m_SceneDesc.Width;
-            m_ExportData[i].Height      = m_SceneDesc.Height;
+            m_ExportData[i].Width       = m_SceneDesc.OutputWidth;
+            m_ExportData[i].Height      = m_SceneDesc.OutputHeight;
         }
     }
 
@@ -774,8 +787,8 @@ bool Renderer::SystemSetup()
     {
         asdx::TargetDesc desc;
         desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-        desc.Width              = m_SceneDesc.Width;
-        desc.Height             = m_SceneDesc.Height;
+        desc.Width              = m_SceneDesc.RenderWidth;
+        desc.Height             = m_SceneDesc.RenderHeight;
         desc.DepthOrArraySize   = 1;
         desc.Format             = DXGI_FORMAT_R32G32B32A32_FLOAT;
         desc.MipLevels          = 1;
@@ -796,8 +809,8 @@ bool Renderer::SystemSetup()
     {
         asdx::TargetDesc desc;
         desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-        desc.Width              = m_SceneDesc.Width;
-        desc.Height             = m_SceneDesc.Height;
+        desc.Width              = m_SceneDesc.RenderWidth;
+        desc.Height             = m_SceneDesc.RenderHeight;
         desc.DepthOrArraySize   = 1;
         desc.Format             = DXGI_FORMAT_R8G8B8A8_UNORM;
         desc.MipLevels          = 1;
@@ -896,8 +909,8 @@ bool Renderer::SystemSetup()
     {
         asdx::TargetDesc desc;
         desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-        desc.Width              = m_SceneDesc.Width;
-        desc.Height             = m_SceneDesc.Height;
+        desc.Width              = m_SceneDesc.OutputWidth;
+        desc.Height             = m_SceneDesc.OutputHeight;
         desc.DepthOrArraySize   = 1;
         desc.Format             = DXGI_FORMAT_R8G8B8A8_UNORM;
         desc.MipLevels          = 1;
@@ -935,8 +948,8 @@ bool Renderer::SystemSetup()
     {
         asdx::TargetDesc desc;
         desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-        desc.Width              = m_SceneDesc.Width;
-        desc.Height             = m_SceneDesc.Height;
+        desc.Width              = m_SceneDesc.RenderWidth;
+        desc.Height             = m_SceneDesc.RenderHeight;
         desc.DepthOrArraySize   = 1;
         desc.MipLevels          = 1;
         desc.Format             = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
@@ -961,8 +974,8 @@ bool Renderer::SystemSetup()
     {
         asdx::TargetDesc desc;
         desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-        desc.Width              = m_SceneDesc.Width;
-        desc.Height             = m_SceneDesc.Height;
+        desc.Width              = m_SceneDesc.RenderWidth;
+        desc.Height             = m_SceneDesc.RenderHeight;
         desc.DepthOrArraySize   = 1;
         desc.MipLevels          = 1;
         desc.Format             = DXGI_FORMAT_R16G16_FLOAT;
@@ -987,8 +1000,8 @@ bool Renderer::SystemSetup()
     {
         asdx::TargetDesc desc;
         desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-        desc.Width              = m_SceneDesc.Width;
-        desc.Height             = m_SceneDesc.Height;
+        desc.Width              = m_SceneDesc.RenderWidth;
+        desc.Height             = m_SceneDesc.RenderHeight;
         desc.DepthOrArraySize   = 1;
         desc.MipLevels          = 1;
         desc.Format             = DXGI_FORMAT_R8_UNORM;
@@ -1013,8 +1026,8 @@ bool Renderer::SystemSetup()
     {
         asdx::TargetDesc desc;
         desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-        desc.Width              = m_SceneDesc.Width;
-        desc.Height             = m_SceneDesc.Height;
+        desc.Width              = m_SceneDesc.RenderWidth;
+        desc.Height             = m_SceneDesc.RenderHeight;
         desc.DepthOrArraySize   = 1;
         desc.MipLevels          = 1;
         desc.Format             = DXGI_FORMAT_R16G16_FLOAT;
@@ -1039,8 +1052,8 @@ bool Renderer::SystemSetup()
     {
         asdx::TargetDesc desc;
         desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-        desc.Width              = m_SceneDesc.Width;
-        desc.Height             = m_SceneDesc.Height;
+        desc.Width              = m_SceneDesc.RenderWidth;
+        desc.Height             = m_SceneDesc.RenderHeight;
         desc.DepthOrArraySize   = 1;
         desc.MipLevels          = 1;
         desc.Format             = DXGI_FORMAT_D32_FLOAT;
@@ -1063,8 +1076,8 @@ bool Renderer::SystemSetup()
     {
         asdx::TargetDesc desc;
         desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-        desc.Width              = m_SceneDesc.Width;
-        desc.Height             = m_SceneDesc.Height;
+        desc.Width              = m_SceneDesc.RenderWidth;
+        desc.Height             = m_SceneDesc.RenderHeight;
         desc.DepthOrArraySize   = 1;
         desc.MipLevels          = 1;
         desc.Format             = DXGI_FORMAT_R32_FLOAT;
@@ -1089,8 +1102,8 @@ bool Renderer::SystemSetup()
     {
         asdx::TargetDesc desc;
         desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-        desc.Width              = m_SceneDesc.Width;
-        desc.Height             = m_SceneDesc.Height;
+        desc.Width              = m_SceneDesc.RenderWidth;
+        desc.Height             = m_SceneDesc.RenderHeight;
         desc.DepthOrArraySize   = 1;
         desc.MipLevels          = 1;
         desc.Format             = DXGI_FORMAT_R8_UINT;
@@ -1115,8 +1128,8 @@ bool Renderer::SystemSetup()
     {
         asdx::TargetDesc desc;
         desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-        desc.Width              = m_SceneDesc.Width;
-        desc.Height             = m_SceneDesc.Height;
+        desc.Width              = m_SceneDesc.RenderWidth;
+        desc.Height             = m_SceneDesc.RenderHeight;
         desc.DepthOrArraySize   = 1;
         desc.MipLevels          = 1;
         desc.Format             = DXGI_FORMAT_R8G8B8A8_UNORM;//DXGI_FORMAT_R32G32B32A32_FLOAT;
@@ -1145,8 +1158,8 @@ bool Renderer::SystemSetup()
     {
         asdx::TargetDesc desc;
         desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-        desc.Width              = m_SceneDesc.Width;
-        desc.Height             = m_SceneDesc.Height;
+        desc.Width              = m_SceneDesc.RenderWidth;
+        desc.Height             = m_SceneDesc.RenderHeight;
         desc.DepthOrArraySize   = 1;
         desc.MipLevels          = 1;
         desc.Format             = DXGI_FORMAT_R8G8B8A8_UNORM;//DXGI_FORMAT_R32G32B32A32_FLOAT;
@@ -1175,8 +1188,8 @@ bool Renderer::SystemSetup()
     {
         asdx::TargetDesc desc;
         desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-        desc.Width              = m_SceneDesc.Width;
-        desc.Height             = m_SceneDesc.Height;
+        desc.Width              = m_SceneDesc.RenderWidth;
+        desc.Height             = m_SceneDesc.RenderHeight;
         desc.DepthOrArraySize   = 1;
         desc.MipLevels          = 1;
         desc.Format             = DXGI_FORMAT_R8G8B8A8_UNORM;//DXGI_FORMAT_R32G32B32A32_FLOAT;
@@ -1336,9 +1349,10 @@ bool Renderer::SystemSetup()
         asdx::InitRangeAsUAV(ranges[5], 0);
         asdx::InitRangeAsUAV(ranges[6], 1);
 
-        D3D12_ROOT_PARAMETER params[9] = {};
+        D3D12_ROOT_PARAMETER params[MAX_DENOISER_PARAM_COUNT] = {};
         asdx::InitAsCBV      (params[DENOISER_PARAM_CBV0], 0, cs);
         asdx::InitAsConstants(params[DENOISER_PARAM_CBV1], 1, 4, cs);
+        asdx::InitAsConstants(params[DENOISER_PARAM_CBV2], 2, 4, cs);
         asdx::InitAsTable    (params[DENOISER_PARAM_SRV0], 1, &ranges[0], cs);
         asdx::InitAsTable    (params[DENOISER_PARAM_SRV1], 1, &ranges[1], cs);
         asdx::InitAsTable    (params[DENOISER_PARAM_SRV2], 1, &ranges[2], cs);
@@ -1599,7 +1613,7 @@ bool Renderer::SystemSetup()
 
     // 初回フレーム計算用に設定しておく.
     {
-        auto aspect = float(m_SceneDesc.Width) / float(m_SceneDesc.Height);
+        auto aspect = float(m_SceneDesc.RenderWidth) / float(m_SceneDesc.RenderHeight);
 
         auto view = m_AppCamera.GetView();
         auto proj = asdx::Matrix::CreatePerspectiveFieldOfView(
@@ -1636,7 +1650,7 @@ bool Renderer::SystemSetup()
 
     // 初回フレーム計算用に設定しておく.
     {
-        auto aspect = float(m_SceneDesc.Width) / float(m_SceneDesc.Height);
+        auto aspect = float(m_SceneDesc.RenderWidth) / float(m_SceneDesc.RenderHeight);
 
         auto view = m_Camera.GetView();
         auto proj = asdx::Matrix::CreatePerspectiveFieldOfView(
@@ -1686,7 +1700,7 @@ bool Renderer::BuildScene()
     // シーン構築.
     {
         std::string path;
-        if (!asdx::SearchFilePathA(m_SceneDesc.Path, path))
+        if (!asdx::SearchFilePathA(m_SceneDesc.SceneFilePath, path))
         {
             ELOGA("Error : File Not Found. path = %s", path);
             return false;
@@ -1697,8 +1711,6 @@ bool Renderer::BuildScene()
             ELOGA("Error : Scene::Init() Failed.");
             return false;
         }
-
-        ILOGA("Scene Binary Loaded.");
     }
 #endif
 
@@ -1726,6 +1738,7 @@ bool Renderer::BuildScene()
 
     timer.End();
     printf_s("done! --- %lf[msec]\n", timer.GetElapsedMsec());
+    DLOGA("Scene Path = %s", m_SceneDesc.SceneFilePath);
 
     return true;
 }
@@ -1934,14 +1947,14 @@ void Renderer::ChangeFrame(uint32_t index)
     m_CurrView = m_Camera.GetView();
     m_CurrProj = asdx::Matrix::CreatePerspectiveFieldOfView(
         m_FovY,
-        float(m_SceneDesc.Width) / float(m_SceneDesc.Height),
+        float(m_SceneDesc.RenderWidth) / float(m_SceneDesc.RenderHeight),
         m_Camera.GetMinDist(),
         m_Camera.GetMaxDist());
     m_CameraZAxis = m_Camera.GetAxisZ();
 
     if (m_MyFrameCount < 400)
     {
-        m_AnimationTime += 1.0f / 30.0f;
+        m_AnimationTime += float(1.0 / m_SceneDesc.FPS);
         m_ForceChanged = true;
     }
 
@@ -1953,7 +1966,7 @@ void Renderer::ChangeFrame(uint32_t index)
     m_CurrView = m_AppCamera.GetView();
     m_CurrProj = asdx::Matrix::CreatePerspectiveFieldOfView(
         m_FovY,
-        float(m_SceneDesc.Width) / float(m_SceneDesc.Height),
+        float(m_SceneDesc.RenderWidth) / float(m_SceneDesc.RenderHeight),
         m_AppCamera.GetNearClip(),
         m_AppCamera.GetFarClip());
     m_CameraZAxis = m_AppCamera.GetAxisZ();
@@ -1978,6 +1991,9 @@ void Renderer::ChangeFrame(uint32_t index)
 
         if (GetFrameCount() == 0)
         { changed = true; }
+
+        if (GetFrameCount() <= 1)
+        { m_ResetHistory = true; }
 
     #if RTC_TARGET == RTC_DEVELOP
         if (m_Dirty)
@@ -2029,8 +2045,8 @@ void Renderer::ChangeFrame(uint32_t index)
         param.AccumulatedFrames     = m_AccumulatedFrames;
         param.ExposureAdjustment    = 1.0f;
         param.LightCount            = m_Scene.GetLightCount();
-        param.Size.x                = float(m_SceneDesc.Width);
-        param.Size.y                = float(m_SceneDesc.Height);
+        param.Size.x                = float(m_SceneDesc.RenderWidth);
+        param.Size.y                = float(m_SceneDesc.RenderHeight);
         param.Size.z                = 1.0f / param.Size.x;
         param.Size.w                = 1.0f / param.Size.y;
         param.CameraDir             = m_CameraZAxis;
@@ -2073,14 +2089,14 @@ void Renderer::ChangeFrame(uint32_t index)
         float projectY = std::abs(2.0f / (y1 - y0));
 
         // ビューポートの横幅と縦幅.
-        auto rectW = float(m_SceneDesc.Width);  
-        auto rectH = float(m_SceneDesc.Height);
+        auto rectW = float(m_SceneDesc.RenderWidth);
+        auto rectH = float(m_SceneDesc.RenderHeight);
 
         float unproject = 1.0f / (0.5f * rectH * projectY);
 
         DenoiseParam param = {};
-        param.ScreenWidth               = m_SceneDesc.Width;
-        param.ScreenHeight              = m_SceneDesc.Height;
+        param.ScreenWidth               = m_SceneDesc.RenderWidth;
+        param.ScreenHeight              = m_SceneDesc.RenderHeight;
         param.MinRectDimMulUnproject    = asdx::Min(rectW, rectH) * unproject;
         param.PlaneDistSensitivity      = 0.005f;
         param.OrthoMode                 = (isOrtho) ? 1.0f : 0.0f;
@@ -2088,7 +2104,7 @@ void Renderer::ChangeFrame(uint32_t index)
         param.RoughnessFraction         = 0.15f;
         param.Unproject                 = unproject;
         param.BlurRadius                = 8.0f;
-        param.InvScreenSize             = asdx::Vector2(1.0f / float(m_SceneDesc.Width), 1.0f / float(m_SceneDesc.Height));
+        param.InvScreenSize             = asdx::Vector2(1.0f / float(m_SceneDesc.RenderWidth), 1.0f / float(m_SceneDesc.RenderHeight));
         param.IgnoreHistory             = (changed) ? 1 : 0;
         param.View                      = m_CurrView;
         param.Proj                      = m_CurrProj;
@@ -2206,8 +2222,8 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         asdx::UAVBarrier(pCmd, m_Radiance.GetResource());
     }
 
-    auto threadX = (m_SceneDesc.Width  + 7) / 8;
-    auto threadY = (m_SceneDesc.Height + 7) / 8;
+    auto threadX = (m_SceneDesc.RenderWidth  + 7) / 8;
+    auto threadY = (m_SceneDesc.RenderHeight + 7) / 8;
 
     // トーンマップ実行.
     {
@@ -2285,9 +2301,11 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
             asdx::Vector2   Jitter;
         };
         Constants constants = {};
-        constants.ScreenWidth   = m_SceneDesc.Width;
-        constants.ScreenHeight  = m_SceneDesc.Height;
+        constants.ScreenWidth   = m_SceneDesc.RenderWidth;
+        constants.ScreenHeight  = m_SceneDesc.RenderHeight;
         constants.Jitter        = jitterOffset;
+
+        uint32_t flags = (m_ResetHistory) ? 0x1 : 0;
 
         m_AccumulationColorHistory[m_PrevHistoryIndex].Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         m_AccumulationColorHistory[m_CurrHistoryIndex].Transition(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -2298,6 +2316,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         pCmd->SetComputeRootSignature(m_DenoiserRootSig.GetPtr());
         m_TemporalAccumulationPipe.SetState(pCmd);
         pCmd->SetComputeRoot32BitConstants(DENOISER_PARAM_CBV1, 4, &constants, 0);
+        pCmd->SetComputeRoot32BitConstants(DENOISER_PARAM_CBV2, 1, &flags, 0);
         pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV0, m_BlurTarget0.GetSRV()->GetHandleGPU());
         pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV1, m_AccumulationColorHistory[m_PrevHistoryIndex].GetSRV()->GetHandleGPU());
         pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV2, m_Velocity.GetSRV()->GetHandleGPU());
@@ -2373,9 +2392,11 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
             asdx::Vector2   Jitter;
         };
         Constants constants = {};
-        constants.ScreenWidth   = m_SceneDesc.Width;
-        constants.ScreenHeight  = m_SceneDesc.Height;
+        constants.ScreenWidth   = m_SceneDesc.RenderWidth;
+        constants.ScreenHeight  = m_SceneDesc.RenderHeight;
         constants.Jitter        = jitterOffset;
+
+        uint32_t flags = (m_ResetHistory) ? 0x1 : 0;
 
         m_StabilizationColorHistory[m_PrevHistoryIndex].Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         m_StabilizationColorHistory[m_CurrHistoryIndex].Transition(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -2384,6 +2405,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         pCmd->SetComputeRootSignature(m_DenoiserRootSig.GetPtr());
         m_TemporalStabilizationPipe.SetState(pCmd);
         pCmd->SetComputeRoot32BitConstants(DENOISER_PARAM_CBV1, 4, &constants, 0);
+        pCmd->SetComputeRoot32BitConstants(DENOISER_PARAM_CBV2, 1, &flags, 0);
         pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV0, m_BlurTarget0.GetSRV()->GetHandleGPU());
         pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV1, m_StabilizationColorHistory[m_PrevHistoryIndex].GetSRV()->GetHandleGPU());
         pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV2, m_Velocity.GetSRV()->GetHandleGPU());
@@ -2398,6 +2420,12 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
     {
     }
 
+    //==========================
+    // ここから先は最終解像度.
+    //==========================
+    threadX = (m_SceneDesc.OutputWidth  + 7) / 8;
+    threadY = (m_SceneDesc.OutputHeight + 7) / 8;
+
     // テンポラルアンチエリアス実行.
     {
         RTC_DEBUG_CODE(ScopedMarker marker(pCmd, "TemporalAntiAliasing"));
@@ -2407,9 +2435,10 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         TaaParam param = {};
         param.Gamma         = 0.95f;
         param.BlendFactor   = 0.9f;
-        param.MapSize       = asdx::Vector2(float(m_SceneDesc.Width), float(m_SceneDesc.Height));
-        param.InvMapSize    = asdx::Vector2(1.0f / float(m_SceneDesc.Width), 1.0f / float(m_SceneDesc.Height));
+        param.MapSize       = asdx::Vector2(float(m_SceneDesc.OutputWidth), float(m_SceneDesc.OutputHeight));
+        param.InvMapSize    = asdx::Vector2(1.0f / float(m_SceneDesc.OutputWidth), 1.0f / float(m_SceneDesc.OutputHeight));
         param.Jitter        = jitterOffset;
+        param.Flags         = (m_ResetHistory) ? 0x1 : 0;
 
         m_TaaParam.SwapBuffer();
         m_TaaParam.Update(&param, sizeof(param));
@@ -2445,8 +2474,8 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         D3D12_TEXTURE_COPY_LOCATION dst = {};
         dst.Type                                = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
         dst.pResource                           = m_ReadBackTexture[m_CaptureTargetIndex].GetPtr();
-        dst.PlacedFootprint.Footprint.Width     = static_cast<UINT>(m_SceneDesc.Width);
-        dst.PlacedFootprint.Footprint.Height    = m_SceneDesc.Height;
+        dst.PlacedFootprint.Footprint.Width     = static_cast<UINT>(m_SceneDesc.OutputWidth);
+        dst.PlacedFootprint.Footprint.Height    = m_SceneDesc.OutputHeight;
         dst.PlacedFootprint.Footprint.Depth     = 1;
         dst.PlacedFootprint.Footprint.RowPitch  = m_ReadBackPitch;
         dst.PlacedFootprint.Footprint.Format    = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -2458,9 +2487,9 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
 
         D3D12_BOX box = {};
         box.left    = 0;
-        box.right   = m_SceneDesc.Width;
+        box.right   = m_SceneDesc.OutputWidth;
         box.top     = 0;
-        box.bottom  = m_SceneDesc.Height;
+        box.bottom  = m_SceneDesc.OutputHeight;
         box.front   = 0;
         box.back    = 1;
 
@@ -2574,7 +2603,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
     m_FrameWaitPoint = pGraphicsQueue->Signal();
 
     // 画面に表示.
-    Present(1);
+    Present(0);
 
     // フレーム同期.
     asdx::FrameSync();
@@ -2583,12 +2612,14 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
     RTC_DEBUG_CODE(ReloadShader());
 
     m_ReadBackTargetIndex = (m_ReadBackTargetIndex + 1) % 3;
-    m_CaptureTargetIndex = (m_CaptureTargetIndex + 1) % 3;
+    m_CaptureTargetIndex  = (m_CaptureTargetIndex  + 1) % 3;
 
     m_PrevHistoryIndex = m_CurrHistoryIndex;
     m_CurrHistoryIndex = (m_CurrHistoryIndex + 1) & 0x1;
 
     m_TemporalJitterIndex = (m_TemporalJitterIndex + 1) % 8;
+
+    m_ResetHistory = false;
 }
 
 //-----------------------------------------------------------------------------
@@ -2599,11 +2630,11 @@ void Renderer::DispatchRays(ID3D12GraphicsCommandList6* pCmd)
 #if RTC_TARGET == RTC_DEVELOP
     if (m_RtShaderFlags.Get(RELOADED_BIT_INDEX))
     {
-        m_DevPipe.Dispatch(pCmd, m_SceneDesc.Width, m_SceneDesc.Height);
+        m_DevPipe.Dispatch(pCmd, m_SceneDesc.RenderWidth, m_SceneDesc.RenderHeight);
         return;
     }
 #endif
-    m_RtPipe.Dispatch(pCmd, m_SceneDesc.Width, m_SceneDesc.Height);
+    m_RtPipe.Dispatch(pCmd, m_SceneDesc.RenderWidth, m_SceneDesc.RenderHeight);
 }
 
 //-----------------------------------------------------------------------------

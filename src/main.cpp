@@ -17,12 +17,14 @@ int main(int argc, char** argv)
 {
     r3d::SceneDesc desc = {};
     desc.RenderTimeSec      = 299.0;
-    desc.Width              = 1920;//2560;
-    desc.Height             = 1080;//1440;
-    desc.FPS                = 59.9;
-    desc.AnimationTimeSec   = 10.0;
-    //desc.Path               = "../res/scene/rtcamp.scn";
-    desc.Path               = "../res/scene/test_scene.scn";
+    desc.OutputWidth        = 1920;
+    desc.OutputHeight       = 1080;
+    desc.RenderWidth        = 1920;//1920;//2560;
+    desc.RenderHeight       = 1080;//1080;//1440;
+    desc.FPS                = 23.9;
+    desc.AnimationTimeSec   = 5.0;
+    //desc.SceneFilePath      = "../res/scene/rtcamp.scn";
+    desc.SceneFilePath      = "../res/scene/test_scene.scn";
 
     r3d::Renderer app(desc);
     app.Run();
