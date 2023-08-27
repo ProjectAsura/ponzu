@@ -63,6 +63,10 @@ static const size_t     RELOADED_BIT_INDEX  = 1;
 #define RELOAD_SHADER_STATE_SUCCESS (1)
 #define RELOAD_SHADER_STATE_FAILED  (-1)
 
+
+///////////////////////////////////////////////////////////////////////////////
+// ScopedMarker class
+///////////////////////////////////////////////////////////////////////////////
 class ScopedMarker
 {
 public:
@@ -84,6 +88,9 @@ private:
 #endif
 
 #ifdef ASDX_ENABLE_IMGUI
+///////////////////////////////////////////////////////////////////////////////
+// BUFFER_KIND enum
+///////////////////////////////////////////////////////////////////////////////
 enum BUFFER_KIND
 {
     BUFFER_KIND_RENDERED  = 0,
@@ -93,6 +100,9 @@ enum BUFFER_KIND
     BUFFER_KIND_VELOCITY,
 };
 
+///////////////////////////////////////////////////////////////////////////////
+// SAMPLING_TYPE enum
+///////////////////////////////////////////////////////////////////////////////
 enum SAMPLING_TYPE
 {
     SAMPLING_TYPE_DEFAULT   = 0,    // RGBA.
@@ -114,6 +124,9 @@ static const char* kBufferKindItems[] = {
 };
 #endif
 
+///////////////////////////////////////////////////////////////////////////////
+// DENOISER_PARAM enum
+///////////////////////////////////////////////////////////////////////////////
 enum DENOISER_PARAM
 {
     DENOISER_PARAM_CBV0,
@@ -124,6 +137,7 @@ enum DENOISER_PARAM
     DENOISER_PARAM_SRV2,
     DENOISER_PARAM_SRV3,
     DENOISER_PARAM_SRV4,
+    DENOISER_PARAM_SRV5,
     DENOISER_PARAM_UAV0,
     DENOISER_PARAM_UAV1,
     MAX_DENOISER_PARAM_COUNT,
@@ -231,21 +245,13 @@ struct DenoiseParam
 {
     uint32_t        ScreenWidth;
     uint32_t        ScreenHeight;
-    float           MinRectDimMulUnproject;
-    float           PlaneDistSensitivity;
-    float           OrthoMode;
-    float           LobeAngleFraction;
-    float           RoughnessFraction;
-    float           Unproject;
-    float           BlurRadius;
-    asdx::Vector2   InvScreenSize;
     uint32_t        IgnoreHistory;
+    float           Sharpness;
     asdx::Matrix    Proj;
     asdx::Matrix    View;
     float           NearClip;
     float           FarClip;
     asdx::Vector2   UVToViewParam;
-    asdx::Vector4   HitDistanceParams;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1340,14 +1346,15 @@ bool Renderer::SystemSetup()
     {
         auto cs = D3D12_SHADER_VISIBILITY_ALL;
 
-        D3D12_DESCRIPTOR_RANGE ranges[7] = {};
+        D3D12_DESCRIPTOR_RANGE ranges[8] = {};
         asdx::InitRangeAsSRV(ranges[0], 0);
         asdx::InitRangeAsSRV(ranges[1], 1);
         asdx::InitRangeAsSRV(ranges[2], 2);
         asdx::InitRangeAsSRV(ranges[3], 3);
         asdx::InitRangeAsSRV(ranges[4], 4);
-        asdx::InitRangeAsUAV(ranges[5], 0);
-        asdx::InitRangeAsUAV(ranges[6], 1);
+        asdx::InitRangeAsSRV(ranges[5], 5);
+        asdx::InitRangeAsUAV(ranges[6], 0);
+        asdx::InitRangeAsUAV(ranges[7], 1);
 
         D3D12_ROOT_PARAMETER params[MAX_DENOISER_PARAM_COUNT] = {};
         asdx::InitAsCBV      (params[DENOISER_PARAM_CBV0], 0, cs);
@@ -1358,8 +1365,9 @@ bool Renderer::SystemSetup()
         asdx::InitAsTable    (params[DENOISER_PARAM_SRV2], 1, &ranges[2], cs);
         asdx::InitAsTable    (params[DENOISER_PARAM_SRV3], 1, &ranges[3], cs);
         asdx::InitAsTable    (params[DENOISER_PARAM_SRV4], 1, &ranges[4], cs);
-        asdx::InitAsTable    (params[DENOISER_PARAM_UAV0], 1, &ranges[5], cs);
-        asdx::InitAsTable    (params[DENOISER_PARAM_UAV1], 1, &ranges[6], cs);
+        asdx::InitAsTable    (params[DENOISER_PARAM_SRV5], 1, &ranges[5], cs);
+        asdx::InitAsTable    (params[DENOISER_PARAM_UAV0], 1, &ranges[6], cs);
+        asdx::InitAsTable    (params[DENOISER_PARAM_UAV1], 1, &ranges[7], cs);
 
         auto flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
 
@@ -2062,56 +2070,16 @@ void Renderer::ChangeFrame(uint32_t index)
 
     // デノイズ用定数バッファ更新.
     {
-        // ビュー射影行列から錐台を構成する平面を求める.
-        asdx::Vector4 plane[6] = {};
-        asdx::CalcFrustumPlanes(m_CurrView, m_CurrProj, plane);
-
-        // 平面式からパラメータを逆算.
-        float y0      = 0.0f;
-        float y1      = 0.0f;
-        bool  isOrtho = (m_CurrProj._44 == 1.0f) ? true : false;
-
-        // 正射影の場合.
-        if (isOrtho)
-        {
-            y0 = -plane[asdx::PLANE_BOTTOM].w;
-            y1 =  plane[asdx::PLANE_TOP].w;
-
-            if (m_CurrProj._22 < 0.0f)
-            { std::swap(y0, y1); }
-        }
-        // 透視投影の場合.
-        else
-        {
-            y0 = plane[asdx::PLANE_BOTTOM].z / plane[asdx::PLANE_BOTTOM].y;
-            y1 = plane[asdx::PLANE_TOP].z / plane[asdx::PLANE_TOP].y;
-        }
-        float projectY = std::abs(2.0f / (y1 - y0));
-
-        // ビューポートの横幅と縦幅.
-        auto rectW = float(m_SceneDesc.RenderWidth);
-        auto rectH = float(m_SceneDesc.RenderHeight);
-
-        float unproject = 1.0f / (0.5f * rectH * projectY);
-
         DenoiseParam param = {};
-        param.ScreenWidth               = m_SceneDesc.RenderWidth;
-        param.ScreenHeight              = m_SceneDesc.RenderHeight;
-        param.MinRectDimMulUnproject    = asdx::Min(rectW, rectH) * unproject;
-        param.PlaneDistSensitivity      = 0.005f;
-        param.OrthoMode                 = (isOrtho) ? 1.0f : 0.0f;
-        param.LobeAngleFraction         = 0.15f;
-        param.RoughnessFraction         = 0.15f;
-        param.Unproject                 = unproject;
-        param.BlurRadius                = 8.0f;
-        param.InvScreenSize             = asdx::Vector2(1.0f / float(m_SceneDesc.RenderWidth), 1.0f / float(m_SceneDesc.RenderHeight));
-        param.IgnoreHistory             = (changed) ? 1 : 0;
-        param.View                      = m_CurrView;
-        param.Proj                      = m_CurrProj;
-        param.NearClip                  = nearClip;
-        param.FarClip                   = farClip;
-        param.UVToViewParam             = asdx::Vector2(1.0f / m_CurrProj._11, 1.0f / m_CurrProj._22);
-        param.HitDistanceParams         = asdx::Vector4(3.0f, 0.1f, 20.0f, -25.0f);
+        param.ScreenWidth   = m_SceneDesc.RenderWidth;
+        param.ScreenHeight  = m_SceneDesc.RenderHeight;
+        param.IgnoreHistory = (changed) ? 0x1 : 0;
+        param.Sharpness     = (farClip - nearClip) * 0.5f;
+        param.View          = m_CurrView;
+        param.Proj          = m_CurrProj;
+        param.NearClip      = nearClip;
+        param.FarClip       = farClip;
+        param.UVToViewParam = asdx::Vector2(1.0f / m_CurrProj._11, 1.0f / m_CurrProj._22);
 
         m_DenoiseParam.SwapBuffer();
         m_DenoiseParam.Update(&param, sizeof(param));
@@ -2236,11 +2204,9 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
 
         pCmd->SetComputeRootSignature(m_TonemapRootSig.GetPtr());
         m_TonemapPipe.SetState(pCmd);
-
         pCmd->SetComputeRootDescriptorTable(0, inputBuffer.GetSRV()->GetHandleGPU());
         pCmd->SetComputeRootConstantBufferView(1, m_SceneParam.GetResource()->GetGPUVirtualAddress());
         pCmd->SetComputeRootDescriptorTable(2, m_Tonemapped.GetUAV()->GetHandleGPU());
-
         pCmd->Dispatch(threadX, threadY, 1);
 
         asdx::UAVBarrier(pCmd, m_Tonemapped.GetResource());
@@ -2266,28 +2232,46 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
 
         auto& inputBuffer = m_Tonemapped;
 
+        asdx::Vector4 blurOffset = {};
+        blurOffset.x = 1.0f / float(m_SceneDesc.RenderWidth);
+        blurOffset.y = 0.0f;
+        blurOffset.z = 1.0f;
+
         m_BlurTarget0.Transition(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         m_Depth      .Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         m_Normal     .Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         m_Roughness  .Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         m_HitDistance.Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        m_AccumulationCount.Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         inputBuffer.Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
         pCmd->SetComputeRootSignature(m_DenoiserRootSig.GetPtr());
         m_PreBlurPipe.SetState(pCmd);
         pCmd->SetComputeRootConstantBufferView(DENOISER_PARAM_CBV0, m_DenoiseParam.GetResource()->GetGPUVirtualAddress());
-        pCmd->SetComputeRoot32BitConstants(DENOISER_PARAM_CBV1, 4, &rotator.x, 0);
+        pCmd->SetComputeRoot32BitConstants(DENOISER_PARAM_CBV1, 3, &blurOffset, 0);
         pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV0, m_Depth.GetSRV()->GetHandleGPU());
         pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV1, m_Normal.GetSRV()->GetHandleGPU());
         pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV2, m_Roughness.GetSRV()->GetHandleGPU());
         pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV3, m_HitDistance.GetSRV()->GetHandleGPU());
         pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV4, inputBuffer.GetSRV()->GetHandleGPU());
+        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV5, m_AccumulationCount.GetSRV()->GetHandleGPU());
         pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_UAV0, m_BlurTarget0.GetUAV()->GetHandleGPU());
-        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_UAV1, m_AccumulationCount.GetUAV()->GetHandleGPU());
-
         pCmd->Dispatch(threadX, threadY, 1);
 
         asdx::UAVBarrier(pCmd, m_BlurTarget0.GetResource());
+
+        blurOffset.x = 0.0f;
+        blurOffset.y = 1.0f / float(m_SceneDesc.RenderHeight);
+
+        m_BlurTarget1.Transition(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        m_BlurTarget0.Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+
+        pCmd->SetComputeRoot32BitConstants(DENOISER_PARAM_CBV1, 3, &blurOffset, 0);
+        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV4, m_BlurTarget0.GetSRV()->GetHandleGPU());
+        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_UAV0, m_BlurTarget1.GetUAV()->GetHandleGPU());
+        pCmd->Dispatch(threadX, threadY, 1);
+
+        asdx::UAVBarrier(pCmd, m_BlurTarget1.GetResource());
     }
 
     // テンポラルアキュムレーション処理.
@@ -2310,19 +2294,18 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         m_AccumulationColorHistory[m_PrevHistoryIndex].Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         m_AccumulationColorHistory[m_CurrHistoryIndex].Transition(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         m_Velocity.Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        m_AccumulationCount.Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        m_BlurTarget0.Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        m_AccumulationCount.Transition(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        m_BlurTarget1.Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
         pCmd->SetComputeRootSignature(m_DenoiserRootSig.GetPtr());
         m_TemporalAccumulationPipe.SetState(pCmd);
         pCmd->SetComputeRoot32BitConstants(DENOISER_PARAM_CBV1, 4, &constants, 0);
         pCmd->SetComputeRoot32BitConstants(DENOISER_PARAM_CBV2, 1, &flags, 0);
-        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV0, m_BlurTarget0.GetSRV()->GetHandleGPU());
+        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV0, m_BlurTarget1.GetSRV()->GetHandleGPU());
         pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV1, m_AccumulationColorHistory[m_PrevHistoryIndex].GetSRV()->GetHandleGPU());
         pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV2, m_Velocity.GetSRV()->GetHandleGPU());
-        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV3, m_AccumulationCount.GetSRV()->GetHandleGPU());
         pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_UAV0, m_AccumulationColorHistory[m_CurrHistoryIndex].GetUAV()->GetHandleGPU());
-
+        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_UAV1, m_AccumulationCount.GetUAV()->GetHandleGPU());
         pCmd->Dispatch(threadX, threadY, 1);
 
         asdx::UAVBarrier(pCmd, m_AccumulationColorHistory[m_CurrHistoryIndex].GetResource());
@@ -2336,21 +2319,38 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
     {
         RTC_DEBUG_CODE(ScopedMarker marker(pCmd, "DenoiseBlur"));
 
-        m_BlurTarget1.Transition(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        m_BlurTarget0.Transition(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        m_AccumulationCount.Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
-        auto rotator = CalcRotator(randomAngle.y, randomScale.y);
+        asdx::Vector4 blurOffset = {};
+        blurOffset.x = 1.0f / float(m_SceneDesc.RenderWidth);
+        blurOffset.y = 0.0f;
+        blurOffset.z = 1.0f;
 
         pCmd->SetComputeRootSignature(m_DenoiserRootSig.GetPtr());
         m_DenoiserPipe.SetState(pCmd);
         pCmd->SetComputeRootConstantBufferView(DENOISER_PARAM_CBV0, m_DenoiseParam.GetResource()->GetGPUVirtualAddress());
-        pCmd->SetComputeRoot32BitConstants(DENOISER_PARAM_CBV1, 4, &rotator.x, 0);
+        pCmd->SetComputeRoot32BitConstants(DENOISER_PARAM_CBV1, 3, &blurOffset, 0);
         pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV0, m_Depth.GetSRV()->GetHandleGPU());
         pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV1, m_Normal.GetSRV()->GetHandleGPU());
         pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV2, m_Roughness.GetSRV()->GetHandleGPU());
         pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV3, m_HitDistance.GetSRV()->GetHandleGPU());
         pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV4, m_AccumulationColorHistory[m_CurrHistoryIndex].GetSRV()->GetHandleGPU());
-        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_UAV0, m_BlurTarget1.GetUAV()->GetHandleGPU());
+        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV5, m_AccumulationCount.GetSRV()->GetHandleGPU());
+        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_UAV0, m_BlurTarget0.GetUAV()->GetHandleGPU());
+        pCmd->Dispatch(threadX, threadY, 1);
 
+        asdx::UAVBarrier(pCmd, m_BlurTarget0.GetResource());
+
+        blurOffset.x = 0.0f;
+        blurOffset.y = 1.0f / float(m_SceneDesc.RenderHeight);
+
+        m_BlurTarget0.Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        m_BlurTarget1.Transition(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+        pCmd->SetComputeRoot32BitConstants(DENOISER_PARAM_CBV1, 3, &blurOffset, 0);
+        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV4, m_BlurTarget0.GetSRV()->GetHandleGPU());
+        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_UAV0, m_BlurTarget1.GetUAV()->GetHandleGPU());
         pCmd->Dispatch(threadX, threadY, 1);
 
         asdx::UAVBarrier(pCmd, m_BlurTarget1.GetResource());
@@ -2360,7 +2360,10 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
     {
         RTC_DEBUG_CODE(ScopedMarker marker(pCmd, "PostBlur"));
 
-        auto rotator = CalcRotator(randomAngle.z, randomScale.z);
+        asdx::Vector4 blurOffset = {};
+        blurOffset.x = 1.0f / float(m_SceneDesc.RenderWidth);
+        blurOffset.y = 0.0f;
+        blurOffset.z = 0.5f;
 
         m_BlurTarget0.Transition(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         m_BlurTarget1.Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -2368,17 +2371,30 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         pCmd->SetComputeRootSignature(m_DenoiserRootSig.GetPtr());
         m_PostBlurPipe.SetState(pCmd);
         pCmd->SetComputeRootConstantBufferView(DENOISER_PARAM_CBV0, m_DenoiseParam.GetResource()->GetGPUVirtualAddress());
-        pCmd->SetComputeRoot32BitConstants(DENOISER_PARAM_CBV1, 4, &rotator.x, 0);
+        pCmd->SetComputeRoot32BitConstants(DENOISER_PARAM_CBV1, 3, &blurOffset, 0);
         pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV0, m_Depth.GetSRV()->GetHandleGPU());
         pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV1, m_Normal.GetSRV()->GetHandleGPU());
         pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV2, m_Roughness.GetSRV()->GetHandleGPU());
         pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV3, m_HitDistance.GetSRV()->GetHandleGPU());
         pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV4, m_BlurTarget1.GetSRV()->GetHandleGPU());
+        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV5, m_AccumulationCount.GetSRV()->GetHandleGPU());
         pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_UAV0, m_BlurTarget0.GetUAV()->GetHandleGPU());
-
         pCmd->Dispatch(threadX, threadY, 1);
 
         asdx::UAVBarrier(pCmd, m_BlurTarget0.GetResource());
+
+        blurOffset.x = 0.0f;
+        blurOffset.y = 1.0f / float(m_SceneDesc.RenderHeight);
+
+        m_BlurTarget0.Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        m_BlurTarget1.Transition(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+        pCmd->SetComputeRoot32BitConstants(DENOISER_PARAM_CBV1, 3, &blurOffset, 0);
+        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV4, m_BlurTarget0.GetSRV()->GetHandleGPU());
+        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_UAV0, m_BlurTarget1.GetUAV()->GetHandleGPU());
+        pCmd->Dispatch(threadX, threadY, 1);
+
+        asdx::UAVBarrier(pCmd, m_BlurTarget1.GetResource());
     }
 
     // テンポラルスタビライゼーション処理.
@@ -2400,17 +2416,16 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
 
         m_StabilizationColorHistory[m_PrevHistoryIndex].Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         m_StabilizationColorHistory[m_CurrHistoryIndex].Transition(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-        m_BlurTarget0.Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        m_BlurTarget1.Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
         pCmd->SetComputeRootSignature(m_DenoiserRootSig.GetPtr());
         m_TemporalStabilizationPipe.SetState(pCmd);
         pCmd->SetComputeRoot32BitConstants(DENOISER_PARAM_CBV1, 4, &constants, 0);
         pCmd->SetComputeRoot32BitConstants(DENOISER_PARAM_CBV2, 1, &flags, 0);
-        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV0, m_BlurTarget0.GetSRV()->GetHandleGPU());
+        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV0, m_BlurTarget1.GetSRV()->GetHandleGPU());
         pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV1, m_StabilizationColorHistory[m_PrevHistoryIndex].GetSRV()->GetHandleGPU());
         pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV2, m_Velocity.GetSRV()->GetHandleGPU());
         pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_UAV0, m_StabilizationColorHistory[m_CurrHistoryIndex].GetUAV()->GetHandleGPU());
-
         pCmd->Dispatch(threadX, threadY, 1);
 
         asdx::UAVBarrier(pCmd, m_StabilizationColorHistory[m_CurrHistoryIndex].GetResource());

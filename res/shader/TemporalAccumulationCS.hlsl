@@ -20,8 +20,8 @@ static const float kMaxHistoryLength          = 64.0f;
 Texture2D<float4>   CurrColorMap    : register(t0);
 Texture2D<float4>   HistoryColorMap : register(t1);
 Texture2D<float2>   VelocityMap     : register(t2);
-Texture2D<uint>     AccumCountMap   : register(t3);
 RWTexture2D<float4> OutColorMap     : register(u0);
+RWTexture2D<uint>   AccumCountMap   : register(u1);
 
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -78,9 +78,9 @@ void main
     // スクリーン内かどうかチェック.
     float inScreen = all(saturate(prevUV) == prevUV) ? 1.0f : 0.0f;
 
-    uint historyLength = AccumCountMap.Load(int3(saturate(prevUV) * ScreenSize, 0));
-    float isAccumValid = (historyLength > 1) ? 1.0f : 0.0f;
-    float resetHistory = (Flags & 0x1) ? 0.0f : 1.0f;
+    uint  historyLength = AccumCountMap[int2(saturate(prevUV) * ScreenSize)];
+    float isAccumValid  = (historyLength > 1) ? 1.0f : 0.0f;
+    float resetHistory  = (Flags & 0x1) ? 0.0f : 1.0f;
 
     // ヒストリーが有効かどうかチェック.
     bool isValidHistory = (velocityDelta * inScreen * isAccumValid * resetHistory) > 0.0f;
@@ -88,8 +88,12 @@ void main
     {
         float4 neighborColor = GetCurrentNeighborColor(CurrColorMap, PointClamp, currUV, currColor);
         OutColorMap[remappedId] = SaturateFloat(neighborColor);
+        AccumCountMap[remappedId] = 0;
         return;
     }
+    
+    historyLength++;
+    historyLength = min(historyLength, 128);
 
     // ヒストリーカラーを取得.
     float4 prevColor = GetHistoryColor(prevUV);
@@ -122,4 +126,5 @@ void main
 
     // 出力.
     OutColorMap[remappedId] = finalColor;
+    AccumCountMap[remappedId] = historyLength;
 }
