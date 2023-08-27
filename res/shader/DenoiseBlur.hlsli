@@ -52,21 +52,28 @@ Texture2D<uint>     AccumCountBuffer    : register(t5);
 RWTexture2D<float4> DenoisedBuffer      : register(u0);
 
 
-//-----------------------------------------------------------------------------
-//      深度の重みを求めます.
-//-----------------------------------------------------------------------------
-float CalcDepthWeight(float r, float d, float d0)
+////-----------------------------------------------------------------------------
+////      深度の重みを求めます.
+////-----------------------------------------------------------------------------
+//float CalcDepthWeight(float r, float d, float d0)
+//{
+//    // 参考. "Stable SSAO in Battlefield 3 with Scelective Temporal Filtering", GDC 2012,
+//    // https://www.ea.com/frostbite/news/stable-ssao-in-battlefield-3-with-selective-temporal-filtering
+
+//    // fxcで最適化される
+//    const float BlurSigma = ((float)KERNEL_RADIUS + 1.0f) * 0.5f;
+//    const float BlurFallOff = 1.0 / (2.0f * BlurSigma * BlurSigma);
+
+//    // dとd0は線形深度値とする.
+//    float dz = (d0 - d) * Sharpness;
+//    return exp2(-r * r * BlurFallOff - dz * dz);
+//}
+
+float CalcGeometryWeight(float3 p0, float3 n0, float3 p, float planeDistNorm)
 {
-    // 参考. "Stable SSAO in Battlefield 3 with Scelective Temporal Filtering", GDC 2012,
-    // https://www.ea.com/frostbite/news/stable-ssao-in-battlefield-3-with-selective-temporal-filtering
-
-    // fxcで最適化される
-    const float BlurSigma = ((float)KERNEL_RADIUS + 1.0f) * 0.5f;
-    const float BlurFallOff = 1.0 / (2.0f * BlurSigma * BlurSigma);
-
-    // dとd0は線形深度値とする.
-    float dz = (d0 - d) * Sharpness;
-    return exp2(-r * r * BlurFallOff - dz * dz);
+    float3 ray = p - p0;
+    float  distToPlane = dot(n0, ray);
+    return saturate(1.0f - abs(distToPlane) * planeDistNorm);
 }
 
 //-----------------------------------------------------------------------------
@@ -111,7 +118,6 @@ void main
     {
         // ブラー結果を出力.
         DenoisedBuffer  [remappedId] = InputBuffer.SampleLevel(PointClamp, uv, 0.0f);
-        //AccumCountBuffer[remappedId] = 0;
         return;
     }
     const uint  MaxAccumCount = 128;
@@ -122,7 +128,7 @@ void main
 
     // ヒストリーが無効な場合.
     if (IgnoreHistory & 0x1)
-    { accumCount = 1; }
+    { accumCount = 0; }
 
     // アキュムレーションスピード.
     float accumSpeed = 1.0f / (1.0f + float(accumCount));
@@ -135,13 +141,14 @@ void main
     
     float  totalWeight = weight;
     float4 result      = color * weight;
-    
+
     float3 posVS     = ToViewPos(uv, ToViewDepth(z, NearClip, FarClip), UVToViewParam);
     float  dist      = length(posVS);
     float  hitDist   = HitDistanceBuffer.SampleLevel(PointClamp, uv, 0.0f);
     float  factor    = hitDist / (hitDist + dist);
     float  blurScale = BlurRadius * lerp(rough, 1.0f, factor) * accumSpeed;
     
+    float planeDistNorm = accumSpeed / (1.0f + abs(posVS.z));
  
     [unroll] for(float r = 1.0f; r <= KERNEL_RADIUS; r += 1.0f)
     {
@@ -159,16 +166,21 @@ void main
 
         float4 c0 = InputBuffer.SampleLevel(LinearClamp, st0, 0.0f);
         float4 c1 = InputBuffer.SampleLevel(LinearClamp, st1, 0.0f);
+        
+        float3 p0 = ToViewPos(st0, ToViewDepth(NearClip, FarClip), UVToViewParam);
+        float3 p1 = ToViewPos(st1, ToViewDepth(NearClip, FarClip), UVToViewParam);
 
         float w0 = KarisAntiFireflyWeight(c0.rgb, 1.0f);
-        w0 *= CalcDepthWeight(r, z0, z);
+        w0 *= CalcGeometryWeight(posVS, n, p0, planeDistNorm);
         w0 *= CalcNormalWeight(n0, n);
         w0 *= CalcRoughnessWeight(rough0, rough);
-        
+        w0 = SaturateFloat(w0);
+
         float w1 = KarisAntiFireflyWeight(c1.rgb, 1.0f);
-        w1 *= CalcDepthWeight(r, z1, z);
+        w1 *= CalcGeometryWeight(posVS, n, p1, planeDistNorm);
         w1 *= CalcNormalWeight(n1, n);
         w1 *= CalcRoughnessWeight(rough1, rough);
+        w1 = SaturateFloat(w1);
 
         totalWeight += w0;
         result += c0 * w0;
@@ -180,8 +192,6 @@ void main
     if (totalWeight > 0)
     { result *= rcp(totalWeight); }
 
-    //accumCount++;
     DenoisedBuffer  [remappedId] = result;
-    //AccumCountBuffer[remappedId] = accumCount;
 }
 
