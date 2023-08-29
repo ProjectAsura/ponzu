@@ -1,9 +1,9 @@
 export {
-   -Path: ..\res\scene\test_scene.scn
+   -Path: ..\res\scene\rtcamp_2023.scn
 };
 
 ibl {
-   -Path: ..\res\ibl\little_paris_eiffel_tower_2k.dds
+   -Path: ..\res\ibl\kloofendal_misty_morning_puresky_2k.dds
 };
 
 model {
@@ -17,41 +17,8 @@ model {
 };
 
 model {
-   -Tag: Box
-   -Path: ..\res\model\box.obj
-};
-
-model {
-   -Tag: Cylinder
-   -Path: ..\res\model\cylinder.obj
-};
-
-model {
-   -Tag: Dosei
-   -Path: ..\res\model\dosei_quad.obj
-};
-
-material {
-   -Tag: DoseiRibon
-   -BaseColor: 0.8 0.0 0.0 1.0
-   -Roughness: 0.0
-   -Metalness: 0.0
-   -Ior: 1.4
-};
-
-material {
-   -Tag: DoseiBody
-   -BaseColor: 0.8 0.68080 0.52080 1.0
-   -Roughness: 0.0
-   -Metalness: 0.0
-   -Ior: 1.4
-};
-
-material {
-   -Tag: DoseiEye
-   -BaseColor: 0.0 0.0 0.0 1.0
-   -Roughness: 1.0
-   -Metalness: 0.0
+   -Tag: Blaster
+   -Path: ..\res\model\blaster.obj
 };
 
 material {
@@ -63,71 +30,96 @@ material {
 
 material {
    -Tag: PlaneMat
-   -BaseColor: 0.1 0.2 0.1 1.0
+   -BaseColor: 0.01 0.01 0.01 1.0
+   -Roughness: 0.3
+   -Metalness: 1.0
+};
+
+material {
+   -Tag: BlasterYellow
+   -BaseColor: 0.05 0.25 0.25 1.0
+   -Roughness: 0.9
+   -Metalness: 0.2
+};
+
+material {
+   -Tag: BlasterDark
+   -BaseColor: 0.1 0.1 0.1 1.0
    -Roughness: 1.0
    -Metalness: 0.0
 };
 
 material {
-   -Tag: BoxMat
-   -BaseColor: 0.0 0.2 0.9 1.0
-   -Roughness: 0.05
+   -Tag: BlasterMetal
+   -BaseColor: 0.4 0.4 0.4 1.0
+   -Roughness: 0.3
    -Metalness: 1.0
 };
 
 material {
-   -Tag: CylinderMat
-   -BaseColor: 0.9 0.2 0.0 1.0
+   -Tag: BlasterDarkMetal
+   -BaseColor: 0.2 0.2 0.2 1.0
    -Roughness: 0.5
    -Metalness: 1.0
 };
 
-instance {
-   -Mesh: group0
-   -Material: DoseiBody
-   -Translation: 0.0 0.0 50.0
-   -Rotation: 0.0 20.0 0.0
+material {
+   -Tag: BlasterScope
+   -BaseColor: 0.5 0.5 0.5 1.0
+   -Roughness: 0.0
+   -Metalness: 1.0
+   -Ior: 1.4
 };
 
-instance {
-   -Mesh: group1
-   -Material: DoseiEye
-   -Translation: 0.0 0.0 50.0
-   -Rotation: 0.0 20.0 0.0
-};
-
-instance {
-   -Mesh: group3
-   -Material: DoseiRibon
-   -Translation: 0.0 0.0 50.0
-   -Rotation: 0.0 20.0 0.0
+material {
+   -Tag: BlasterDefaultMat
+   -BaseColor: 0.3 0.3 0.3 1.0
+   -Roughness: 1.0
+   -Metalness: 0.0
 };
 
 instance {
     -Mesh: sphere
     -Material: SphereMat
-    -Translation: 0.0 0.0 -200.0
+    -Translation: 500.0 0.0 0.0
 };
 
 instance {
     -Mesh: plane
     -Material: PlaneMat
-    -Scale: 2.0 2.0 2.0
-    -Translation: 0.0 -100.0 0.0    
+    -Scale: 2000.0 1.0 2000.0
+    -Translation: 0.0 -100.0 0.0
 };
 
-#instance {
-#    -Mesh: box
-#    -Material: BoxMat
-#    -Translation: -300.0 0.0 5.0
-#    -Scale: 2.0 2.0 2.0  
-#};
+instance {
+   -Mesh: blasterE
+   -Material: BlasterYellow
+};
 
-#instance {
-#    -Mesh: cylinder
-#    -Material: CylinderMat
-#    -Translation: 0.0 0.0 -200.0
-#};
+instance {
+    -Mesh: dark
+    -Material: BlasterDark
+};
+
+instance {
+    -Mesh: scope
+    -Material: BlasterScope
+};
+
+instance {
+    -Mesh: _defaultMat
+    -Material: BlasterDefaultMat
+};
+
+instance {
+    -Mesh: metal
+    -Material: BlasterMetal
+};
+
+instance {
+   -Mesh: darkMetal
+   -Material: BlasterDarkMetal
+};
 
 directional_light {
    -Direction: 0.0 -1.0 1.0

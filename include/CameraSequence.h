@@ -36,18 +36,20 @@ public:
     //=========================================================================
     // public methods.
     //=========================================================================
-    bool Init(const char* path);
+    bool Init(const char* path, float aspectRatio);
     void Term();
 
-    const asdx::Matrix&  GetCurrView() const { return m_CurrView; }
-    const asdx::Matrix&  GetPrevView() const { return m_PrevView; }
-    const asdx::Matrix&  GetCurrProj() const { return m_CurrProj; }
-    const asdx::Matrix&  GetPrevProj() const { return m_PrevProj; }
-    asdx::Vector3        GetPosition() const;
-    float                GetNearClip() const;
-    float                GetFarlip  () const;
+    const asdx::Matrix&  GetCurrView () const { return m_CurrView; }
+    const asdx::Matrix&  GetPrevView () const { return m_PrevView; }
+    const asdx::Matrix&  GetCurrProj () const { return m_CurrProj; }
+    const asdx::Matrix&  GetPrevProj () const { return m_PrevProj; }
+    asdx::Vector3        GetPosition () const;
+    float                GetFovY     () const;
+    float                GetNearClip () const;
+    float                GetFarlip   () const;
+    asdx::Vector3        GetCameraDir() const;
 
-    void Update(uint32_t frameIndex, float aspectRatio);
+    bool Update(uint32_t frameIndex, float aspectRatio);
 
 private:
     //=========================================================================
@@ -101,7 +103,7 @@ public:
     //=========================================================================
     // public methods.
     //=========================================================================
-    bool LoadFromTXT(const char* path);
+    bool LoadFromTXT(const char* path, std::string& exportPath);
     bool Export(const char* path);
     void Reset();
 

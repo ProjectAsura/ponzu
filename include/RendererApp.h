@@ -26,6 +26,7 @@
 #include <gfx/asdxCommandQueue.h>
 #include <ModelManager.h>
 #include <Scene.h>
+#include <CameraSequence.h>
 #include <fnd/asdxStopWatch.h>
 
 #if RTC_TARGET == RTC_DEVELOP
@@ -53,6 +54,7 @@ struct SceneDesc
     double      FPS;                // Frame Per Second.
     double      AnimationTimeSec;   // 総アニメーション時間.
     const char* SceneFilePath;      // シーンファイルパス.
+    const char* CameraFilePath;     // カメラファイルパス.
 };
 
 
@@ -155,7 +157,8 @@ private:
     asdx::ComputeTarget             m_BlurTarget1;                  // ブラーターゲット1.
 
     Scene                           m_Scene;
-    asdx::Camera                    m_Camera;
+    //asdx::Camera                    m_Camera;
+    CameraSequence                  m_Camera;
 
     asdx::RefPtr<ID3D12Resource>    m_ReadBackTexture[3];
     uint32_t                        m_ReadBackPitch         = 0;
@@ -195,8 +198,6 @@ private:
     bool                m_ResetHistory = true;
 
     bool                m_EndRequest    = false;
-    bool                m_ForceChanged  = false;
-    uint64_t            m_MyFrameCount  = 0;
 
     asdx::PCG           m_PcgRandom;
     uint8_t             m_TemporalJitterIndex = 0;

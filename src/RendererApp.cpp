@@ -59,6 +59,7 @@ static_assert(sizeof(r3d::ResVertex) == sizeof(VertexOBJ), "Vertex size not matc
 static const size_t     REQUEST_BIT_INDEX   = 0;
 static const size_t     RELOADED_BIT_INDEX  = 1;
 #define SCENE_SETTING_PATH     ("../res/scene/scene_setting.txt")
+#define CAMERA_SETTING_PATH    ("../res/scene/camera_setting.txt")
 #define RELOAD_SHADER_STATE_NONE    (0)
 #define RELOAD_SHADER_STATE_SUCCESS (1)
 #define RELOAD_SHADER_STATE_FAILED  (-1)
@@ -557,7 +558,7 @@ Renderer::Renderer(const SceneDesc& desc)
     m_DeviceDesc.EnableCapture        = false;
 
     // 提出版はウィンドウを生成しない.
-    m_CreateWindow                    = false;
+    //m_CreateWindow                    = false;
 #else
     m_DeviceDesc.EnableCapture        = true;
     m_DeviceDesc.EnableBreakOnWarning = false;
@@ -1637,42 +1638,19 @@ bool Renderer::SystemSetup()
         m_PrevInvViewProj   = m_PrevInvProj * m_PrevInvView;
     }
 #else
-    // カメラ初期化.
+    auto aspectRatio = float(m_SceneDesc.RenderWidth) / float(m_SceneDesc.RenderHeight);
+
+    if (!m_Camera.Init(m_SceneDesc.CameraFilePath, aspectRatio))
     {
-        //m_Camera.SetPosition(asdx::Vector3(-1425.195f, 1018.635f, 1710.176f));
-        //m_Camera.SetTarget(asdx::Vector3(-64.474f, 86.644f, 370.234f));
-        //m_Camera.SetUpward(asdx::Vector3(0.313f, 0.899f, -0.308f));
-        //m_Camera.Update();
-        asdx::Camera::Param param;
-        param.Position = asdx::Vector3(-1325.207520f, 995.419373f, 1612.109253f);
-        param.Target   = asdx::Vector3(56.435787f, -34.221855f, 128.971191f);
-        param.Upward   = asdx::Vector3(0.308701f, 0.891568f, -0.331378f);
-        param.Rotate   = asdx::Vector2(2.391608f, -0.470002f);
-        param.PanTilt  = asdx::Vector2(2.391608f, -0.470002f);
-        param.Twist    = 0.000000f;
-        param.MinDist  = 0.100000f;
-        param.MaxDist  = 10000.000000f;
-        m_Camera.SetParam(param);
-        m_Camera.Update();
+        ELOG("Error : CameraSequence::Init() Failed.");
+        return false;
     }
 
-    // 初回フレーム計算用に設定しておく.
-    {
-        auto aspect = float(m_SceneDesc.RenderWidth) / float(m_SceneDesc.RenderHeight);
-
-        auto view = m_Camera.GetView();
-        auto proj = asdx::Matrix::CreatePerspectiveFieldOfView(
-            m_FovY,
-            aspect,
-            m_Camera.GetMinDist(),
-            m_Camera.GetMaxDist());
-
-        m_PrevView          = view;
-        m_PrevProj          = proj;
-        m_PrevInvView       = asdx::Matrix::Invert(view);
-        m_PrevInvProj       = asdx::Matrix::Invert(proj);
-        m_PrevInvViewProj   = m_PrevInvProj * m_PrevInvView;
-    }
+    m_PrevView        = m_Camera.GetPrevView();
+    m_PrevProj        = m_Camera.GetPrevView();
+    m_PrevInvView     = asdx::Matrix::Invert(m_PrevView);
+    m_PrevInvProj     = asdx::Matrix::Invert(m_PrevProj);
+    m_PrevInvViewProj = m_PrevInvProj * m_PrevInvView;
 #endif
 
     timer.End();
@@ -1691,19 +1669,35 @@ bool Renderer::BuildScene()
     printf_s("Build scene  ... ");
 
 #if RTC_TARGET == RTC_DEVELOP
-    SceneExporter exporter;
-    std::string exportPath;
-    if (!exporter.LoadFromTXT(SCENE_SETTING_PATH, exportPath))
+    SceneExporter sceneExporter;
+    std::string sceneExportPath;
+    if (!sceneExporter.LoadFromTXT(SCENE_SETTING_PATH, sceneExportPath))
     {
         ELOG("Error : Scene Load Failed.");
         return false;
     }
 
-    if (!m_Scene.Init(exportPath.c_str(), m_GfxCmdList.GetCommandList()))
+    if (!m_Scene.Init(sceneExportPath.c_str(), m_GfxCmdList.GetCommandList()))
     {
         ELOG("Error : Scene::Init() Failed.");
         return false;
     }
+
+    CameraSequenceExporter cameraExporter;
+    std::string cameraExportPath;
+    if (!cameraExporter.LoadFromTXT(CAMERA_SETTING_PATH, cameraExportPath))
+    {
+        ELOG("Error : Camera Load Failed.");
+        return false;
+    }
+
+    auto aspectRatio = float(m_SceneDesc.RenderWidth) / float(m_SceneDesc.RenderHeight);
+    if (!m_Camera.Init(cameraExportPath.c_str(), aspectRatio))
+    {
+        ELOG("Error : CameraSequence::Init() Failed.");
+        return false;
+    }
+
 #else
     // シーン構築.
     {
@@ -1781,7 +1775,8 @@ void Renderer::OnTerm()
 
     // シーン関連.
     {
-        m_Scene.Term();
+        m_Scene .Term();
+        m_Camera.Term();
     }
 
     // レンダーターゲット関連.
@@ -1878,8 +1873,6 @@ void Renderer::OnFrameMove(asdx::FrameEventArgs& args)
         return;
     }
 
-    m_ForceChanged = false;
-
     // CPUで読み取り.
     m_AnimationElapsedTime += args.ElapsedTime;
     if (m_AnimationElapsedTime >= m_AnimationOneFrameTime && GetFrameCount() > 0)
@@ -1889,12 +1882,13 @@ void Renderer::OnFrameMove(asdx::FrameEventArgs& args)
 
         // 次のフレームに切り替え.
         m_AnimationElapsedTime = 0.0;
-        ChangeFrame(m_CaptureIndex);
 
         // 適宜調整する.
         auto totalFrame = double(m_SceneDesc.FPS * m_SceneDesc.AnimationTimeSec - (m_CaptureIndex - 1));
         m_AnimationOneFrameTime = (m_SceneDesc.RenderTimeSec - m_Timer.GetRelativeSec()) / totalFrame;
     }
+
+    ChangeFrame(m_CaptureIndex);
 #else
     ChangeFrame(GetFrameCount());
 #endif
@@ -1912,64 +1906,19 @@ void Renderer::ChangeFrame(uint32_t index)
 
     float nearClip;
     float farClip;
+    float fovY;
 
 #if RTC_TARGET == RTC_RELEASE
-    //asdx::CameraEvent camEvent = {};
-    //camEvent.Flags |= asdx::CameraEvent::EVENT_ROTATE;
-    //camEvent.Rotate.x += 2.0f * asdx::F_PI / 600.0f; 
+    auto aspectRatio = float(m_SceneDesc.RenderWidth) / float(m_SceneDesc.RenderHeight);
+    m_Camera.Update(index, aspectRatio);
 
-    //m_Camera.UpdateByEvent(camEvent);
+    m_CurrView    = m_Camera.GetCurrView();
+    m_CurrProj    = m_Camera.GetCurrProj();
+    m_CameraZAxis = m_Camera.GetCameraDir();
 
-    if (m_MyFrameCount >= 200 && m_MyFrameCount < 400)
-    {
-        asdx::Camera::Param param;
-        param.Position = asdx::Vector3(-8698.803711f, 166.165710f, 13402.062500f);
-        param.Target   = asdx::Vector3(-6625.559082f, 825.442749f, 11306.008789f);
-        param.Upward   = asdx::Vector3(-0.153466f, 0.975897f, 0.155155f);
-        param.Rotate   = asdx::Vector2(2.361665f, 0.220002f);
-        param.PanTilt  = asdx::Vector2(2.361665f, 0.220002f);
-        param.Twist    = 0.000000f;
-        param.MinDist  = 0.100000f;
-        param.MaxDist  = 10000.000000f;
-
-        m_Camera.SetParam(param);
-        m_Camera.Update();
-    }
-    else if (m_MyFrameCount >= 400)
-    {
-        asdx::Camera::Param param;
-        param.Position = asdx::Vector3(-6236.219238f, 643.296875f, 12190.804688f);
-        param.Target   = asdx::Vector3(-6761.750977f, 363.141693f, 11173.848633f);
-        param.Upward   = asdx::Vector3(-0.109136f, 0.971333f, -0.211189f);
-        param.Rotate   = asdx::Vector2(3.618566f, -0.240019f);
-        param.PanTilt  = asdx::Vector2(3.618566f, -0.240019f);
-        param.Twist    = 0.000000f;
-        param.MinDist  = 0.100000f;
-        param.MaxDist  = 10000.000000f;
-
-        m_Camera.SetParam(param);
-        m_Camera.Update();
-    }
-
-
-    m_CurrView = m_Camera.GetView();
-    m_CurrProj = asdx::Matrix::CreatePerspectiveFieldOfView(
-        m_FovY,
-        float(m_SceneDesc.RenderWidth) / float(m_SceneDesc.RenderHeight),
-        m_Camera.GetMinDist(),
-        m_Camera.GetMaxDist());
-    m_CameraZAxis = m_Camera.GetAxisZ();
-
-    if (m_MyFrameCount < 400)
-    {
-        m_AnimationTime += float(1.0 / m_SceneDesc.FPS);
-        m_ForceChanged = true;
-    }
-
-    nearClip = m_Camera.GetMinDist();
-    farClip  = m_Camera.GetMaxDist();
-
-    m_MyFrameCount++;
+    nearClip = m_Camera.GetNearClip();
+    farClip  = m_Camera.GetFarlip();
+    fovY     = m_Camera.GetFovY();
 #else
     m_CurrView = m_AppCamera.GetView();
     m_CurrProj = asdx::Matrix::CreatePerspectiveFieldOfView(
@@ -1980,12 +1929,11 @@ void Renderer::ChangeFrame(uint32_t index)
     m_CameraZAxis = m_AppCamera.GetAxisZ();
 
     if (!m_ForceAccumulationOff)
-    {
-        m_AnimationTime = float(m_Timer.GetRelativeSec());
-    }
+    { m_AnimationTime = float(m_Timer.GetRelativeSec()); }
 
     nearClip = m_AppCamera.GetNearClip();
     farClip  = m_AppCamera.GetFarClip ();
+    fovY     = m_FovY;
 #endif
 
     m_CurrInvView = asdx::Matrix::Invert(m_CurrView);
@@ -2019,17 +1967,13 @@ void Renderer::ChangeFrame(uint32_t index)
         }
     #endif
 
-    #if RTC_TARGET == RTC_RELEASE
-        if (m_ForceChanged)
-        { changed = true; }
-    #endif
-
         // カメラ変更があったかどうか?
         if (changed)
         {
             enableAccumulation  = false;
             m_AccumulatedFrames = 0;
             m_RenderingTimer.Start();
+            m_ResetHistory = true;
         }
 
         m_AccumulatedFrames++;
@@ -2060,7 +2004,7 @@ void Renderer::ChangeFrame(uint32_t index)
         param.CameraDir             = m_CameraZAxis;
         param.MaxIteration          = MAX_RECURSION_DEPTH;
         param.AnimationTime         = m_AnimationTime;
-        param.FovY                  = m_FovY;
+        param.FovY                  = fovY;
         param.NearClip              = nearClip;
         param.FarClip               = farClip;
 
@@ -2810,17 +2754,15 @@ void Renderer::Draw2D(float elapsedSec)
             if (ImGui::Button(u8"カメラ情報出力"))
             {
                 auto& param = m_AppCamera.GetParam();
-                printf_s("// Camera Parameter\n");
-                printf_s("asdx::Camera::Param param;\n");
-                printf_s("param.Position = asdx::Vector3(%f, %f, %f);\n", param.Position.x, param.Position.y, param.Position.z);
-                printf_s("param.Target   = asdx::Vector3(%f, %f, %f);\n", param.Target.x, param.Target.y, param.Target.z);
-                printf_s("param.Upward   = asdx::Vector3(%f, %f, %f);\n", param.Upward.x, param.Upward.y, param.Upward.z);
-                printf_s("param.Rotate   = asdx::Vector2(%f, %f);\n", param.Rotate.x, param.Rotate.y);
-                printf_s("param.PanTilt  = asdx::Vector2(%f, %f);\n", param.PanTilt.x, param.PanTilt.y);
-                printf_s("param.Twist    = %f;\n", param.Twist);
-                printf_s("param.MinDist  = %f;\n", param.MinDist);
-                printf_s("param.MaxDist  = %f;\n", param.MaxDist);
-                printf_s("\n");
+                printf_s("camera {\n");
+                printf_s("    -FrameIndex:\n");
+                printf_s("    -Position: %f %f %f\n", param.Position.x, param.Position.y, param.Position.z);
+                printf_s("    -Target: %f %f %f\n", param.Target.x, param.Target.y, param.Target.z);
+                printf_s("    -Upward: %f %f %f\n", param.Upward.x, param.Upward.y, param.Upward.z);
+                printf_s("    -FieldOfView: %f\n", asdx::ToDegree(m_FovY));
+                printf_s("    -NearClip: %f\n", param.MinDist);
+                printf_s("    -FarClip: %f\n", param.MaxDist);
+                printf_s("};\n");
             }
             if (ImGui::Button(u8"シーン設定 リロード"))
             {

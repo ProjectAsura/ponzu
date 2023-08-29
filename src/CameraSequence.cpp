@@ -35,7 +35,7 @@ asdx::Vector3 Convert(const r3d::Vector3& value)
 //-----------------------------------------------------------------------------
 //      バイナリをロードします.
 //-----------------------------------------------------------------------------
-bool CameraSequence::Init(const char* path)
+bool CameraSequence::Init(const char* path, float aspectRatio)
 {
     // ファイル読み込み.
     {
@@ -67,7 +67,40 @@ bool CameraSequence::Init(const char* path)
     m_FrameIndex = 0;
     m_ParamIndex = 0;
 
-    return false;
+    auto resSequence = GetResCameraSequence(m_pBinary);
+    assert(resSequence->params()->size() > 0);
+
+#if 0
+    for(auto i=0u; i<resSequence->params()->size(); ++i)
+    {
+        auto p = resSequence->params()->Get(i);
+        ILOG("frame : %u", p->frameIndex());
+        ILOG("pos : %f, %f, %f", p->position().x(), p->position().y(), p->position().z());
+        ILOG("at  : %f, %f, %f", p->target().x(), p->target().y(), p->target().z());
+        ILOG("up  : %f, %f, %f", p->upward().x(), p->upward().y(), p->upward().z());
+        ILOG("fov : %f", p->fieldOfView());
+        ILOG("near : %f", p->nearClip());
+        ILOG("far : %f", p->farClip());
+    }
+#endif
+
+    auto param = resSequence->params()->Get(0);
+
+    auto pos = Convert(param->position());
+    auto at  = Convert(param->target());
+    auto up  = Convert(param->upward());
+
+    m_CurrView = asdx::Matrix::CreateLookAt(pos, at, up);
+    m_PrevView = m_CurrView;
+
+    m_CurrProj = asdx::Matrix::CreatePerspectiveFieldOfView(
+        param->fieldOfView(),
+        aspectRatio,
+        param->nearClip(),
+        param->farClip());
+    m_PrevProj = m_CurrProj;
+
+    return true;
 }
 
 //-----------------------------------------------------------------------------
@@ -94,6 +127,16 @@ asdx::Vector3 CameraSequence::GetPosition() const
 }
 
 //-----------------------------------------------------------------------------
+//      視野角(radian)を取得します.
+//-----------------------------------------------------------------------------
+float CameraSequence::GetFovY() const
+{
+    assert(m_pBinary != nullptr);
+    auto resSequence = GetResCameraSequence(m_pBinary);
+    return resSequence->params()->Get(m_ParamIndex)->fieldOfView();
+}
+
+//-----------------------------------------------------------------------------
 //      ニアクリップ平面を取得します.
 //-----------------------------------------------------------------------------
 float CameraSequence::GetNearClip() const
@@ -114,9 +157,15 @@ float CameraSequence::GetFarlip() const
 }
 
 //-----------------------------------------------------------------------------
+//      カメラの方向ベクトルを取得します.
+//-----------------------------------------------------------------------------
+asdx::Vector3 CameraSequence::GetCameraDir() const
+{ return asdx::Vector3(m_CurrView._13, m_CurrView._23, m_CurrView._33); }
+
+//-----------------------------------------------------------------------------
 //      カメラ更新処理を行います.
 //-----------------------------------------------------------------------------
-void CameraSequence::Update(uint32_t frameIndex, float aspectRatio)
+bool CameraSequence::Update(uint32_t frameIndex, float aspectRatio)
 {
     assert(m_pBinary != nullptr);
 
@@ -124,7 +173,7 @@ void CameraSequence::Update(uint32_t frameIndex, float aspectRatio)
     m_FrameIndex = frameIndex;
 
     auto resSequence = GetResCameraSequence(m_pBinary);
-    auto maxIndex = resSequence->params()->size();
+    auto maxIndex = resSequence->params()->size() - 1;
 
     auto nextIndex = asdx::Clamp(m_ParamIndex + 1u, 0u, maxIndex);
 
@@ -132,8 +181,16 @@ void CameraSequence::Update(uint32_t frameIndex, float aspectRatio)
     auto param = resSequence->params()->Get(nextIndex);
     bool changed = param->frameIndex() == m_FrameIndex;
 
+#if 0
+    ILOG("maxIndex : %u", maxIndex);
+    ILOG("m_FrameIndex : %u", m_FrameIndex);
+    ILOG("nextIndex : %u", nextIndex);
+    ILOG("param->frameIndex = %u", param->frameIndex());
+    ILOG("param->pos : %f, %f, %f", param->position().x(), param->position().y(), param->position().z());
+#endif
+
     if (!changed)
-    { return; }
+    { return false; }
 
     m_ParamIndex = nextIndex;
 
@@ -152,6 +209,8 @@ void CameraSequence::Update(uint32_t frameIndex, float aspectRatio)
         aspectRatio,
         param->nearClip(),
         param->farClip());
+
+    return true;
 }
 
 #if !CAMP_RELEASE
@@ -162,7 +221,7 @@ void CameraSequence::Update(uint32_t frameIndex, float aspectRatio)
 //-----------------------------------------------------------------------------
 //      テキストファイルからデータをロードします.
 //-----------------------------------------------------------------------------
-bool CameraSequenceExporter::LoadFromTXT(const char* path)
+bool CameraSequenceExporter::LoadFromTXT(const char* path, std::string& exportPath)
 {
     std::string inputPath;
     if (!asdx::SearchFilePathA(path, inputPath))
@@ -182,7 +241,6 @@ bool CameraSequenceExporter::LoadFromTXT(const char* path)
 
     const uint32_t BUFFER_SIZE = 4096;
     char buf[BUFFER_SIZE] = {};
-    std::string exportPath;
 
     for(;;)
     {
@@ -215,7 +273,11 @@ bool CameraSequenceExporter::LoadFromTXT(const char* path)
                 else if (0 == _stricmp(buf, "-Upward:"))
                 { stream >> param.Upward.x >> param.Upward.y >> param.Upward.z; }
                 else if (0 == _stricmp(buf, "-FieldOfView:"))
-                { stream >> param.FieldOfView; }
+                {
+                    float fovYDeg = 0.0f;
+                    stream >> fovYDeg;
+                    param.FieldOfView = asdx::ToRadian(fovYDeg);
+                }
                 else if (0 == _stricmp(buf, "-NearClip:"))
                 { stream >> param.NearClip; }
                 else if (0 == _stricmp(buf, "-FarClip:"))

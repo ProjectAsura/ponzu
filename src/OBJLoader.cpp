@@ -399,7 +399,10 @@ bool OBJLoader::LoadOBJ(const char* path, ModelOBJ& model)
             stream >> subset.MaterialName;
 
             if (group.empty())
-            { group = "group" + std::to_string(subsets.size()); }
+            {
+                //group = "group" + std::to_string(subsets.size());
+                group = subset.MaterialName;
+            }
 
             subset.MeshName   = group;
             subset.IndexStart = faceIndex * 3;
