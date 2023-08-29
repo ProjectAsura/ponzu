@@ -52,22 +52,22 @@ Texture2D<uint>     AccumCountBuffer    : register(t5);
 RWTexture2D<float4> DenoisedBuffer      : register(u0);
 
 
-////-----------------------------------------------------------------------------
-////      深度の重みを求めます.
-////-----------------------------------------------------------------------------
-//float CalcDepthWeight(float r, float d, float d0)
-//{
-//    // 参考. "Stable SSAO in Battlefield 3 with Scelective Temporal Filtering", GDC 2012,
-//    // https://www.ea.com/frostbite/news/stable-ssao-in-battlefield-3-with-selective-temporal-filtering
+//-----------------------------------------------------------------------------
+//      深度の重みを求めます.
+//-----------------------------------------------------------------------------
+float CalcDepthWeight(float r, float d, float d0)
+{
+    // 参考. "Stable SSAO in Battlefield 3 with Scelective Temporal Filtering", GDC 2012,
+    // https://www.ea.com/frostbite/news/stable-ssao-in-battlefield-3-with-selective-temporal-filtering
 
-//    // fxcで最適化される
-//    const float BlurSigma = ((float)KERNEL_RADIUS + 1.0f) * 0.5f;
-//    const float BlurFallOff = 1.0 / (2.0f * BlurSigma * BlurSigma);
+    // fxcで最適化される
+    const float BlurSigma = ((float) KERNEL_RADIUS + 1.0f) * 0.5f;
+    const float BlurFallOff = 1.0 / (2.0f * BlurSigma * BlurSigma);
 
-//    // dとd0は線形深度値とする.
-//    float dz = (d0 - d) * Sharpness;
-//    return exp2(-r * r * BlurFallOff - dz * dz);
-//}
+    // dとd0は線形深度値とする.
+    float dz = (d0 - d) * Sharpness;
+    return exp2(-r * r * BlurFallOff - dz * dz);
+}
 
 float CalcGeometryWeight(float3 p0, float3 n0, float3 p, float planeDistNorm)
 {
@@ -147,8 +147,6 @@ void main
     float  hitDist   = HitDistanceBuffer.SampleLevel(PointClamp, uv, 0.0f);
     float  factor    = hitDist / (hitDist + dist);
     float  blurScale = BlurRadius * lerp(rough, 1.0f, factor) * accumSpeed;
-    
-    float planeDistNorm = accumSpeed / (1.0f + abs(posVS.z));
  
     [unroll] for(float r = 1.0f; r <= KERNEL_RADIUS; r += 1.0f)
     {
@@ -171,13 +169,13 @@ void main
         float3 p1 = ToViewPos(st1, ToViewDepth(NearClip, FarClip), UVToViewParam);
 
         float w0 = KarisAntiFireflyWeight(c0.rgb, 1.0f);
-        w0 *= CalcGeometryWeight(posVS, n, p0, planeDistNorm);
+        w0 *= CalcDepthWeight(r, z0, z);
         w0 *= CalcNormalWeight(n0, n);
         w0 *= CalcRoughnessWeight(rough0, rough);
         w0 = SaturateFloat(w0);
 
         float w1 = KarisAntiFireflyWeight(c1.rgb, 1.0f);
-        w1 *= CalcGeometryWeight(posVS, n, p1, planeDistNorm);
+        w1 *= CalcDepthWeight(r, z1, z);
         w1 *= CalcNormalWeight(n1, n);
         w1 *= CalcRoughnessWeight(rough1, rough);
         w1 = SaturateFloat(w1);

@@ -2074,7 +2074,7 @@ void Renderer::ChangeFrame(uint32_t index)
         param.ScreenWidth   = m_SceneDesc.RenderWidth;
         param.ScreenHeight  = m_SceneDesc.RenderHeight;
         param.IgnoreHistory = (changed) ? 0x1 : 0;
-        param.Sharpness     = (farClip - nearClip) * 0.5f;
+        param.Sharpness     = (farClip - nearClip) * 0.1f;
         param.View          = m_CurrView;
         param.Proj          = m_CurrProj;
         param.NearClip      = nearClip;

@@ -1356,7 +1356,7 @@ bool SceneExporter::LoadFromTXT(const char* path, std::string& exportPath)
     }
     stream.close();
 
-    // エクスポート名が無ければタイムスタンプを着ける
+    // エクスポート名が無ければタイムスタンプを付ける
     if (exportPath.empty())
     {
         tm local_time = {};
