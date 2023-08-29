@@ -8,7 +8,7 @@ setlocal
 
 @rem --- 以下に追加してください --
 call :CompileFormat scene
-
+call :CompileFormat camera
 
 
 @rem --- おしまい ---

@@ -1,0 +1,31 @@
+//-----------------------------------------------------------------------------
+// Desc : Camera Sequence Data
+// Copyright(c) Project Asura. All right reserved.
+//-----------------------------------------------------------------------------
+namespace r3d;
+
+struct Vector3
+{
+    x : float;
+    y : float;
+    z : float;
+}
+
+struct ResCameraParam
+{
+    frameIndex  : uint;
+    position    : Vector3;
+    target      : Vector3;
+    upward      : Vector3;
+    fieldOfView : float;
+    nearClip    : float;
+    farClip     : float;
+}
+
+table ResCameraSequence
+{
+    params : [ResCameraParam];
+}
+
+root_type ResCameraSequence;
+

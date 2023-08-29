@@ -294,7 +294,7 @@ bool CameraSequenceExporter::Export(const char* path)
         r3d::Vector3 target(m_Params[i].Target.x, m_Params[i].Target.y, m_Params[i].Target.z);
         r3d::Vector3 upward(m_Params[i].Upward.x, m_Params[i].Upward.y, m_Params[i].Upward.z);
 
-        params[i] = ResCameraParam(
+        params[i] = r3d::ResCameraParam(
             m_Params[i].FrameIndex,
             position,
             target,

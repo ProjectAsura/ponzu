@@ -60,6 +60,9 @@
     <ClCompile Include="..\external\xxhash\xxhash.c">
       <Filter>ソース ファイル\external\xxhash</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\CameraSequence.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\external\fpng\fpng.h">
@@ -88,6 +91,9 @@
     </ClInclude>
     <ClInclude Include="..\external\xxhash\xxhash.h">
       <Filter>ソース ファイル\external\xxhash</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\CameraSequence.h">
+      <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

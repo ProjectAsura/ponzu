@@ -31,6 +31,7 @@
     <ClCompile Include="..\external\fpng\fpng.cpp" />
     <ClCompile Include="..\external\mikktspace\mikktspace.c" />
     <ClCompile Include="..\external\xxhash\xxhash.c" />
+    <ClCompile Include="..\src\CameraSequence.cpp" />
     <ClCompile Include="..\src\main.cpp" />
     <ClCompile Include="..\src\ModelManager.cpp" />
     <ClCompile Include="..\src\OBJLoader.cpp" />
@@ -41,6 +42,7 @@
     <ClInclude Include="..\external\fpng\fpng.h" />
     <ClInclude Include="..\external\mikktspace\mikktspace.h" />
     <ClInclude Include="..\external\xxhash\xxhash.h" />
+    <ClInclude Include="..\include\CameraSequence.h" />
     <ClInclude Include="..\include\generated\scene_format.h" />
     <ClInclude Include="..\include\Macro.h" />
     <ClInclude Include="..\include\ModelManager.h" />
