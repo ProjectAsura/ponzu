@@ -58,8 +58,12 @@ bool CameraSequence::Init(const char* path, float aspectRatio)
         DWORD readSize = 0;
         auto ret = ReadFile(hFile, m_pBinary, size, &readSize, NULL);
         if (!ret)
-        { ELOGA("Error : Read Failed. path = %s", path); }
-
+        {
+            ELOGA("Error : Read Failed. path = %s", path);
+            free(m_pBinary);
+            CloseHandle(hFile);
+            return false;
+        }
         CloseHandle(hFile);
     }
 
@@ -69,20 +73,6 @@ bool CameraSequence::Init(const char* path, float aspectRatio)
 
     auto resSequence = GetResCameraSequence(m_pBinary);
     assert(resSequence->params()->size() > 0);
-
-#if 0
-    for(auto i=0u; i<resSequence->params()->size(); ++i)
-    {
-        auto p = resSequence->params()->Get(i);
-        ILOG("frame : %u", p->frameIndex());
-        ILOG("pos : %f, %f, %f", p->position().x(), p->position().y(), p->position().z());
-        ILOG("at  : %f, %f, %f", p->target().x(), p->target().y(), p->target().z());
-        ILOG("up  : %f, %f, %f", p->upward().x(), p->upward().y(), p->upward().z());
-        ILOG("fov : %f", p->fieldOfView());
-        ILOG("near : %f", p->nearClip());
-        ILOG("far : %f", p->farClip());
-    }
-#endif
 
     auto param = resSequence->params()->Get(0);
 
@@ -180,14 +170,6 @@ bool CameraSequence::Update(uint32_t frameIndex, float aspectRatio)
     // 更新フレームかどうかチェック.
     auto param = resSequence->params()->Get(nextIndex);
     bool changed = param->frameIndex() == m_FrameIndex;
-
-#if 0
-    ILOG("maxIndex : %u", maxIndex);
-    ILOG("m_FrameIndex : %u", m_FrameIndex);
-    ILOG("nextIndex : %u", nextIndex);
-    ILOG("param->frameIndex = %u", param->frameIndex());
-    ILOG("param->pos : %f, %f, %f", param->position().x(), param->position().y(), param->position().z());
-#endif
 
     if (!changed)
     { return false; }

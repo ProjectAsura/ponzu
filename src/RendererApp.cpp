@@ -22,7 +22,7 @@
 #include <pix3.h>
 #endif
 
-extern "C" { __declspec(dllexport) extern const UINT D3D12SDKVersion = 602;}
+extern "C" { __declspec(dllexport) extern const UINT D3D12SDKVersion = 610;}
 extern "C" { __declspec(dllexport) extern const char* D3D12SDKPath = u8".\\D3D12\\"; }
 
 #define MAX_RECURSION_DEPTH     (16)
@@ -1139,7 +1139,7 @@ bool Renderer::SystemSetup()
         desc.Height             = m_SceneDesc.RenderHeight;
         desc.DepthOrArraySize   = 1;
         desc.MipLevels          = 1;
-        desc.Format             = DXGI_FORMAT_R8G8B8A8_UNORM;//DXGI_FORMAT_R32G32B32A32_FLOAT;
+        desc.Format             = DXGI_FORMAT_R8G8B8A8_UNORM;
         desc.SampleDesc.Count   = 1;
         desc.SampleDesc.Quality = 0;
         desc.InitState          = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
@@ -1169,7 +1169,7 @@ bool Renderer::SystemSetup()
         desc.Height             = m_SceneDesc.RenderHeight;
         desc.DepthOrArraySize   = 1;
         desc.MipLevels          = 1;
-        desc.Format             = DXGI_FORMAT_R8G8B8A8_UNORM;//DXGI_FORMAT_R32G32B32A32_FLOAT;
+        desc.Format             = DXGI_FORMAT_R8G8B8A8_UNORM;
         desc.SampleDesc.Count   = 1;
         desc.SampleDesc.Quality = 0;
         desc.InitState          = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
@@ -1199,7 +1199,7 @@ bool Renderer::SystemSetup()
         desc.Height             = m_SceneDesc.RenderHeight;
         desc.DepthOrArraySize   = 1;
         desc.MipLevels          = 1;
-        desc.Format             = DXGI_FORMAT_R8G8B8A8_UNORM;//DXGI_FORMAT_R32G32B32A32_FLOAT;
+        desc.Format             = DXGI_FORMAT_R8G8B8A8_UNORM;
         desc.SampleDesc.Count   = 1;
         desc.SampleDesc.Quality = 0;
         desc.InitState          = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
@@ -1638,12 +1638,23 @@ bool Renderer::SystemSetup()
         m_PrevInvViewProj   = m_PrevInvProj * m_PrevInvView;
     }
 #else
+    // アスペクト比.
     auto aspectRatio = float(m_SceneDesc.RenderWidth) / float(m_SceneDesc.RenderHeight);
 
-    if (!m_Camera.Init(m_SceneDesc.CameraFilePath, aspectRatio))
+    // カメラ―データ読み込み.
     {
-        ELOG("Error : CameraSequence::Init() Failed.");
-        return false;
+        std::string path;
+        if (!asdx::SearchFilePathA(m_SceneDesc.CameraFilePath, path))
+        {
+            ELOG("Error : File Not Found. path = %s", m_SceneDesc.CameraFilePath);
+            return false;
+        }
+
+        if (!m_Camera.Init(path.c_str(), aspectRatio))
+        {
+            ELOG("Error : CameraSequence::Init() Failed.");
+            return false;
+        }
     }
 
     m_PrevView        = m_Camera.GetPrevView();
@@ -1668,37 +1679,38 @@ bool Renderer::BuildScene()
     timer.Start();
     printf_s("Build scene  ... ");
 
-#if RTC_TARGET == RTC_DEVELOP
-    SceneExporter sceneExporter;
-    std::string sceneExportPath;
-    if (!sceneExporter.LoadFromTXT(SCENE_SETTING_PATH, sceneExportPath))
+    #if RTC_TARGET == RTC_DEVELOP
     {
-        ELOG("Error : Scene Load Failed.");
-        return false;
-    }
+        SceneExporter sceneExporter;
+        std::string sceneExportPath;
+        if (!sceneExporter.LoadFromTXT(SCENE_SETTING_PATH, sceneExportPath))
+        {
+            ELOG("Error : Scene Load Failed.");
+            return false;
+        }
 
-    if (!m_Scene.Init(sceneExportPath.c_str(), m_GfxCmdList.GetCommandList()))
-    {
-        ELOG("Error : Scene::Init() Failed.");
-        return false;
-    }
+        if (!m_Scene.Init(sceneExportPath.c_str(), m_GfxCmdList.GetCommandList()))
+        {
+            ELOG("Error : Scene::Init() Failed.");
+            return false;
+        }
 
-    CameraSequenceExporter cameraExporter;
-    std::string cameraExportPath;
-    if (!cameraExporter.LoadFromTXT(CAMERA_SETTING_PATH, cameraExportPath))
-    {
-        ELOG("Error : Camera Load Failed.");
-        return false;
-    }
+        CameraSequenceExporter cameraExporter;
+        std::string cameraExportPath;
+        if (!cameraExporter.LoadFromTXT(CAMERA_SETTING_PATH, cameraExportPath))
+        {
+            ELOG("Error : Camera Load Failed.");
+            return false;
+        }
 
-    auto aspectRatio = float(m_SceneDesc.RenderWidth) / float(m_SceneDesc.RenderHeight);
-    if (!m_Camera.Init(cameraExportPath.c_str(), aspectRatio))
-    {
-        ELOG("Error : CameraSequence::Init() Failed.");
-        return false;
+        auto aspectRatio = float(m_SceneDesc.RenderWidth) / float(m_SceneDesc.RenderHeight);
+        if (!m_Camera.Init(cameraExportPath.c_str(), aspectRatio))
+        {
+            ELOG("Error : CameraSequence::Init() Failed.");
+            return false;
+        }
     }
-
-#else
+    #else
     // シーン構築.
     {
         std::string path;
@@ -1714,7 +1726,7 @@ bool Renderer::BuildScene()
             return false;
         }
     }
-#endif
+    #endif
 
     // セットアップコマンド実行.
     {
