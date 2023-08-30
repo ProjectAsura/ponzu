@@ -267,6 +267,9 @@ bool OBJLoader::LoadOBJ(const char* path, ModelOBJ& model)
         return false;
     }
 
+    std::string baseName = asdx::RemoveDirectoryPathA(path);
+    baseName = asdx::GetPathWithoutExtA(baseName.c_str());
+
     char buf[OBJ_BUFFER_LENGTH] = {};
     std::string group;
 
@@ -401,7 +404,7 @@ bool OBJLoader::LoadOBJ(const char* path, ModelOBJ& model)
             if (group.empty())
             {
                 //group = "group" + std::to_string(subsets.size());
-                group = subset.MaterialName;
+                group = baseName + "_" + subset.MaterialName;
             }
 
             subset.MeshName   = group;
@@ -442,8 +445,6 @@ bool OBJLoader::LoadOBJ(const char* path, ModelOBJ& model)
 
     MeshOBJ dstMesh;
 
-    std::string baseName = asdx::RemoveDirectoryPathA(path).c_str();
-    baseName = asdx::GetPathWithoutExtA(baseName.c_str());
 
     for(size_t i=0; i<subsets.size(); ++i)
     {

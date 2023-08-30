@@ -1100,7 +1100,7 @@ bool SceneExporter::LoadFromTXT(const char* path, std::string& exportPath)
 
             if (materialDic.find(tag) == materialDic.end())
             {
-                Material material = material.Default();
+                Material material  = material.Default();
                 material.BaseColor = baseColor;
                 material.Occlusion = occlusion;
                 material.Roughness = roughness;

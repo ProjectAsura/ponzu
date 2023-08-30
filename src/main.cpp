@@ -22,7 +22,7 @@ int main(int argc, char** argv)
     desc.RenderWidth        = 1920;//1920;//2560;
     desc.RenderHeight       = 1080;//1080;//1440;
     desc.FPS                = 23.9;
-    desc.AnimationTimeSec   = 5.0;
+    desc.AnimationTimeSec   = 10.0;
 #if 1
     desc.SceneFilePath      = "../res/scene/rtcamp_2023.scn";
     desc.CameraFilePath     = "../res/scene/rtcamp_2023.cam";

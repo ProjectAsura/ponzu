@@ -2719,6 +2719,16 @@ void Renderer::Draw2D(float elapsedSec)
         auto target = m_AppCamera.GetTarget();
         auto upward = m_AppCamera.GetUpward();
 
+        // TODO : コード整理.
+        static bool animating = false;
+        static float r[2] = { 0.0f, 0.0f };
+        static float d = 0.0f;
+        static int frameCount = 0;
+        static int startIndex = 0;
+        static uint32_t cameraEventFlags = 0;
+        static int offsetFrame = 0;
+        static FILE* fp = nullptr;
+
         ImGui::SetNextWindowPos(ImVec2(10, 10));
         ImGui::SetNextWindowSize(ImVec2(250, 0));
         if (ImGui::Begin(u8"フレーム情報", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoTitleBar))
@@ -2776,6 +2786,12 @@ void Renderer::Draw2D(float elapsedSec)
                 printf_s("    -FarClip: %f\n", param.MaxDist);
                 printf_s("};\n");
             }
+            if (ImGui::Button(u8"カメラ回転量出力"))
+            {
+                auto& param = m_AppCamera.GetParam();
+                printf_s("angleX : %f[rad] (%f[deg])\n", param.Rotate.x, asdx::ToDegree(param.Rotate.x));
+                printf_s("angleY : %f[rad] (%f[deg])\n", param.Rotate.y, asdx::ToDegree(param.Rotate.y));
+            }
             if (ImGui::Button(u8"シーン設定 リロード"))
             {
                 SceneExporter exporter;
@@ -2795,11 +2811,66 @@ void Renderer::Draw2D(float elapsedSec)
                 m_PostBlurShaderFlags.Set(REQUEST_BIT_INDEX, true);
                 m_TemporalStabilizationShaderFlags.Set(REQUEST_BIT_INDEX, true);
             }
+            if (ImGui::CollapsingHeader(u8"カメライベント") && !animating)
+            {
+                ImGui::DragFloat2(u8"Rotate", r, 0.1f);
+                ImGui::DragFloat(u8"Dolly", &d, 0.1f);
+                ImGui::DragInt(u8"StartIndex", &startIndex);
+                ImGui::DragInt(u8"FrameCount", &frameCount);
+
+                if (ImGui::Button(u8"Apply"))
+                {
+                    cameraEventFlags = 0;
+                    if (abs(r[0]) > 1e-8f || abs(r[1]) > 1e-8f)
+                    { cameraEventFlags |= asdx::CameraEvent::EVENT_ROTATE; }
+                    if (abs(d) > 1e-8f)
+                    { cameraEventFlags |= asdx::CameraEvent::EVENT_DOLLY; }
+
+                    animating = true;
+                    offsetFrame = 0;
+
+                    auto err = fopen_s(&fp, "cam.txt", "wb");
+                    if (err != 0)
+                    { animating = false; }
+                }
+            }
         }
         ImGui::End();
 
         // 描画コマンド発行.
         asdx::GuiMgr::Instance().Draw(m_GfxCmdList.GetCommandList());
+
+        if (animating)
+        {
+            asdx::CameraEvent camEvent = {};
+            camEvent.Flags    = cameraEventFlags;
+            camEvent.Rotate.x = asdx::ToRadian(r[0]);
+            camEvent.Rotate.y = asdx::ToRadian(r[1]);
+            camEvent.Dolly    = d;
+
+            m_AppCamera.UpdateByEvent(camEvent);
+
+            auto& param = m_AppCamera.GetParam();
+            fprintf_s(fp, "camera {\n");
+            fprintf_s(fp, "    -FrameIndex: %d\n", startIndex + offsetFrame);
+            fprintf_s(fp, "    -Position: %f %f %f\n", param.Position.x, param.Position.y, param.Position.z);
+            fprintf_s(fp, "    -Target: %f %f %f\n", param.Target.x, param.Target.y, param.Target.z);
+            fprintf_s(fp, "    -Upward: %f %f %f\n", param.Upward.x, param.Upward.y, param.Upward.z);
+            fprintf_s(fp, "    -FieldOfView: %f\n", asdx::ToDegree(m_FovY));
+            fprintf_s(fp, "    -NearClip: %f\n", param.MinDist);
+            fprintf_s(fp, "    -FarClip: %f\n", param.MaxDist);
+            fprintf_s(fp, "};\n\n");
+
+            offsetFrame++;
+            frameCount--;
+            if (frameCount == 0)
+            {
+                animating = false;
+                offsetFrame = 0;
+                fclose(fp);
+                fp = nullptr;
+            }
+        }
     #endif
 #endif
 }

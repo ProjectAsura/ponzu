@@ -7,59 +7,61 @@ ibl {
 };
 
 model {
-   -Tag: Sphere
-   -Path: ..\res\model\sphere.obj
-};
-
-model {
    -Tag: Plane
    -Path: ..\res\model\plane.obj
 };
 
 model {
-   -Tag: Blaster
+   -Tag: BlasterE
    -Path: ..\res\model\blaster.obj
 };
 
-material {
-   -Tag: SphereMat
-   -BaseColor: 1.0 0.0 0.0 1.0
-   -Roughness: 0.2
-   -Metalness: 1.0
+model {
+   -Tag: BlasterH
+   -Path: ..\res\model\blasterH.obj
+};
+
+model {
+   -Tag: BlasterL
+   -Path: ..\res\model\blasterL.obj
+};
+
+model {
+   -Tag: BlaterO
+   -Path: ..\res\model\blasterO.obj
+};
+
+model {
+   -Tag: BlasterP
+   -Path: ..\res\model\blasterP.obj
 };
 
 material {
    -Tag: PlaneMat
-   -BaseColor: 0.01 0.01 0.01 1.0
-   -Roughness: 0.3
+   -BaseColor: 0.05 0.05 0.05 1.0
+   -Roughness: 0.25
    -Metalness: 1.0
 };
 
-material {
-   -Tag: BlasterYellow
-   -BaseColor: 0.05 0.25 0.25 1.0
-   -Roughness: 0.9
-   -Metalness: 0.2
-};
 
 material {
    -Tag: BlasterDark
-   -BaseColor: 0.1 0.1 0.1 1.0
+   -BaseColor: 0.031946592 0.04603938 0.0651107 1.0
    -Roughness: 1.0
    -Metalness: 0.0
 };
 
 material {
    -Tag: BlasterMetal
-   -BaseColor: 0.4 0.4 0.4 1.0
-   -Roughness: 0.3
+   -BaseColor: 0.5972019 0.6307572 0.745404363 1
+   -Roughness: 0.1
    -Metalness: 1.0
 };
 
 material {
    -Tag: BlasterDarkMetal
-   -BaseColor: 0.2 0.2 0.2 1.0
-   -Roughness: 0.5
+   -BaseColor: 0.3094689 0.361306876 0.5520115 1.0
+   -Roughness: 0.1
    -Metalness: 1.0
 };
 
@@ -73,52 +75,209 @@ material {
 
 material {
    -Tag: BlasterDefaultMat
-   -BaseColor: 0.3 0.3 0.3 1.0
+   -BaseColor: 1.0 1.0 1.0 1.0
    -Roughness: 1.0
    -Metalness: 0.0
 };
 
-instance {
-    -Mesh: sphere
-    -Material: SphereMat
-    -Translation: 500.0 0.0 0.0
+material {
+   -Tag: BlasterE_yellow
+   -BaseColor: 0.9911022 0.56471163 0.0395462252 1.0
+   -Roughness: 0.2
+   -Metalness: 1.0
 };
+
+
+#-----
+
+material {
+   -Tag: BlasterH_pink
+   -BaseColor: 0.9911022 0.0395462252 0.141263276 1.0
+   -Roughness: 0.2
+   -Metalness: 1.0
+};
+
+#-----
+
+material {
+   -Tag: BlasterL_purple
+   -BaseColor: 0.3400426 0.154294729 1.0 1.0
+   -Roughness: 0.2
+   -Metalness: 1.0
+};
+
+#-----
+
+material {
+   -Tag: BlasterO_green
+   -BaseColor: 0.06010524 0.817612767 0.416153878 1.0
+   -Roughness: 0.2
+   -Metalness: 1.0
+};
+
+#-----
+
+material {
+   -Tag: BlasterP_red
+   -BaseColor: 0.8 0.1 0.1 1.0
+   -Roughness: 0.2
+   -Metalness: 1.0
+};
+
+#-----
 
 instance {
     -Mesh: plane
     -Material: PlaneMat
     -Scale: 2000.0 1.0 2000.0
-    -Translation: 0.0 -100.0 0.0
+    -Translation: 0.0 -200.0 0.0
 };
 
 instance {
    -Mesh: blasterE
-   -Material: BlasterYellow
+   -Material: BlasterE_yellow
 };
 
 instance {
-    -Mesh: dark
+    -Mesh: blaster_dark
     -Material: BlasterDark
 };
 
 instance {
-    -Mesh: scope
+    -Mesh: blaster_scope
     -Material: BlasterScope
 };
 
 instance {
-    -Mesh: _defaultMat
+    -Mesh: blaster__defaultMat
     -Material: BlasterDefaultMat
 };
 
 instance {
-    -Mesh: metal
+    -Mesh: blaster_metal
     -Material: BlasterMetal
 };
 
 instance {
-   -Mesh: darkMetal
+   -Mesh: blaster_darkMetal
    -Material: BlasterDarkMetal
+};
+
+#----
+
+instance {
+   -Mesh: blasterH
+   -Material: BlasterMetal
+   -Translation: -500 0 0
+};
+
+instance {
+   -Mesh: blasterH_darkMetal
+   -Material: BlasterDarkMetal
+   -Translation: -500 0 0
+};
+
+instance {
+   -Mesh: blasterH_dark
+   -Material: BlasterDark
+   -Translation: -500 0 0
+};
+
+instance {
+   -Mesh: blasterH_pink
+   -Material: BlasterH_pink
+   -Translation: -500 0 0
+};
+
+
+#----
+
+instance {
+   -Mesh: blasterO
+   -Material: BlasterDark
+   -Translation: 1000 0 0
+};
+
+instance {
+   -Mesh: blasterO_green
+   -Material: BlasterO_green
+   -Translation: 1000 0 0
+};
+
+instance {
+   -Mesh: blasterO_metal
+   -Material: BlasterMetal
+   -Translation: 1000 0 0
+};
+
+instance {
+   -Mesh: blasterO_darkMetal
+   -Material: BlasterDarkMetal
+   -Translation: 1000 0 0
+};
+
+#----
+
+instance {
+   -Mesh: blasterL
+   -Material: BlasterL_purple
+   -Translation: 500 0 0
+};
+
+instance {
+   -Mesh: blasterL_dark
+   -Material: BlasterDark
+   -Translation: 500 0 0
+};
+
+instance {
+   -Mesh: blasterL_metal
+   -Material: BlasterMetal
+   -Translation: 500 0 0
+};
+
+instance {
+   -Mesh: blasterL_darkMetal
+   -Material: BlasterDarkMetal
+   -Translation: 500 0 0
+};
+
+instance {
+   -Mesh: blasterL_defaultMat
+   -Material: BlasterDefaultMat
+   -Translation: 500 0 0
+};
+
+#----
+
+instance {
+   -Mesh: blasterP
+   -Material: BlasterMetal
+   -Translation: -1000 0 0
+};
+
+instance {
+   -Mesh: blasterP_red
+   -Material: BlasterP_red
+   -Translation: -1000 0 0
+};
+
+instance {
+   -Mesh: blasterP_dark
+   -Material: BlasterDark
+   -Translation: -1000 0 0
+};
+
+instance {
+   -Mesh: blasterP_darkMetal
+   -Material: BlasterDarkMetal
+   -Translation: -1000 0 0
+};
+
+instance {
+   -Mesh: blasterP_defaultMat
+   -Material: BlasterDefaultMat
+   -Translation: -1000 0 0
 };
 
 directional_light {

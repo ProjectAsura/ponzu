@@ -1,34 +1,1711 @@
+# 24fps - 10s animation = 240frame
 
 export {
    -Path: ..\res\scene\rtcamp_2023.cam
 };
 
+# 真上から開始.
 camera {
     -FrameIndex: 0
-    -Position: -681.024414 181.127930 -1090.046997
+    -Position: 0.111606 2310.942383 -70.008934
     -Target: 0.000000 0.000000 0.000000
-    -Upward: 0.073938 0.990216 0.118345
-    -FieldOfView: 37.5
+    -Upward: -0.001593 0.030281 0.999540
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 1
+    -Position: 0.198114 2308.660400 -124.273994
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.001592 0.053752 0.998553
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 2
+    -Position: 0.284514 2305.104248 -178.471588
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.001589 0.077194 0.997015
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 3
+    -Position: 0.370758 2300.275635 -232.571228
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.001586 0.100593 0.994926
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 4
+    -Position: 0.456798 2294.177490 -286.543030
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.001582 0.123937 0.992289
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 5
+    -Position: 0.542584 2286.813232 -340.355927
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.001577 0.147213 0.989104
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 6
+    -Position: 0.628072 2278.187012 -393.981201
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.001571 0.170407 0.985372
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 7
+    -Position: 0.713213 2268.303223 -447.389343
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.001564 0.193507 0.981098
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 8
+    -Position: 0.797961 2257.167725 -500.550293
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.001556 0.216501 0.976281
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 9
+    -Position: 0.882268 2244.786377 -553.434937
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.001548 0.239375 0.970926
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 10
+    -Position: 0.966089 2231.166260 -606.014709
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.001538 0.262117 0.965035
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 11
+    -Position: 1.049376 2216.314697 -658.259521
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.001528 0.284714 0.958611
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 12
+    -Position: 1.132084 2200.239990 -710.140991
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.001517 0.307154 0.951658
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 13
+    -Position: 1.214167 2182.950928 -761.630798
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.001505 0.329425 0.944180
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 14
+    -Position: 1.295580 2164.457031 -812.700073
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.001492 0.351514 0.936181
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 15
+    -Position: 1.376278 2144.768555 -863.320984
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.001479 0.373409 0.927666
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 16
+    -Position: 1.456217 2123.896484 -913.465454
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.001464 0.395098 0.918638
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 17
+    -Position: 1.535352 2101.852295 -963.105896
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.001449 0.416568 0.909103
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 18
+    -Position: 1.613639 2078.647949 -1012.214539
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.001433 0.437809 0.899067
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 19
+    -Position: 1.691037 2054.296143 -1060.764771
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.001416 0.458808 0.888534
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 20
+    -Position: 1.767501 2028.810669 -1108.729736
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.001399 0.479554 0.877511
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 21
+    -Position: 1.842989 2002.205566 -1156.082520
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.001381 0.500036 0.866004
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 22
+    -Position: 1.917460 1974.495483 -1202.797241
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.001361 0.520241 0.854018
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 23
+    -Position: 1.990873 1945.695679 -1248.848145
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.001342 0.540159 0.841562
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 24
+    -Position: 2.063187 1915.822021 -1294.209839
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.001321 0.559779 0.828641
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 25
+    -Position: 2.134363 1884.891113 -1338.857422
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.001300 0.579091 0.815262
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 26
+    -Position: 2.204360 1852.919800 -1382.765747
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.001278 0.598082 0.801434
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 27
+    -Position: 2.273141 1819.925781 -1425.911133
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.001255 0.616744 0.787163
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 28
+    -Position: 2.340667 1785.927490 -1468.269531
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.001231 0.635065 0.772458
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 29
+    -Position: 2.406901 1750.943481 -1509.817261
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.001207 0.653035 0.757327
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 30
+    -Position: 2.471807 1714.993164 -1550.532104
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.001183 0.670645 0.741777
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 31
+    -Position: 2.535350 1678.096313 -1590.391113
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.001157 0.687885 0.725818
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 32
+    -Position: 2.597492 1640.273315 -1629.372314
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.001131 0.704746 0.709459
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 33
+    -Position: 2.658201 1601.545044 -1667.454346
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.001104 0.721217 0.692708
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 34
+    -Position: 2.717443 1561.932739 -1704.616089
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.001077 0.737291 0.675575
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 35
+    -Position: 2.775185 1521.458740 -1740.836914
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.001049 0.752957 0.658069
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 36
+    -Position: 2.831396 1480.144897 -1776.097168
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.001021 0.768208 0.640199
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 37
+    -Position: 2.886044 1438.013916 -1810.377075
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.000992 0.783035 0.621977
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 38
+    -Position: 2.939099 1395.089600 -1843.657837
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.000962 0.797430 0.603411
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 39
+    -Position: 2.990532 1351.395142 -1875.921143
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.000932 0.811385 0.584512
+    -FieldOfView: 37.499996
     -NearClip: 0.100000
     -FarClip: 10000.000000
 };
 
 camera {
     -FrameIndex: 40
-    -Position: -974.395569 846.082336 -139.647171
+    -Position: 3.040314 1306.954834 -1907.149048
     -Target: 0.000000 0.000000 0.000000
-    -Upward: 0.645243 0.758360 0.092474
-    -FieldOfView: 37.5
+    -Upward: -0.000901 0.824891 0.565290
+    -FieldOfView: 37.499996
     -NearClip: 0.100000
     -FarClip: 10000.000000
 };
 
 camera {
-    -FrameIndex: 80
-    -Position: 1122.468872 64.880234 648.580017
+    -FrameIndex: 41
+    -Position: 3.088418 1261.793335 -1937.324341
     -Target: 0.000000 0.000000 0.000000
-    -Upward: -0.043279 0.998750 -0.025008
-    -FieldOfView: 37.5
+    -Upward: -0.000870 0.837943 0.545757
+    -FieldOfView: 37.499996
     -NearClip: 0.100000
     -FarClip: 10000.000000
 };
+
+camera {
+    -FrameIndex: 42
+    -Position: 3.134819 1215.935425 -1966.430542
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.000838 0.850532 0.525922
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 43
+    -Position: 3.179489 1169.406250 -1994.451538
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.000806 0.862652 0.505797
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 44
+    -Position: 3.222404 1122.231812 -2021.371582
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.000774 0.874296 0.485393
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 45
+    -Position: 3.263541 1074.437988 -2047.176147
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.000741 0.885457 0.464721
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 46
+    -Position: 3.302876 1026.051147 -2071.850830
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.000707 0.896129 0.443793
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 47
+    -Position: 3.340389 977.098083 -2095.382080
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.000674 0.906307 0.422619
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+
+# 止めショット左上. 1s
+camera {
+    -FrameIndex: 48
+    -Position: 1496.311035 1304.127563 -1447.612549
+    -Target: 198.863281 -175.135605 57.029411
+    -Upward: -0.389994 0.802093 0.452274
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+# 止めショット右後ろ. 1s
+camera {
+    -FrameIndex: 68
+    -Position: -1809.028320 541.272339 1149.800903
+    -Target: -352.399384 -149.804092 -22.671816
+    -Upward: 0.270050 0.937989 -0.217369
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+# 最後1回転
+camera {
+    -FrameIndex: 88
+    -Position: -132.994064 741.166077 -2185.942139
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.019468 0.947224 0.319981
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 89
+    -Position: -247.215179 741.166077 -2175.986084
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.036188 0.947224 0.318524
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 90
+    -Position: -360.758698 741.166077 -2160.065674
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.052808 0.947224 0.316194
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 91
+    -Position: -473.313385 741.166077 -2138.224854
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.069284 0.947224 0.312997
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 92
+    -Position: -584.570679 741.166077 -2110.523193
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.085570 0.947224 0.308942
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 93
+    -Position: -694.225769 741.166077 -2077.036621
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.101622 0.947224 0.304040
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 94
+    -Position: -801.978027 741.166077 -2037.857178
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.117395 0.947224 0.298305
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 95
+    -Position: -907.532227 741.166077 -1993.092041
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.132846 0.947224 0.291752
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 96
+    -Position: -1010.598816 741.166077 -1942.864014
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.147933 0.947224 0.284399
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 97
+    -Position: -1110.895508 741.166077 -1887.310791
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.162615 0.947224 0.276267
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 98
+    -Position: -1208.147339 741.166077 -1826.584473
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.176850 0.947224 0.267378
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 99
+    -Position: -1302.087646 741.166077 -1760.851685
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.190602 0.947224 0.257756
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 100
+    -Position: -1392.458984 741.166077 -1690.292480
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.203830 0.947224 0.247428
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 101
+    -Position: -1479.013794 741.166077 -1615.100342
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.216500 0.947224 0.236421
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 102
+    -Position: -1561.514648 741.166077 -1535.481323
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.228577 0.947224 0.224766
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 103
+    -Position: -1639.735352 741.166077 -1451.653564
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.240027 0.947224 0.212495
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 104
+    -Position: -1713.461914 741.166138 -1363.847168
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.250819 0.947224 0.199642
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 105
+    -Position: -1782.491943 741.166138 -1272.302246
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.260924 0.947224 0.186242
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 106
+    -Position: -1846.636108 741.166199 -1177.270020
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.270313 0.947224 0.172331
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 107
+    -Position: -1905.719116 741.166260 -1079.010986
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.278962 0.947224 0.157947
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 108
+    -Position: -1959.578369 741.166260 -977.794678
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.286846 0.947224 0.143131
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 109
+    -Position: -2008.066772 741.166260 -873.898376
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.293944 0.947224 0.127923
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 110
+    -Position: -2051.051025 741.166260 -767.606689
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.300236 0.947224 0.112363
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 111
+    -Position: -2088.413330 741.166260 -659.211182
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.305705 0.947224 0.096496
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 112
+    -Position: -2120.051758 741.166321 -549.008240
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.310337 0.947224 0.080365
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 113
+    -Position: -2145.879395 741.166382 -437.300995
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.314117 0.947224 0.064013
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 114
+    -Position: -2165.825195 741.166382 -324.394653
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.317037 0.947224 0.047485
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 115
+    -Position: -2179.834717 741.166443 -210.599716
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.319088 0.947224 0.030828
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 116
+    -Position: -2187.869141 741.166443 -96.228027
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.320264 0.947224 0.014086
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 117
+    -Position: -2189.906738 741.166443 18.411072
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.320562 0.947224 -0.002695
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 118
+    -Position: -2185.942627 741.166382 132.983017
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.319982 0.947224 -0.019466
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 119
+    -Position: -2175.987305 741.166504 247.204041
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.318524 0.947224 -0.036186
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 120
+    -Position: -2160.067627 741.166565 360.747528
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.316194 0.947224 -0.052807
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 121
+    -Position: -2138.227051 741.166565 473.302734
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.312997 0.947224 -0.069283
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 122
+    -Position: -2110.525879 741.166626 584.560120
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.308942 0.947224 -0.085569
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 123
+    -Position: -2077.040039 741.166687 694.215149
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.304040 0.947224 -0.101620
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 124
+    -Position: -2037.860840 741.166687 801.968079
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.298305 0.947224 -0.117393
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 125
+    -Position: -1993.096313 741.166687 907.522217
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.291753 0.947224 -0.132845
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 126
+    -Position: -1942.868896 741.166687 1010.588989
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.284400 0.947224 -0.147932
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 127
+    -Position: -1887.316162 741.166687 1110.885864
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.276268 0.947224 -0.162613
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 128
+    -Position: -1826.590088 741.166687 1208.138062
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.267379 0.947224 -0.176849
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 129
+    -Position: -1760.857544 741.166687 1302.079102
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.257757 0.947224 -0.190600
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 130
+    -Position: -1690.298584 741.166687 1392.451172
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.247429 0.947224 -0.203829
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 131
+    -Position: -1615.106934 741.166687 1479.006226
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.236422 0.947224 -0.216499
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 132
+    -Position: -1535.488159 741.166687 1561.507446
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.224767 0.947224 -0.228576
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 133
+    -Position: -1451.660767 741.166687 1639.728882
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.212496 0.947224 -0.240026
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 134
+    -Position: -1363.854126 741.166687 1713.456055
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.199643 0.947224 -0.250818
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 135
+    -Position: -1272.309814 741.166687 1782.486206
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.186243 0.947224 -0.260923
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 136
+    -Position: -1177.278198 741.166687 1846.630859
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.172332 0.947224 -0.270313
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 137
+    -Position: -1079.019165 741.166687 1905.714233
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.157949 0.947224 -0.278962
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 138
+    -Position: -977.802673 741.166687 1959.574219
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.143132 0.947224 -0.286846
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 139
+    -Position: -873.906616 741.166687 2008.062866
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.127924 0.947224 -0.293944
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 140
+    -Position: -767.615173 741.166687 2051.047607
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.112365 0.947224 -0.300236
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 141
+    -Position: -659.219727 741.166687 2088.410645
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.096498 0.947224 -0.305705
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 142
+    -Position: -549.017456 741.166687 2120.049316
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.080366 0.947224 -0.310336
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 143
+    -Position: -437.310364 741.166687 2145.877197
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.064014 0.947224 -0.314117
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 144
+    -Position: -324.404602 741.166687 2165.823242
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.047487 0.947224 -0.317037
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 145
+    -Position: -210.609741 741.166748 2179.833252
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.030829 0.947224 -0.319088
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 146
+    -Position: -96.237579 741.166748 2187.868164
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.014087 0.947224 -0.320264
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 147
+    -Position: 18.398371 741.166809 2189.906494
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.002693 0.947224 -0.320562
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 148
+    -Position: 132.983887 741.166870 2185.942627
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.019466 0.947224 -0.319982
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 149
+    -Position: 247.204910 741.166870 2175.986816
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.036186 0.947224 -0.318525
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 150
+    -Position: 360.748322 741.166931 2160.066895
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.052807 0.947224 -0.316194
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 151
+    -Position: 473.302979 741.167053 2138.226562
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.069283 0.947224 -0.312997
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 152
+    -Position: 584.560303 741.167114 2110.525635
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.085569 0.947224 -0.308942
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 153
+    -Position: 694.215454 741.167175 2077.039551
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.101620 0.947224 -0.304041
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 154
+    -Position: 801.967773 741.167236 2037.860718
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.117393 0.947224 -0.298306
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 155
+    -Position: 907.522034 741.167297 1993.096191
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.132845 0.947224 -0.291753
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 156
+    -Position: 1010.588806 741.167297 1942.868774
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.147932 0.947224 -0.284401
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 157
+    -Position: 1110.885620 741.167297 1887.316162
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.162613 0.947224 -0.276269
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 158
+    -Position: 1208.137573 741.167297 1826.590454
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.176849 0.947224 -0.267380
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 159
+    -Position: 1302.078125 741.167297 1760.858154
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.190600 0.947224 -0.257758
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 160
+    -Position: 1392.449707 741.167297 1690.299438
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.203829 0.947224 -0.247429
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 161
+    -Position: 1479.005249 741.167297 1615.107544
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.216499 0.947224 -0.236422
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 162
+    -Position: 1561.506348 741.167297 1535.489014
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.228576 0.947224 -0.224768
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 163
+    -Position: 1639.727539 741.167297 1451.661987
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.240026 0.947224 -0.212497
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 164
+    -Position: 1713.454346 741.167297 1363.855835
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.250818 0.947224 -0.199644
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 165
+    -Position: 1782.484985 741.167297 1272.311157
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.260923 0.947224 -0.186243
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 166
+    -Position: 1846.630127 741.167297 1177.279175
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.270313 0.947224 -0.172332
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 167
+    -Position: 1905.713623 741.167297 1079.020142
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.278962 0.947224 -0.157949
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 168
+    -Position: 1959.573608 741.167297 977.803772
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.286846 0.947224 -0.143133
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 169
+    -Position: 2008.062500 741.167297 873.907104
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.293944 0.947224 -0.127924
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 170
+    -Position: 2051.047363 741.167358 767.615173
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.300236 0.947224 -0.112365
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 171
+    -Position: 2088.410400 741.167419 659.219299
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.305705 0.947224 -0.096498
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 172
+    -Position: 2120.049316 741.167542 549.016541
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.310337 0.947224 -0.080366
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 173
+    -Position: 2145.877441 741.167603 437.307892
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.314117 0.947224 -0.064014
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 174
+    -Position: 2165.823486 741.167603 324.401642
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.317037 0.947224 -0.047487
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 175
+    -Position: 2179.833252 741.167664 210.606247
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.319088 0.947224 -0.030829
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 176
+    -Position: 2187.868164 741.167664 96.234589
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.320264 0.947224 -0.014087
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 177
+    -Position: 2189.906250 741.167664 -18.402903
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.320563 0.947224 0.002694
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 178
+    -Position: 2185.942383 741.167664 -132.982803
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.319982 0.947224 0.019466
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 179
+    -Position: 2175.986816 741.167664 -247.203812
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.318525 0.947224 0.036186
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 180
+    -Position: 2160.067139 741.167664 -360.747253
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.316195 0.947224 0.052807
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 181
+    -Position: 2138.226562 741.167664 -473.302399
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.312998 0.947224 0.069283
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 182
+    -Position: 2110.525391 741.167664 -584.560303
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.308943 0.947224 0.085569
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 183
+    -Position: 2077.039551 741.167664 -694.215393
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.304041 0.947224 0.101621
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 184
+    -Position: 2037.860718 741.167664 -801.967773
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.298306 0.947224 0.117394
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 185
+    -Position: 1993.096191 741.167725 -907.522034
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.291753 0.947224 0.132845
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 186
+    -Position: 1942.868774 741.167725 -1010.588745
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.284401 0.947224 0.147932
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 187
+    -Position: 1887.316040 741.167725 -1110.885498
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.276269 0.947224 0.162613
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 188
+    -Position: 1826.590210 741.167725 -1208.137695
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.267380 0.947224 0.176849
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 189
+    -Position: 1760.857910 741.167725 -1302.078247
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.257758 0.947224 0.190601
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 190
+    -Position: 1690.299194 741.167725 -1392.450073
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.247429 0.947224 0.203829
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 191
+    -Position: 1615.107544 741.167725 -1479.005249
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.236422 0.947224 0.216500
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 192
+    -Position: 1535.489014 741.167786 -1561.506592
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.224768 0.947224 0.228576
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 193
+    -Position: 1451.661743 741.167786 -1639.727783
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.212497 0.947224 0.240026
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 194
+    -Position: 1363.855713 741.167786 -1713.454834
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.199644 0.947224 0.250819
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 195
+    -Position: 1272.311279 741.167847 -1782.485352
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.186243 0.947224 0.260923
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 196
+    -Position: 1177.279663 741.167847 -1846.630127
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.172332 0.947224 0.270313
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 197
+    -Position: 1079.021240 741.167847 -1905.713379
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.157949 0.947224 0.278962
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 198
+    -Position: 977.805237 741.167847 -1959.573120
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.143133 0.947224 0.286846
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 199
+    -Position: 873.908936 741.167847 -2008.062134
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.127924 0.947224 0.293944
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 200
+    -Position: 767.617432 741.167847 -2051.046875
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.112365 0.947224 0.300236
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 201
+    -Position: 659.221924 741.167969 -2088.409912
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.096498 0.947223 0.305705
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 202
+    -Position: 549.019592 741.167969 -2120.048828
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.080366 0.947223 0.310337
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 203
+    -Position: 437.312408 741.167969 -2145.876953
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.064015 0.947223 0.314117
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 204
+    -Position: 324.406555 741.167969 -2165.823242
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.047487 0.947223 0.317037
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 205
+    -Position: 210.611557 741.167969 -2179.833252
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.030830 0.947223 0.319088
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 206
+    -Position: 96.239250 741.167969 -2187.868164
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: -0.014088 0.947223 0.320264
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
+camera {
+    -FrameIndex: 207
+    -Position: -18.396814 741.168030 -2189.906494
+    -Target: 0.000000 0.000000 0.000000
+    -Upward: 0.002693 0.947223 0.320563
+    -FieldOfView: 37.499996
+    -NearClip: 0.100000
+    -FarClip: 10000.000000
+};
+
