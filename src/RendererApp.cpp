@@ -558,7 +558,7 @@ Renderer::Renderer(const SceneDesc& desc)
     m_DeviceDesc.EnableCapture        = false;
 
     // 提出版はウィンドウを生成しない.
-    //m_CreateWindow                    = false;
+    m_CreateWindow                    = false;
 #else
     m_DeviceDesc.EnableCapture        = true;
     m_DeviceDesc.EnableBreakOnWarning = false;
