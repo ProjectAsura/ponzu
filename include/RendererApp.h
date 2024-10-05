@@ -18,7 +18,7 @@
 // Include
 //-----------------------------------------------------------------------------
 #include <Macro.h>
-#include <fnd/asdxBitFlags.h>
+#include <fnd/asdxBit.h>
 #include <fw/asdxApp.h>
 #include <fw/asdxAppCamera.h>
 #include <gfx/asdxPipelineState.h>
@@ -32,6 +32,7 @@
 #if RTC_TARGET == RTC_DEVELOP
 #include <gfx/asdxShaderCompiler.h>
 #include <edit/asdxFileWatcher.h>
+#include <list>
 #endif
 
 #ifdef ASDX_ENABLE_IMGUI
@@ -98,20 +99,20 @@ public:
     ~Renderer();
 
 private:
-    ///////////////////////////////////////////////////////////////////////////
-    // RayTracingPipe structure
-    ///////////////////////////////////////////////////////////////////////////
-    struct RayTracingPipe
-    {
-        asdx::RayTracingPipelineState   PipelineState;
-        asdx::ShaderTable               RayGen;
-        asdx::ShaderTable               Miss;
-        asdx::ShaderTable               HitGroup;
+    /////////////////////////////////////////////////////////////////////////////
+    //// RayTracingPipe structure
+    /////////////////////////////////////////////////////////////////////////////
+    //struct RayTracingPipe
+    //{
+    //    asdx::RayTracingPipelineState   PipelineState;
+    //    asdx::ShaderTable               RayGen;
+    //    asdx::ShaderTable               Miss;
+    //    asdx::ShaderTable               HitGroup;
 
-        bool Init       (ID3D12RootSignature* pRootSig, const void* binary, size_t binarySize);
-        void Term       ();
-        void Dispatch   (ID3D12GraphicsCommandList6* pCmd, uint32_t width, uint32_t height);
-    };
+    //    bool Init       (ID3D12RootSignature* pRootSig, const void* binary, size_t binarySize);
+    //    void Term       ();
+    //    void Dispatch   (ID3D12GraphicsCommandList6* pCmd, uint32_t width, uint32_t height);
+    //};
 
     //=========================================================================
     // private variables.
@@ -125,7 +126,7 @@ private:
     asdx::RefPtr<ID3D12RootSignature>   m_CopyRootSig;
     asdx::RefPtr<ID3D12RootSignature>   m_DenoiserRootSig;
 
-    RayTracingPipe                  m_RtPipe;
+    asdx::RayTracingPipelineState   m_RtPipe;
     asdx::PipelineState             m_ModelPipe;
     asdx::PipelineState             m_TonemapPipe;
     asdx::PipelineState             m_TaaPipe;
@@ -217,20 +218,16 @@ private:
 
     asdx::AppCamera                     m_AppCamera;
     asdx::FileWatcher                   m_ShaderWatcher;
-    RayTracingPipe                      m_DevPipe;
+    //RayTracingPipe                      m_DevPipe;
     asdx::RefPtr<ID3D12RootSignature>   m_DebugRootSig;
     asdx::PipelineState                 m_DebugPipe;
     asdx::PipelineState                 m_WireFramePipe;
 
-    asdx::BitFlags8                 m_RtShaderFlags;
-    asdx::BitFlags8                 m_TonemapShaderFlags;
-    asdx::BitFlags8                 m_PreBlurShaderFlags;
-    asdx::BitFlags8                 m_TemporalAccumulationShaderFlags;
-    asdx::BitFlags8                 m_DenoiserShaderFlags;
-    asdx::BitFlags8                 m_TemporalStabilizationShaderFlags;
-    asdx::BitFlags8                 m_PostBlurShaderFlags;
+    asdx::BitFlag8                  m_RtShaderFlags;
     int                             m_ReloadShaderState = 0;
     float                           m_ReloadShaderDisplaySec = 0;
+
+    std::list<asdx::IFileUpdateListener*>   m_pShaderReloadListener;
 #endif
 
     //=========================================================================
@@ -249,20 +246,16 @@ private:
 
     bool SystemSetup    ();
     bool BuildScene     ();
-    void DispatchRays   (ID3D12GraphicsCommandList6* pCmd);
+    //void DispatchRays   (ID3D12GraphicsCommandList6* pCmd);
 
     void ChangeFrame    (uint32_t index);
     void CaptureScreen  (ID3D12Resource* pResource);
 
 #if RTC_TARGET == RTC_DEVELOP
     bool BuildTestScene ();
-    void ReloadShader   ();
 
     // ファイル更新コールバック.
-    void OnUpdate(
-        asdx::ACTION_TYPE actionType,
-        const char* directoryPath,
-        const char* relativePath) override;
+    void OnUpdate(const asdx::FileUpdateEventArgs& args) override;
 #endif
 };
 

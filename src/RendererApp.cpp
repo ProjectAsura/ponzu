@@ -20,6 +20,7 @@
 
 #if RTC_TARGET == RTC_DEVELOP
 #include <pix3.h>
+#include <gfx/asdxShaderCompiler.h>
 #endif
 
 extern "C" { __declspec(dllexport) extern const UINT D3D12SDKVersion = 610;}
@@ -64,6 +65,10 @@ static const size_t     RELOADED_BIT_INDEX  = 1;
 #define RELOAD_SHADER_STATE_SUCCESS (1)
 #define RELOAD_SHADER_STATE_FAILED  (-1)
 
+static const std::vector<std::string> kIncludeDirs{
+    "../external/asdx12/res/shaders",
+    "../res/shader"
+};
 
 ///////////////////////////////////////////////////////////////////////////////
 // ScopedMarker class
@@ -387,150 +392,150 @@ asdx::Vector2 CalcTemporalJitterOffset(uint8_t index)
 
 
 namespace r3d {
-
-///////////////////////////////////////////////////////////////////////////////
-// RayTracingPipe structure
-///////////////////////////////////////////////////////////////////////////////
-
-//-----------------------------------------------------------------------------
-//      初期化処理です.
-//-----------------------------------------------------------------------------
-bool Renderer::RayTracingPipe::Init
-(
-    ID3D12RootSignature*    pRootSig,
-    const void*             binary,
-    size_t                  binarySize
-)
-{
-    auto pDevice = asdx::GetD3D12Device();
-
-    // レイトレ用パイプラインステート生成.
-    {
-        D3D12_EXPORT_DESC exports[] = {
-            { L"OnGenerateRay"      , nullptr, D3D12_EXPORT_FLAG_NONE },
-            { L"OnClosestHit"       , nullptr, D3D12_EXPORT_FLAG_NONE },
-            { L"OnShadowAnyHit"     , nullptr, D3D12_EXPORT_FLAG_NONE },
-            { L"OnMiss"             , nullptr, D3D12_EXPORT_FLAG_NONE },
-            { L"OnShadowMiss"       , nullptr, D3D12_EXPORT_FLAG_NONE },
-        };
-
-        D3D12_HIT_GROUP_DESC groups[2] = {};
-        groups[0].ClosestHitShaderImport    = L"OnClosestHit";
-        groups[0].HitGroupExport            = L"StandardHit";
-        groups[0].Type                      = D3D12_HIT_GROUP_TYPE_TRIANGLES;
-
-        groups[1].AnyHitShaderImport        = L"OnShadowAnyHit";
-        groups[1].HitGroupExport            = L"ShadowHit";
-        groups[1].Type                      = D3D12_HIT_GROUP_TYPE_TRIANGLES;
-
-        asdx::RayTracingPipelineStateDesc desc = {};
-        desc.pGlobalRootSignature       = pRootSig;
-        desc.DXILLibrary                = { binary, binarySize };
-        desc.ExportCount                = _countof(exports);
-        desc.pExports                   = exports;
-        desc.HitGroupCount              = _countof(groups);
-        desc.pHitGroups                 = groups;
-        desc.MaxPayloadSize             = sizeof(Payload);
-        desc.MaxAttributeSize           = sizeof(asdx::Vector2);
-        desc.MaxTraceRecursionDepth     = MAX_RECURSION_DEPTH;
-
-        if (!PipelineState.Init(pDevice, desc))
-        {
-            ELOGA("Error : RayTracing PSO Failed.");
-            return false;
-        }
-    }
-
-    // レイ生成テーブル.
-    {
-        asdx::ShaderRecord record = {};
-        record.ShaderIdentifier = PipelineState.GetShaderIdentifier(L"OnGenerateRay");
-
-        asdx::ShaderTable::Desc desc = {};
-        desc.RecordCount    = 1;
-        desc.pRecords       = &record;
-
-        if (!RayGen.Init(pDevice, &desc))
-        {
-            ELOGA("Error : RayGenTable Init Failed.");
-            return false;
-        }
-    }
-
-    // ミステーブル.
-    {
-        asdx::ShaderRecord record[2] = {};
-        record[0].ShaderIdentifier = PipelineState.GetShaderIdentifier(L"OnMiss");
-        record[1].ShaderIdentifier = PipelineState.GetShaderIdentifier(L"OnShadowMiss");
-
-        asdx::ShaderTable::Desc desc = {};
-        desc.RecordCount = 2;
-        desc.pRecords    = record;
-
-        if (!Miss.Init(pDevice, &desc))
-        {
-            ELOGA("Error : MissTable Init Failed.");
-            return false;
-        }
-    }
-
-    // ヒットグループ.
-    {
-        asdx::ShaderRecord record[2];
-        record[0].ShaderIdentifier = PipelineState.GetShaderIdentifier(L"StandardHit");
-        record[1].ShaderIdentifier = PipelineState.GetShaderIdentifier(L"ShadowHit");
-
-        asdx::ShaderTable::Desc desc = {};
-        desc.RecordCount = 2;
-        desc.pRecords    = record;
-
-        if (!HitGroup.Init(pDevice, &desc))
-        {
-            ELOGA("Error : HitGroupTable Init Failed.");
-            return false;
-        }
-    }
-
-    return true;
-}
-
-//-----------------------------------------------------------------------------
-//      終了処理です.
-//-----------------------------------------------------------------------------
-void Renderer::RayTracingPipe::Term()
-{
-    HitGroup     .Term();
-    Miss         .Term();
-    RayGen       .Term();
-    PipelineState.Term();
-}
-
-//-----------------------------------------------------------------------------
-//      レイトレーシングパイプラインを起動します.
-//-----------------------------------------------------------------------------
-void Renderer::RayTracingPipe::Dispatch
-(
-    ID3D12GraphicsCommandList6* pCmd,
-    uint32_t                    width,
-    uint32_t                    height
-)
-{
-    auto stateObject    = PipelineState.GetStateObject();
-    auto rayGenTable    = RayGen  .GetRecordView();
-    auto missTable      = Miss    .GetTableView();
-    auto hitGroupTable  = HitGroup.GetTableView();
-
-    D3D12_DISPATCH_RAYS_DESC desc = {};
-    desc.RayGenerationShaderRecord  = rayGenTable;
-    desc.MissShaderTable            = missTable;
-    desc.HitGroupTable              = hitGroupTable;
-    desc.Width                      = width;
-    desc.Height                     = height;
-    desc.Depth                      = 1;
-
-    pCmd->SetPipelineState1(stateObject);
-    pCmd->DispatchRays(&desc);
-}
+//
+/////////////////////////////////////////////////////////////////////////////////
+//// RayTracingPipe structure
+/////////////////////////////////////////////////////////////////////////////////
+//
+////-----------------------------------------------------------------------------
+////      初期化処理です.
+////-----------------------------------------------------------------------------
+//bool Renderer::RayTracingPipe::Init
+//(
+//    ID3D12RootSignature*    pRootSig,
+//    const void*             binary,
+//    size_t                  binarySize
+//)
+//{
+//    auto pDevice = asdx::GetD3D12Device();
+//
+//    // レイトレ用パイプラインステート生成.
+//    {
+//        D3D12_EXPORT_DESC exports[] = {
+//            { L"OnGenerateRay"      , nullptr, D3D12_EXPORT_FLAG_NONE },
+//            { L"OnClosestHit"       , nullptr, D3D12_EXPORT_FLAG_NONE },
+//            { L"OnShadowAnyHit"     , nullptr, D3D12_EXPORT_FLAG_NONE },
+//            { L"OnMiss"             , nullptr, D3D12_EXPORT_FLAG_NONE },
+//            { L"OnShadowMiss"       , nullptr, D3D12_EXPORT_FLAG_NONE },
+//        };
+//
+//        D3D12_HIT_GROUP_DESC groups[2] = {};
+//        groups[0].ClosestHitShaderImport    = L"OnClosestHit";
+//        groups[0].HitGroupExport            = L"StandardHit";
+//        groups[0].Type                      = D3D12_HIT_GROUP_TYPE_TRIANGLES;
+//
+//        groups[1].AnyHitShaderImport        = L"OnShadowAnyHit";
+//        groups[1].HitGroupExport            = L"ShadowHit";
+//        groups[1].Type                      = D3D12_HIT_GROUP_TYPE_TRIANGLES;
+//
+//        asdx::RayTracingPipelineStateDesc desc = {};
+//        desc.pGlobalRootSignature       = pRootSig;
+//        desc.DXILLibrary                = { binary, binarySize };
+//        desc.ExportCount                = _countof(exports);
+//        desc.pExports                   = exports;
+//        desc.HitGroupCount              = _countof(groups);
+//        desc.pHitGroups                 = groups;
+//        desc.MaxPayloadSize             = sizeof(Payload);
+//        desc.MaxAttributeSize           = sizeof(asdx::Vector2);
+//        desc.MaxTraceRecursionDepth     = MAX_RECURSION_DEPTH;
+//
+//        if (!PipelineState.Init(pDevice, desc))
+//        {
+//            ELOGA("Error : RayTracing PSO Failed.");
+//            return false;
+//        }
+//    }
+//
+//    // レイ生成テーブル.
+//    {
+//        asdx::ShaderRecord record = {};
+//        record.ShaderIdentifier = PipelineState.GetShaderIdentifier(L"OnGenerateRay");
+//
+//        asdx::ShaderTable::Desc desc = {};
+//        desc.RecordCount    = 1;
+//        desc.pRecords       = &record;
+//
+//        if (!RayGen.Init(pDevice, &desc))
+//        {
+//            ELOGA("Error : RayGenTable Init Failed.");
+//            return false;
+//        }
+//    }
+//
+//    // ミステーブル.
+//    {
+//        asdx::ShaderRecord record[2] = {};
+//        record[0].ShaderIdentifier = PipelineState.GetShaderIdentifier(L"OnMiss");
+//        record[1].ShaderIdentifier = PipelineState.GetShaderIdentifier(L"OnShadowMiss");
+//
+//        asdx::ShaderTable::Desc desc = {};
+//        desc.RecordCount = 2;
+//        desc.pRecords    = record;
+//
+//        if (!Miss.Init(pDevice, &desc))
+//        {
+//            ELOGA("Error : MissTable Init Failed.");
+//            return false;
+//        }
+//    }
+//
+//    // ヒットグループ.
+//    {
+//        asdx::ShaderRecord record[2];
+//        record[0].ShaderIdentifier = PipelineState.GetShaderIdentifier(L"StandardHit");
+//        record[1].ShaderIdentifier = PipelineState.GetShaderIdentifier(L"ShadowHit");
+//
+//        asdx::ShaderTable::Desc desc = {};
+//        desc.RecordCount = 2;
+//        desc.pRecords    = record;
+//
+//        if (!HitGroup.Init(pDevice, &desc))
+//        {
+//            ELOGA("Error : HitGroupTable Init Failed.");
+//            return false;
+//        }
+//    }
+//
+//    return true;
+//}
+//
+////-----------------------------------------------------------------------------
+////      終了処理です.
+////-----------------------------------------------------------------------------
+//void Renderer::RayTracingPipe::Term()
+//{
+//    HitGroup     .Term();
+//    Miss         .Term();
+//    RayGen       .Term();
+//    PipelineState.Term();
+//}
+//
+////-----------------------------------------------------------------------------
+////      レイトレーシングパイプラインを起動します.
+////-----------------------------------------------------------------------------
+//void Renderer::RayTracingPipe::Dispatch
+//(
+//    ID3D12GraphicsCommandList6* pCmd,
+//    uint32_t                    width,
+//    uint32_t                    height
+//)
+//{
+//    auto stateObject    = PipelineState.GetStateObject();
+//    auto rayGenTable    = RayGen  .GetRecordView();
+//    auto missTable      = Miss    .GetTableView();
+//    auto hitGroupTable  = HitGroup.GetTableView();
+//
+//    D3D12_DISPATCH_RAYS_DESC desc = {};
+//    desc.RayGenerationShaderRecord  = rayGenTable;
+//    desc.MissShaderTable            = missTable;
+//    desc.HitGroupTable              = hitGroupTable;
+//    desc.Width                      = width;
+//    desc.Height                     = height;
+//    desc.Depth                      = 1;
+//
+//    pCmd->SetPipelineState1(stateObject);
+//    pCmd->DispatchRays(&desc);
+//}
 
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -618,7 +623,7 @@ bool Renderer::OnInit()
         desc.DirectoryPath  = path.c_str();
         desc.BufferSize     = 4096;
         desc.WaitTimeMsec   = 16;
-        desc.pListener      = this;
+        desc.pListeners.push_back(this);
 
         if (!m_ShaderWatcher.Init(desc))
         {
@@ -868,11 +873,48 @@ bool Renderer::SystemSetup()
             return false;
         }
 
-        if (!m_RtPipe.Init(m_RtRootSig.GetPtr(), RtCamp, sizeof(RtCamp)))
+        std::vector<D3D12_HIT_GROUP_DESC> groups;
+        groups.resize(2);
+        groups[0].ClosestHitShaderImport    = L"OnClosestHit";
+        groups[0].HitGroupExport            = L"StandardHit";
+        groups[0].Type                      = D3D12_HIT_GROUP_TYPE_TRIANGLES;
+
+        groups[1].AnyHitShaderImport        = L"OnShadowAnyHit";
+        groups[1].HitGroupExport            = L"ShadowHit";
+        groups[1].Type                      = D3D12_HIT_GROUP_TYPE_TRIANGLES;
+
+        std::vector<std::wstring> miss{
+            L"OnMiss",
+            L"OnShadowMiss"
+        };
+
+        asdx::RayTracingPipelineStateDesc psoDesc;
+        psoDesc.pGlobalRootSignature   = m_RtRootSig.GetPtr();
+        psoDesc.DXILLibrary            = { RtCamp, sizeof(RtCamp) };
+        psoDesc.RayGeneration          = L"OnGenerateRay";
+        psoDesc.HitGroups              = groups;
+        psoDesc.MissTable              = miss;
+        psoDesc.MaxPayloadSize         = sizeof(Payload);
+        psoDesc.MaxAttributeSize       = sizeof(asdx::Vector2);
+        psoDesc.MaxTraceRecursionDepth = MAX_RECURSION_DEPTH;
+
+        if (!m_RtPipe.Init(pDevice, psoDesc))
         {
             ELOG("Error : RayTracingPipe Init Failed.");
             return false;
         }
+
+#if RTC_TARGET == RTC_DEVELOP
+        std::vector<std::string> deps{
+            "../external/asdx12/res/Math.hlsli",
+            "../external/asdx12/res/BRDF.hlsli",
+            "../res/shader/SceneParam.hlsli",
+            "../res/shader/Common.hlsli",
+        };
+        m_RtPipe.SetIncludeDirs(kIncludeDirs);
+        m_RtPipe.SetDependencies(deps);
+        m_RtPipe.SetReloadPathLib("../res/shader/RtCamp.hlsl", "lib_6_6");
+#endif
     }
 
     // トーンマップ用ルートシグニチャ生成.
@@ -910,6 +952,12 @@ bool Renderer::SystemSetup()
             ELOGA("Error : Tonemap PipelineState Init Failed.");
             return false;
         }
+
+    #if RTC_TARGET == RTC_DEVELOP
+        m_TonemapPipe.SetIncludeDirs(kIncludeDirs);
+        m_TonemapPipe.SetReloadPathCS("../res/shader/TonemapCS.hlsl", "cs_6_0");
+        m_pShaderReloadListener.push_back(&m_TonemapPipe);
+    #endif
     }
 
     // ヒストリーバッファ生成.
@@ -1260,9 +1308,9 @@ bool Renderer::SystemSetup()
         desc.pRootSignature                 = m_ModelRootSig.GetPtr();
         desc.VS                             = { ModelVS, sizeof(ModelVS) };
         desc.PS                             = { ModelPS, sizeof(ModelPS) };
-        desc.BlendState                     = asdx::BLEND_DESC(asdx::BLEND_STATE_OPAQUE);
-        desc.DepthStencilState              = asdx::DEPTH_STENCIL_DESC(asdx::DEPTH_STATE_DEFAULT);
-        desc.RasterizerState                = asdx::RASTERIZER_DESC(asdx::RASTERIZER_STATE_CULL_NONE);
+        desc.BlendState                     = asdx::Preset::Opaque;
+        desc.DepthStencilState              = asdx::Preset::DepthDefault;
+        desc.RasterizerState                = asdx::Preset::CullNone;
         desc.SampleMask                     = D3D12_DEFAULT_SAMPLE_MASK;
         desc.PrimitiveTopologyType          = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
         desc.NumRenderTargets               = 4;
@@ -1281,6 +1329,13 @@ bool Renderer::SystemSetup()
             ELOGA("Error : Model Pipe Init Failed.");
             return false;
         }
+
+    #if RTC_TARGET == RTC_DEVELOP
+        m_ModelPipe.SetIncludeDirs(kIncludeDirs);
+        m_ModelPipe.SetReloadPathVS("../res/shader/ModelVS.hlsl", "vs_6_0");
+        m_ModelPipe.SetReloadPathPS("../res/shdaer/ModelPS.hlsl", "ps_6_0");
+        m_pShaderReloadListener.push_back(&m_ModelPipe);
+    #endif
     }
 
     // テンポラルAA用ルートシグニチャ生成.
@@ -1331,6 +1386,12 @@ bool Renderer::SystemSetup()
             ELOGA("Error : Taa Pipe Init Failed.");
             return false;
         }
+
+    #if RTC_TARGET == RTC_DEVELOP
+        m_TaaPipe.SetIncludeDirs(kIncludeDirs);
+        m_TaaPipe.SetReloadPathCS("../external/asdx12/res/shaders/TaaCS.hlsl", "cs_6_0");
+        m_pShaderReloadListener.push_back(&m_TaaPipe);
+    #endif
     }
 
     // テンポラルAA用定数バッファ.
@@ -1397,6 +1458,12 @@ bool Renderer::SystemSetup()
             ELOGA("Error : PreBlur Pipe Init Failed.");
             return false;
         }
+
+    #if RTC_TARGET == RTC_DEVELOP
+        m_PreBlurPipe.SetIncludeDirs(kIncludeDirs);
+        m_PreBlurPipe.SetReloadPathCS("../res/shader/PreBlurCS.hlsl", "cs_6_0");
+        m_pShaderReloadListener.push_back(&m_PreBlurPipe);
+    #endif
     }
 
     // テンポラルアキュムレーション用パイプラインステート.
@@ -1410,6 +1477,12 @@ bool Renderer::SystemSetup()
             ELOGA("Error : TemporalAccumulation Pipe Init Failed.");
             return false;
         }
+
+    #if RTC_TARGET == RTC_DEVELOP
+        m_TemporalAccumulationPipe.SetIncludeDirs(kIncludeDirs);
+        m_TemporalAccumulationPipe.SetReloadPathCS("../res/shader/TemporalAccumulationCS.hlsl", "cs_6_0");
+        m_pShaderReloadListener.push_back(&m_TemporalAccumulationPipe);
+    #endif
     }
 
     // デノイズブラー用パイプラインステート.
@@ -1423,6 +1496,12 @@ bool Renderer::SystemSetup()
             ELOGA("Error : Denoiser Pipe Init Failed.");
             return false;
         }
+
+    #if RTC_TARGET == RTC_DEVELOP
+        m_DenoiserPipe.SetIncludeDirs(kIncludeDirs);
+        m_DenoiserPipe.SetReloadPathCS("../res/shader/DenoiserCS.hlsl", "cs_6_0");
+        m_pShaderReloadListener.push_back(&m_DenoiserPipe);
+    #endif
     }
 
     // テンポラルスタビライゼーション用パイプラインステート.
@@ -1436,6 +1515,12 @@ bool Renderer::SystemSetup()
             ELOGA("Error : TemporalStabilization Pipe Init Failed.");
             return false;
         }
+
+    #if RTC_TARGET == RTC_DEVELOP
+        m_TemporalStabilizationPipe.SetIncludeDirs(kIncludeDirs);
+        m_TemporalStabilizationPipe.SetReloadPathCS("../res/shader/TemporalStabilizationCS.hlsl", "cs_6_0");
+        m_pShaderReloadListener.push_back(&m_TemporalStabilizationPipe);
+    #endif
     }
 
     // ポストブラー用パイプラインステート.
@@ -1449,6 +1534,12 @@ bool Renderer::SystemSetup()
             ELOGA("Error : PostBlur Pipe Init Failed.");
             return false;
         }
+
+    #if RTC_TARGET == RTC_DEVELOP
+        m_PostBlurPipe.SetIncludeDirs(kIncludeDirs);
+        m_PostBlurPipe.SetReloadPathCS("../res/shader/PostBlurCS.hlsl", "cs_6_0");
+        m_pShaderReloadListener.push_back(&m_PostBlurPipe);
+    #endif
     }
 
     // デノイズ用定数バッファ.
@@ -1495,9 +1586,9 @@ bool Renderer::SystemSetup()
         desc.pRootSignature         = m_DebugRootSig.GetPtr();
         desc.VS                     = { TonemapVS, sizeof(TonemapVS) };
         desc.PS                     = { DebugPS, sizeof(DebugPS) };
-        desc.BlendState             = asdx::BLEND_DESC(asdx::BLEND_STATE_OPAQUE);
-        desc.DepthStencilState      = asdx::DEPTH_STENCIL_DESC(asdx::DEPTH_STATE_NONE);
-        desc.RasterizerState        = asdx::RASTERIZER_DESC(asdx::RASTERIZER_STATE_CULL_NONE);
+        desc.BlendState             = asdx::Preset::Opaque;//asdx::BLEND_DESC(asdx::BLEND_STATE_OPAQUE);
+        desc.DepthStencilState      = asdx::Preset::DepthNone;//asdx::DEPTH_STENCIL_DESC(asdx::DEPTH_STATE_NONE);
+        desc.RasterizerState        = asdx::Preset::CullNone;//asdx::RASTERIZER_DESC(asdx::RASTERIZER_STATE_CULL_NONE);
         desc.SampleMask             = D3D12_DEFAULT_SAMPLE_MASK;
         desc.PrimitiveTopologyType  = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
         desc.NumRenderTargets       = 1;
@@ -1512,6 +1603,13 @@ bool Renderer::SystemSetup()
             ELOGA("Error : Debug PipelineState Failed.");
             return false;
         }
+
+    #if RTC_TARGET == RTC_DEVELOP
+        m_DebugPipe.SetIncludeDirs(kIncludeDirs);
+        m_DebugPipe.SetReloadPathVS("../external/asdx12/res/shaders/FullScreenVS.hlsl", "vs_6_0");
+        m_DebugPipe.SetReloadPathPS("../res/shader/DebugPS.hlsl", "ps_6_0");
+        m_pShaderReloadListener.push_back(&m_DebugPipe);
+    #endif
     }
 
     // ワイヤーフレーム描画用 G-Bufferパイプラインステート.
@@ -1520,9 +1618,9 @@ bool Renderer::SystemSetup()
         desc.pRootSignature                 = m_ModelRootSig.GetPtr();
         desc.VS                             = { ModelVS, sizeof(ModelVS) };
         desc.PS                             = { ModelPS, sizeof(ModelPS) };
-        desc.BlendState                     = asdx::BLEND_DESC(asdx::BLEND_STATE_OPAQUE);
-        desc.DepthStencilState              = asdx::DEPTH_STENCIL_DESC(asdx::DEPTH_STATE_DEFAULT);
-        desc.RasterizerState                = asdx::RASTERIZER_DESC(asdx::RASTERIZER_STATE_CULL_NONE);
+        desc.BlendState                     = asdx::Preset::Opaque;//asdx::BLEND_DESC(asdx::BLEND_STATE_OPAQUE);
+        desc.DepthStencilState              = asdx::Preset::DepthDefault;//asdx::DEPTH_STENCIL_DESC(asdx::DEPTH_STATE_DEFAULT);
+        desc.RasterizerState                = asdx::Preset::CullNone;//asdx::RASTERIZER_DESC(asdx::RASTERIZER_STATE_CULL_NONE);
         desc.SampleMask                     = D3D12_DEFAULT_SAMPLE_MASK;
         desc.PrimitiveTopologyType          = D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE;
         desc.NumRenderTargets               = 4;
@@ -1541,6 +1639,13 @@ bool Renderer::SystemSetup()
             ELOGA("Error : PipelineState Failed.");
             return false;
         }
+
+    #if RTC_TARGET == RTC_DEVELOP
+        m_WireFramePipe.SetIncludeDirs(kIncludeDirs);
+        m_WireFramePipe.SetReloadPathVS("../res/shader/ModelVS.hlsl", "vs_6_0");
+        m_WireFramePipe.SetReloadPathPS("../res/shader/ModelPS.hlsl", "ps_6_0");
+        m_pShaderReloadListener.push_back(&m_WireFramePipe);
+    #endif
     }
     #else
     if (m_CreateWindow)
@@ -1591,9 +1696,9 @@ bool Renderer::SystemSetup()
             desc.pRootSignature         = m_CopyRootSig.GetPtr();
             desc.VS                     = { TonemapVS, sizeof(TonemapVS) };
             desc.PS                     = { CopyPS, sizeof(CopyPS) };
-            desc.BlendState             = asdx::BLEND_DESC(asdx::BLEND_STATE_OPAQUE);
-            desc.DepthStencilState      = asdx::DEPTH_STENCIL_DESC(asdx::DEPTH_STATE_DEFAULT);
-            desc.RasterizerState        = asdx::RASTERIZER_DESC(asdx::RASTERIZER_STATE_CULL_NONE);
+            desc.BlendState             = asdx::Preset::Opaque;//asdx::BLEND_DESC(asdx::BLEND_STATE_OPAQUE);
+            desc.DepthStencilState      = asdx::Preset::DepthDefault;//asdx::DEPTH_STENCIL_DESC(asdx::DEPTH_STATE_DEFAULT);
+            desc.RasterizerState        = asdx::Preset::CullNone;//asdx::RASTERIZER_DESC(asdx::RASTERIZER_STATE_CULL_NONE);
             desc.SampleMask             = D3D12_DEFAULT_SAMPLE_MASK;
             desc.PrimitiveTopologyType  = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
             desc.NumRenderTargets       = 1;
@@ -1772,7 +1877,7 @@ void Renderer::OnTerm()
     #if RTC_TARGET == RTC_DEVELOP
     // 開発用関連.
     {
-        m_DevPipe       .Term();
+        //m_DevPipe       .Term();
         m_ShaderWatcher .Term();
         m_DebugPipe     .Term();
         m_DebugRootSig  .Reset();
@@ -2063,11 +2168,11 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
     {
         RTC_DEBUG_CODE(ScopedMarker marker(pCmd, "G-Buffer"));
 
-        m_Albedo    .Transition(pCmd, D3D12_RESOURCE_STATE_RENDER_TARGET);
-        m_Normal    .Transition(pCmd, D3D12_RESOURCE_STATE_RENDER_TARGET);
-        m_Roughness .Transition(pCmd, D3D12_RESOURCE_STATE_RENDER_TARGET);
-        m_Velocity  .Transition(pCmd, D3D12_RESOURCE_STATE_RENDER_TARGET);
-        m_Depth     .Transition(pCmd, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+        m_Albedo    .ChangeState(pCmd, D3D12_RESOURCE_STATE_RENDER_TARGET);
+        m_Normal    .ChangeState(pCmd, D3D12_RESOURCE_STATE_RENDER_TARGET);
+        m_Roughness .ChangeState(pCmd, D3D12_RESOURCE_STATE_RENDER_TARGET);
+        m_Velocity  .ChangeState(pCmd, D3D12_RESOURCE_STATE_RENDER_TARGET);
+        m_Depth     .ChangeState(pCmd, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 
         auto pRTV0 = m_Albedo   .GetRTV();
         auto pRTV1 = m_Normal   .GetRTV();
@@ -2128,7 +2233,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
     {
         RTC_DEBUG_CODE(ScopedMarker marker(pCmd, "PathTracing"));
 
-        m_Radiance.Transition(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        m_Radiance.ChangeState(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
         pCmd->SetComputeRootSignature(m_RtRootSig.GetPtr());
         pCmd->SetComputeRootDescriptorTable(0, m_Radiance.GetUAV()->GetHandleGPU());
@@ -2141,7 +2246,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         pCmd->SetComputeRootDescriptorTable(7, m_Scene.GetLB()->GetHandleGPU());
         pCmd->SetComputeRootDescriptorTable(8, m_HitDistance.GetUAV()->GetHandleGPU());
 
-        DispatchRays(pCmd);
+        m_RtPipe.DispatchRays(pCmd, m_SceneDesc.RenderWidth, m_SceneDesc.RenderHeight);
 
         asdx::UAVBarrier(pCmd, m_Radiance.GetResource());
     }
@@ -2155,8 +2260,8 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
 
         auto& inputBuffer = m_Radiance;
 
-        inputBuffer.Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        m_Tonemapped.Transition(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        inputBuffer .ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        m_Tonemapped.ChangeState(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
         pCmd->SetComputeRootSignature(m_TonemapRootSig.GetPtr());
         m_TonemapPipe.SetState(pCmd);
@@ -2193,13 +2298,13 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         blurOffset.y = 0.0f;
         blurOffset.z = 1.0f;
 
-        m_BlurTarget0.Transition(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-        m_Depth      .Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        m_Normal     .Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        m_Roughness  .Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        m_HitDistance.Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        m_AccumulationCount.Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        inputBuffer.Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        m_BlurTarget0      .ChangeState(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        m_Depth            .ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        m_Normal           .ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        m_Roughness        .ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        m_HitDistance      .ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        m_AccumulationCount.ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        inputBuffer        .ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
         pCmd->SetComputeRootSignature(m_DenoiserRootSig.GetPtr());
         m_PreBlurPipe.SetState(pCmd);
@@ -2219,8 +2324,8 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         blurOffset.x = 0.0f;
         blurOffset.y = 1.0f / float(m_SceneDesc.RenderHeight);
 
-        m_BlurTarget1.Transition(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-        m_BlurTarget0.Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        m_BlurTarget1.ChangeState(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        m_BlurTarget0.ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
         pCmd->SetComputeRoot32BitConstants(DENOISER_PARAM_CBV1, 3, &blurOffset, 0);
         pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV4, m_BlurTarget0.GetSRV()->GetHandleGPU());
@@ -2247,11 +2352,11 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
 
         uint32_t flags = (m_ResetHistory) ? 0x1 : 0;
 
-        m_AccumulationColorHistory[m_PrevHistoryIndex].Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        m_AccumulationColorHistory[m_CurrHistoryIndex].Transition(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-        m_Velocity.Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        m_AccumulationCount.Transition(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-        m_BlurTarget1.Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        m_AccumulationColorHistory[m_PrevHistoryIndex].ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        m_AccumulationColorHistory[m_CurrHistoryIndex].ChangeState(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        m_Velocity.ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        m_AccumulationCount.ChangeState(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        m_BlurTarget1.ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
         pCmd->SetComputeRootSignature(m_DenoiserRootSig.GetPtr());
         m_TemporalAccumulationPipe.SetState(pCmd);
@@ -2275,8 +2380,8 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
     {
         RTC_DEBUG_CODE(ScopedMarker marker(pCmd, "DenoiseBlur"));
 
-        m_BlurTarget0.Transition(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-        m_AccumulationCount.Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        m_BlurTarget0      .ChangeState(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        m_AccumulationCount.ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
         asdx::Vector4 blurOffset = {};
         blurOffset.x = 1.0f / float(m_SceneDesc.RenderWidth);
@@ -2301,8 +2406,8 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         blurOffset.x = 0.0f;
         blurOffset.y = 1.0f / float(m_SceneDesc.RenderHeight);
 
-        m_BlurTarget0.Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        m_BlurTarget1.Transition(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        m_BlurTarget0.ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        m_BlurTarget1.ChangeState(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
         pCmd->SetComputeRoot32BitConstants(DENOISER_PARAM_CBV1, 3, &blurOffset, 0);
         pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV4, m_BlurTarget0.GetSRV()->GetHandleGPU());
@@ -2321,8 +2426,8 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         blurOffset.y = 0.0f;
         blurOffset.z = 0.5f;
 
-        m_BlurTarget0.Transition(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-        m_BlurTarget1.Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        m_BlurTarget0.ChangeState(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        m_BlurTarget1.ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
         pCmd->SetComputeRootSignature(m_DenoiserRootSig.GetPtr());
         m_PostBlurPipe.SetState(pCmd);
@@ -2342,8 +2447,8 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         blurOffset.x = 0.0f;
         blurOffset.y = 1.0f / float(m_SceneDesc.RenderHeight);
 
-        m_BlurTarget0.Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        m_BlurTarget1.Transition(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        m_BlurTarget0.ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        m_BlurTarget1.ChangeState(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
         pCmd->SetComputeRoot32BitConstants(DENOISER_PARAM_CBV1, 3, &blurOffset, 0);
         pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV4, m_BlurTarget0.GetSRV()->GetHandleGPU());
@@ -2370,9 +2475,9 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
 
         uint32_t flags = (m_ResetHistory) ? 0x1 : 0;
 
-        m_StabilizationColorHistory[m_PrevHistoryIndex].Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        m_StabilizationColorHistory[m_CurrHistoryIndex].Transition(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-        m_BlurTarget1.Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        m_StabilizationColorHistory[m_PrevHistoryIndex].ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        m_StabilizationColorHistory[m_CurrHistoryIndex].ChangeState(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        m_BlurTarget1.ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
         pCmd->SetComputeRootSignature(m_DenoiserRootSig.GetPtr());
         m_TemporalStabilizationPipe.SetState(pCmd);
@@ -2414,10 +2519,10 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         m_TaaParam.SwapBuffer();
         m_TaaParam.Update(&param, sizeof(param));
 
-        inputBuffer.Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        m_ColorHistory[m_PrevHistoryIndex].Transition(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        m_ColorHistory[m_CurrHistoryIndex].Transition(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-        m_CaptureTarget.Transition(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        inputBuffer.ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        m_ColorHistory[m_PrevHistoryIndex].ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        m_ColorHistory[m_CurrHistoryIndex].ChangeState(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        m_CaptureTarget.ChangeState(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
         pCmd->SetComputeRootSignature(m_TaaRootSig.GetPtr());
         m_TaaPipe.SetState(pCmd);
@@ -2440,7 +2545,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
     {
         RTC_DEBUG_CODE(ScopedMarker marker(pCmd, "ReadBack"));
 
-        m_CaptureTarget.Transition(pCmd, D3D12_RESOURCE_STATE_COPY_SOURCE);
+        m_CaptureTarget.ChangeState(pCmd, D3D12_RESOURCE_STATE_COPY_SOURCE);
 
         D3D12_TEXTURE_COPY_LOCATION dst = {};
         dst.Type                                = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
@@ -2472,7 +2577,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
     {
         RTC_DEBUG_CODE(ScopedMarker marker(pCmd, "DebugOutput"));
 
-        m_ColorTarget[idx].Transition(pCmd, D3D12_RESOURCE_STATE_RENDER_TARGET);
+        m_ColorTarget[idx].ChangeState(pCmd, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
         const asdx::IShaderResourceView* pSRV = nullptr;
         uint32_t type = 0;
@@ -2480,31 +2585,31 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         switch(m_BufferKind)
         {
         case BUFFER_KIND_RENDERED:
-            m_CaptureTarget.Transition(pCmd, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            m_CaptureTarget.ChangeState(pCmd, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
             pSRV = m_CaptureTarget.GetSRV();
             type = SAMPLING_TYPE_DEFAULT;
             break;
 
         case BUFFER_KIND_ALBEDO:
-            m_Albedo.Transition(pCmd, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            m_Albedo.ChangeState(pCmd, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
             pSRV = m_Albedo.GetSRV();
             type = SAMPLING_TYPE_DEFAULT;
             break;
 
         case BUFFER_KIND_NORMAL:
-            m_Normal.Transition(pCmd, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            m_Normal.ChangeState(pCmd, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
             pSRV = m_Normal.GetSRV();
             type = SAMPLING_TYPE_NORMAL;
             break;
 
         case BUFFER_KIND_ROUGHNESS:
-            m_Roughness.Transition(pCmd, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            m_Roughness.ChangeState(pCmd, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
             pSRV = m_Roughness.GetSRV();
             type = SAMPLING_TYPE_R;
             break;
 
         case BUFFER_KIND_VELOCITY:
-            m_Velocity.Transition(pCmd, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            m_Velocity.ChangeState(pCmd, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
             pSRV = m_Velocity.GetSRV();
             type = SAMPLING_TYPE_VELOCITY;
             break;
@@ -2528,7 +2633,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         // 2D描画.
         Draw2D(float(args.ElapsedTime));
 
-        m_ColorTarget[idx].Transition(pCmd, D3D12_RESOURCE_STATE_PRESENT);
+        m_ColorTarget[idx].ChangeState(pCmd, D3D12_RESOURCE_STATE_PRESENT);
     }
     #else
     // カラーターゲットにコピー.
@@ -2536,8 +2641,8 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
     {
         RTC_DEBUG_CODE(ScopedMarker marker(pCmd, "WindowOutput"));
 
-        m_CaptureTarget.Transition(pCmd, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-        m_ColorTarget[idx].Transition(pCmd, D3D12_RESOURCE_STATE_RENDER_TARGET);
+        m_CaptureTarget.ChangeState(pCmd, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+        m_ColorTarget[idx].ChangeState(pCmd, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
         auto pRTV = m_ColorTarget[idx].GetRTV()->GetHandleCPU();
         pCmd->OMSetRenderTargets(1, &pRTV, FALSE, nullptr);
@@ -2550,7 +2655,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
 
         asdx::DrawQuad(pCmd);
 
-        m_ColorTarget[idx].Transition(pCmd, D3D12_RESOURCE_STATE_PRESENT);
+        m_ColorTarget[idx].ChangeState(pCmd, D3D12_RESOURCE_STATE_PRESENT);
     }
     #endif
 
@@ -2579,9 +2684,6 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
     // フレーム同期.
     asdx::FrameSync();
 
-    // シェーダをリロードします.
-    RTC_DEBUG_CODE(ReloadShader());
-
     m_ReadBackTargetIndex = (m_ReadBackTargetIndex + 1) % 3;
     m_CaptureTargetIndex  = (m_CaptureTargetIndex  + 1) % 3;
 
@@ -2593,20 +2695,20 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
     m_ResetHistory = false;
 }
 
-//-----------------------------------------------------------------------------
-//      レイトレーサーを起動します.
-//-----------------------------------------------------------------------------
-void Renderer::DispatchRays(ID3D12GraphicsCommandList6* pCmd)
-{
-#if RTC_TARGET == RTC_DEVELOP
-    if (m_RtShaderFlags.Get(RELOADED_BIT_INDEX))
-    {
-        m_DevPipe.Dispatch(pCmd, m_SceneDesc.RenderWidth, m_SceneDesc.RenderHeight);
-        return;
-    }
-#endif
-    m_RtPipe.Dispatch(pCmd, m_SceneDesc.RenderWidth, m_SceneDesc.RenderHeight);
-}
+////-----------------------------------------------------------------------------
+////      レイトレーサーを起動します.
+////-----------------------------------------------------------------------------
+//void Renderer::DispatchRays(ID3D12GraphicsCommandList6* pCmd)
+//{
+//#if RTC_TARGET == RTC_DEVELOP
+//    if (m_RtShaderFlags.Get(RELOADED_BIT_INDEX))
+//    {
+//        m_DevPipe.Dispatch(pCmd, m_SceneDesc.RenderWidth, m_SceneDesc.RenderHeight);
+//        return;
+//    }
+//#endif
+//    m_RtPipe.Dispatch(pCmd, m_SceneDesc.RenderWidth, m_SceneDesc.RenderHeight);
+//}
 
 //-----------------------------------------------------------------------------
 //      リサイズ処理です.
@@ -2639,12 +2741,6 @@ void Renderer::OnKey(const asdx::KeyEventArgs& args)
                 // シェーダを明示的にリロードします.
                 // ※ VisualStudioで編集すると正しいパスが来ないため回避策.
                 m_RtShaderFlags.Set(REQUEST_BIT_INDEX, true);
-                m_TonemapShaderFlags.Set(REQUEST_BIT_INDEX, true);
-                m_PreBlurShaderFlags.Set(REQUEST_BIT_INDEX, true);
-                m_TemporalAccumulationShaderFlags.Set(REQUEST_BIT_INDEX, true);
-                m_DenoiserShaderFlags.Set(REQUEST_BIT_INDEX, true);
-                m_PostBlurShaderFlags.Set(REQUEST_BIT_INDEX, true);
-                m_TemporalStabilizationShaderFlags.Set(REQUEST_BIT_INDEX, true);
             }
             break;
 
@@ -2804,12 +2900,6 @@ void Renderer::Draw2D(float elapsedSec)
             if (ImGui::Button(u8"シェーダ リロード"))
             {
                 m_RtShaderFlags.Set(REQUEST_BIT_INDEX, true);
-                m_TonemapShaderFlags.Set(REQUEST_BIT_INDEX, true);
-                m_PreBlurShaderFlags.Set(REQUEST_BIT_INDEX, true);
-                m_TemporalAccumulationShaderFlags.Set(REQUEST_BIT_INDEX, true);
-                m_DenoiserShaderFlags.Set(REQUEST_BIT_INDEX, true);
-                m_PostBlurShaderFlags.Set(REQUEST_BIT_INDEX, true);
-                m_TemporalStabilizationShaderFlags.Set(REQUEST_BIT_INDEX, true);
             }
             if (ImGui::CollapsingHeader(u8"カメライベント") && !animating)
             {
@@ -2898,372 +2988,14 @@ void Renderer::CaptureScreen(ID3D12Resource* pResource)
 
 #if RTC_TARGET == RTC_DEVELOP
 //-----------------------------------------------------------------------------
-//      シェーダをコンパイルします.
-//-----------------------------------------------------------------------------
-bool CompileShader
-(
-    const wchar_t*  path,
-    const char*     entryPoint,
-    const char*     profile,
-    asdx::IBlob**   ppBlob
-)
-{
-    std::wstring resolvePath;
-
-    if (!asdx::SearchFilePathW(path, resolvePath))
-    {
-        ELOGA("Error : File Not Found. path = %ls", path);
-        return false;
-    }
-
-    std::vector<std::wstring> includeDirs;
-    includeDirs.push_back(asdx::ToFullPathW(L"../external/asdx12/res/shaders"));
-    includeDirs.push_back(asdx::ToFullPathW(L"../res/shader"));
-
-    if (!asdx::CompileFromFile(resolvePath.c_str(), includeDirs, entryPoint, profile, ppBlob))
-    {
-        ELOGA("Error : Compile Shader Failed. path = %ls", resolvePath.c_str());
-        return false;
-    }
-
-    return true;
-}
-
-//-----------------------------------------------------------------------------
-//      更新ファイル対象があればフラグを立てます.
-//-----------------------------------------------------------------------------
-void CheckModify
-(
-    const char*         relativePath,
-    asdx::BitFlags8&    flags,
-    const char*         paths[],
-    uint32_t            countPaths
-)
-{
-    bool detect = false;
-
-    // 更新対象に入っているかチェック.
-    for(auto i=0u; i<countPaths; ++i)
-    { detect |= (_stricmp(paths[i], relativePath) == 0); }
-
-    // 対象ファイルを検出したらリロードフラグを立てる.
-    if (detect)
-    { flags.Set(REQUEST_BIT_INDEX, true); }
-}
-
-//-----------------------------------------------------------------------------
 //      ファイル更新コールバック関数.
 //-----------------------------------------------------------------------------
-void Renderer::OnUpdate
-(
-    asdx::ACTION_TYPE actionType,
-    const char* directoryPath,
-    const char* relativePath
-)
+void Renderer::OnUpdate(const asdx::FileUpdateEventArgs& args)
 {
-    if (actionType != asdx::ACTION_MODIFIED)
-    { return; }
-
-    // レイトレーシングシェーダ.
-    {
-        const char* paths[] = {
-            "Math.hlsli",
-            "BRDF.hlsli",
-            "SceneParam.hlsli",
-            "Common.hlsli"
-            "RtCamp.hlsl"
-        };
-
-        CheckModify(relativePath, m_RtShaderFlags, paths, _countof(paths));
-    }
-
-    // トーンマップシェーダ.
-    {
-        const char* paths[] = {
-            "SceneParam.hlsli",
-            "Math.hlsli",
-            "TonemapCS.hlsl"
-        };
-
-        CheckModify(relativePath, m_TonemapShaderFlags, paths, _countof(paths));
-    }
-
-    {
-        const char* paths[] = {
-            "Math.hlsli",
-            "BRDF.hlsli",
-            "TextureUtil.hlsli",
-            "Denoiser.hlsli",
-            "DenoiserBlur.hlsli",
-            "PreBlurCS.hlsl"
-        };
-
-        CheckModify(relativePath, m_PreBlurShaderFlags, paths, _countof(paths));
-    }
-
-    {
-        const char* paths[] = {
-            "Math.hlsli",
-            "BRDF.hlsli",
-            "TextureUtil.hlsli",
-            "Denoiser.hlsli",
-            "TemporalAccumulationCS.hlsl",
-        };
-
-        CheckModify(relativePath, m_TemporalAccumulationShaderFlags, paths, _countof(paths));
-    }
-
-    // デノイザーシェーダ.
-    {
-        const char* paths[] = {
-            "Math.hlsli",
-            "BRDF.hlsli",
-            "TextureUtil.hlsli",
-            "Denoiser.hlsli",
-            "DenoiserBlur.hlsli",
-            "DenoiserCS.hlsl",
-        };
-
-        CheckModify(relativePath, m_DenoiserShaderFlags, paths, _countof(paths));
-    }
-
-    {
-        const char* paths[] = {
-            "Math.hlsli",
-            "BRDF.hlsli",
-            "TextureUtil.hlsli",
-            "Denoiser.hlsli",
-            "DenoiserBlur.hlsli",
-            "TemporalStabilizationCS.hlsl",
-        };
-
-        CheckModify(relativePath, m_TemporalStabilizationShaderFlags, paths, _countof(paths));
-    }
-
-    {
-        const char* paths[] = {
-            "Math.hlsli",
-            "BRDF.hlsli",
-            "TextureUtil.hlsli",
-            "Denoiser.hlsli",
-            "DenoiserBlur.hlsli",
-            "PostBlurCS.hlsl",
-        };
-
-        CheckModify(relativePath, m_PostBlurShaderFlags, paths, _countof(paths));
-    }
+    for(auto& item : m_pShaderReloadListener)
+    { item->OnUpdate(args); }
 }
 
-//-----------------------------------------------------------------------------
-//      シェーダをリロードします.
-//-----------------------------------------------------------------------------
-void Renderer::ReloadShader()
-{
-    auto pDevice = asdx::GetD3D12Device();
-
-    auto failedCount  = 0;
-    auto successCount = 0;
-
-    if (m_RtShaderFlags.Get(REQUEST_BIT_INDEX))
-    {
-        asdx::RefPtr<asdx::IBlob> blob;
-        if (CompileShader(L"../res/shader/RtCamp.hlsl", "", "lib_6_6", blob.GetAddress()))
-        {
-            // リロード済みフラグを下げておく.
-            m_RtShaderFlags.Set(RELOADED_BIT_INDEX, false);
-
-            m_DevPipe.Term();
-
-            if (m_DevPipe.Init(
-                m_RtRootSig.GetPtr(),
-                blob->GetBufferPointer(),
-                blob->GetBufferSize()))
-            {
-                // リロード済みフラグを立てる.
-                m_RtShaderFlags.Set(RELOADED_BIT_INDEX, true);
-                successCount++;
-            }
-        }
-        else
-        {
-            failedCount++;
-        }
-
-        // コンパイル要求フラグを下げる.
-        m_RtShaderFlags.Set(REQUEST_BIT_INDEX, false);
-    }
-
-    if (m_PreBlurShaderFlags.Get(REQUEST_BIT_INDEX))
-    {
-        asdx::RefPtr<asdx::IBlob> blob;
-        if (CompileShader(L"../res/shader/PreBlurCS.hlsl", "main", "cs_6_6", blob.GetAddress()))
-        {
-            m_PreBlurShaderFlags.Set(RELOADED_BIT_INDEX, false);
-
-            m_PreBlurPipe.ReplaceShader(
-                asdx::SHADER_TYPE_CS,
-                blob->GetBufferPointer(),
-                blob->GetBufferSize());
-            m_PreBlurPipe.Rebuild();
-
-            m_PreBlurShaderFlags.Set(RELOADED_BIT_INDEX, true);
-            successCount++;
-        }
-        else
-        {
-            failedCount++;
-        }
-        m_PreBlurShaderFlags.Set(REQUEST_BIT_INDEX, false);
-    }
-
-    if (m_TemporalAccumulationShaderFlags.Get(REQUEST_BIT_INDEX))
-    {
-        asdx::RefPtr<asdx::IBlob> blob;
-        if (CompileShader(L"../res/shader/TemporalAccumulationCS.hlsl", "main", "cs_6_6", blob.GetAddress()))
-        {
-            m_TemporalAccumulationShaderFlags.Set(RELOADED_BIT_INDEX, false);
-
-            m_TemporalAccumulationPipe.ReplaceShader(
-                asdx::SHADER_TYPE_CS,
-                blob->GetBufferPointer(),
-                blob->GetBufferSize());
-            m_TemporalAccumulationPipe.Rebuild();
-
-            m_TemporalAccumulationShaderFlags.Set(RELOADED_BIT_INDEX, true);
-            successCount++;
-        }
-        else
-        {
-            failedCount++;
-        }
-        m_TemporalAccumulationShaderFlags.Set(REQUEST_BIT_INDEX, false);
-    }
-
-    if (m_DenoiserShaderFlags.Get(REQUEST_BIT_INDEX))
-    {
-        asdx::RefPtr<asdx::IBlob> blob;
-        if (CompileShader(L"../res/shader/DenoiserCS.hlsl", "main", "cs_6_6", blob.GetAddress()))
-        {
-            m_DenoiserShaderFlags.Set(RELOADED_BIT_INDEX, false);
-
-            m_DenoiserPipe.ReplaceShader(
-                asdx::SHADER_TYPE_CS,
-                blob->GetBufferPointer(),
-                blob->GetBufferSize());
-            m_DenoiserPipe.Rebuild();
-
-            m_DenoiserShaderFlags.Set(RELOADED_BIT_INDEX, true);
-            successCount++;
-        }
-        else
-        {
-            failedCount++;
-        }
-        m_DenoiserShaderFlags.Set(REQUEST_BIT_INDEX, false);
-    }
-
-    if (m_TemporalStabilizationShaderFlags.Get(REQUEST_BIT_INDEX))
-    {
-        asdx::RefPtr<asdx::IBlob> blob;
-        if (CompileShader(L"../res/shader/TemporalStabilizationCS.hlsl", "main", "cs_6_6", blob.GetAddress()))
-        {
-            m_TemporalStabilizationShaderFlags.Set(RELOADED_BIT_INDEX, false);
-
-            m_TemporalAccumulationPipe.ReplaceShader(
-                asdx::SHADER_TYPE_CS,
-                blob->GetBufferPointer(),
-                blob->GetBufferSize());
-            m_TemporalAccumulationPipe.Rebuild();
-
-            m_TemporalAccumulationShaderFlags.Set(RELOADED_BIT_INDEX, true);
-            successCount++;
-        }
-        else
-        {
-            failedCount++;
-        }
-        m_TemporalStabilizationShaderFlags.Set(REQUEST_BIT_INDEX, false);
-    }
-
-    if (m_PostBlurShaderFlags.Get(REQUEST_BIT_INDEX))
-    {
-        asdx::RefPtr<asdx::IBlob> blob;
-        if (CompileShader(L"../res/shader/PostBlurCS.hlsl", "main", "cs_6_6", blob.GetAddress()))
-        {
-            m_PostBlurShaderFlags.Set(RELOADED_BIT_INDEX, false);
-
-            m_PostBlurPipe.ReplaceShader(
-                asdx::SHADER_TYPE_CS,
-                blob->GetBufferPointer(),
-                blob->GetBufferSize());
-            m_PostBlurPipe.Rebuild();
-
-            m_PostBlurShaderFlags.Set(RELOADED_BIT_INDEX, true);
-            successCount++;
-        }
-        else
-        {
-            failedCount++;
-        }
-        m_PostBlurShaderFlags.Set(REQUEST_BIT_INDEX, false);
-    }
-
-    if (m_TonemapShaderFlags.Get(REQUEST_BIT_INDEX))
-    {
-        asdx::RefPtr<asdx::IBlob> blob;
-        if (CompileShader(L"../res/shader/TonemapCS.hlsl", "main", "cs_6_6", blob.GetAddress()))
-        {
-            m_TonemapShaderFlags.Set(RELOADED_BIT_INDEX, false);
-
-            m_TonemapPipe.ReplaceShader(
-                asdx::SHADER_TYPE_CS,
-                blob->GetBufferPointer(),
-                blob->GetBufferSize());
-            m_TonemapPipe.Rebuild();
-
-            m_TonemapShaderFlags.Set(RELOADED_BIT_INDEX, true);
-            successCount++;
-        }
-        else
-        {
-            failedCount++;
-        }
-
-        // コンパイル要求フラグを下げる.
-        m_TonemapShaderFlags.Set(REQUEST_BIT_INDEX, false);
-    }
-
-    if (failedCount == 0 && successCount > 0) {
-        // リロード完了時刻を取得.
-        tm local_time = {};
-        auto t   = time(nullptr);
-        auto err = localtime_s( &local_time, &t );
-
-        // 成功ログを出力.
-        ILOGA("Info : Shader Reload Successs!! [%04d/%02d/%02d %02d:%02d:%02d]",
-            local_time.tm_year + 1900,
-            local_time.tm_mon + 1,
-            local_time.tm_mday,
-            local_time.tm_hour,
-            local_time.tm_min,
-            local_time.tm_sec);
-
-        m_Dirty = true;
-        m_ReloadShaderState = RELOAD_SHADER_STATE_SUCCESS;
-
-        // 5秒間表示.
-        m_ReloadShaderDisplaySec = 5.0;
-
-    }
-    else if (failedCount > 0)
-    {
-        m_ReloadShaderState = RELOAD_SHADER_STATE_FAILED;
-
-        // 5秒間表示.
-        m_ReloadShaderDisplaySec = 5.0;
-    }
-
-}
-#endif//(!CAMP_RELEASE)
+#endif//RTC_TARGET == RTC_DEVELOP
 
 } // namespace r3d

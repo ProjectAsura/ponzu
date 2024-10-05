@@ -14,6 +14,7 @@
 #include <generated/scene_format.h>
 #include <xxhash.h>
 #include <Windows.h>
+#include <Macro.h>
 
 #if !CAMP_RELEASE
 #include <OBJLoader.h>
@@ -509,7 +510,8 @@ bool Scene::Init(const char* path, ID3D12GraphicsCommandList6* pCmdList)
     assert(resScene != nullptr);
 
     auto pDevice   = asdx::GetD3D12Device();
-    auto buildFlag = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
+    auto buildFlag = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE |
+        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE;
 
     // IBLテクスチャのセットアップ.
     {
@@ -570,6 +572,7 @@ bool Scene::Init(const char* path, ID3D12GraphicsCommandList6* pCmdList)
         auto count = resScene->MeshCount();
 
         m_BLAS.resize(count);
+        m_ScratchBLAS.resize(count);
 
         auto resMeshes = resScene->Meshes();
         assert(resMeshes != nullptr);
@@ -604,7 +607,15 @@ bool Scene::Init(const char* path, ID3D12GraphicsCommandList6* pCmdList)
                 return false;
             }
 
-            m_BLAS[i].Build(pCmdList);
+            auto size = m_BLAS[i].GetScratchBufferSize();
+            if (!m_ScratchBLAS[i].Init(pDevice, size))
+            {
+                ELOGA("Error : AsScratchBuffer::Init() Failed. index = %llu", i);
+                return false;
+            }
+            RTC_DEBUG_CODE(m_ScratchBLAS[i].SetDebugName(L"ScratchBLAS"));
+
+            m_BLAS[i].Build(pCmdList, m_ScratchBLAS[i].GetGpuAddress());
         }
     }
 
@@ -707,7 +718,14 @@ bool Scene::Init(const char* path, ID3D12GraphicsCommandList6* pCmdList)
             return false;
         }
 
-        m_TLAS.Build(pCmdList);
+        if (!m_ScratchTLAS.Init(pDevice, m_TLAS.GetScratchBufferSize()))
+        {
+            ELOGA("Error : AsScratchBuffer::Init() Failed.");
+            return false;
+        }
+        RTC_DEBUG_CODE(m_ScratchTLAS.SetDebugName(L"ScratchTLAS"));
+
+        m_TLAS.Build(pCmdList, m_ScratchTLAS.GetGpuAddress());
     }
 
     // ライトバッファ構築.

@@ -5,7 +5,7 @@ VisualStudioVersion = 17.1.32421.90
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "rtc", "rtc.vcxproj", "{4414F671-B9FE-4BFB-8B2E-02C0420D3A5D}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "asdx12", "..\external\asdx12\project\asdx12.vcxproj", "{ECD906D6-5DEB-4B5B-B919-05C147194C1D}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "asdx12", "C:\Users\Pocol\Documents\01_WS\Github\asdx12\project\asdx12.vcxproj", "{ECD906D6-5DEB-4B5B-B919-05C147194C1D}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -20,12 +20,12 @@ Global
 		{4414F671-B9FE-4BFB-8B2E-02C0420D3A5D}.Master|x64.Build.0 = Master|x64
 		{4414F671-B9FE-4BFB-8B2E-02C0420D3A5D}.Release|x64.ActiveCfg = Release|x64
 		{4414F671-B9FE-4BFB-8B2E-02C0420D3A5D}.Release|x64.Build.0 = Release|x64
-		{ECD906D6-5DEB-4B5B-B919-05C147194C1D}.Debug|x64.ActiveCfg = Debug|x64
-		{ECD906D6-5DEB-4B5B-B919-05C147194C1D}.Debug|x64.Build.0 = Debug|x64
-		{ECD906D6-5DEB-4B5B-B919-05C147194C1D}.Master|x64.ActiveCfg = Release|x64
-		{ECD906D6-5DEB-4B5B-B919-05C147194C1D}.Master|x64.Build.0 = Release|x64
-		{ECD906D6-5DEB-4B5B-B919-05C147194C1D}.Release|x64.ActiveCfg = Release|x64
-		{ECD906D6-5DEB-4B5B-B919-05C147194C1D}.Release|x64.Build.0 = Release|x64
+		{ECD906D6-5DEB-4B5B-B919-05C147194C1D}.Debug|x64.ActiveCfg = DebugMD|x64
+		{ECD906D6-5DEB-4B5B-B919-05C147194C1D}.Debug|x64.Build.0 = DebugMD|x64
+		{ECD906D6-5DEB-4B5B-B919-05C147194C1D}.Master|x64.ActiveCfg = ReleaseMD|x64
+		{ECD906D6-5DEB-4B5B-B919-05C147194C1D}.Master|x64.Build.0 = ReleaseMD|x64
+		{ECD906D6-5DEB-4B5B-B919-05C147194C1D}.Release|x64.ActiveCfg = ReleaseMD|x64
+		{ECD906D6-5DEB-4B5B-B919-05C147194C1D}.Release|x64.Build.0 = ReleaseMD|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

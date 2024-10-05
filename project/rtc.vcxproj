@@ -148,7 +148,7 @@
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\external\asdx12\project\asdx12.vcxproj">
+    <ProjectReference Include="C:\Users\Pocol\Documents\01_WS\Github\asdx12\project\asdx12.vcxproj">
       <Project>{ecd906d6-5deb-4b5b-b919-05c147194c1d}</Project>
     </ProjectReference>
   </ItemGroup>
@@ -292,10 +292,10 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;ENABLE_OVERRIDE;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;ENABLE_OVERRIDE;_DEBUG;_CONSOLE;ASDX_ENABLE_SINGLE_THREAD=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <AdditionalIncludeDirectories>$(ProjectDir)..\external\asdx12\include;$(ProjectDir)..\external\fpng;$(ProjectDir)..\external\flatbuffers-2.0.0\include;$(ProjectDir)..\external\dxc\inc;$(ProjectDir)..\include;$(ProjectDir)..\external\mikktspace;$(ProjectDir)..\external\xxhash;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <EnableEnhancedInstructionSet>AdvancedVectorExtensions</EnableEnhancedInstructionSet>
     </ClCompile>
     <Link>
@@ -325,10 +325,10 @@ xcopy $(ProjectDir)..\external\dxc\bin\x64\dxil.dll $(TargetDir) /e /y /c</Comma
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;ENABLE_OVERRIDE;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;ENABLE_OVERRIDE;NDEBUG;_CONSOLE;ASDX_ENABLE_SINGLE_THREAD=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <AdditionalIncludeDirectories>$(ProjectDir)..\external\asdx12\include;$(ProjectDir)..\external\fpng;$(ProjectDir)..\external\flatbuffers-2.0.0\include;$(ProjectDir)..\external\dxc\inc;$(ProjectDir)..\include;$(ProjectDir)..\external\mikktspace;$(ProjectDir)..\external\xxhash;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <EnableEnhancedInstructionSet>AdvancedVectorExtensions</EnableEnhancedInstructionSet>
     </ClCompile>
     <Link>
@@ -358,9 +358,9 @@ xcopy $(ProjectDir)..\external\dxc\bin\x64\dxil.dll $(TargetDir) /e /y /c</Comma
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;ENABLE_OVERRIDE;NDEBUG;_CONSOLE;CAMP_RELEASE=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;ENABLE_OVERRIDE;NDEBUG;_CONSOLE;CAMP_RELEASE=1;ASDX_ENABLE_SINGLE_THREAD=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>$(ProjectDir)..\external\asdx12\include;$(ProjectDir)..\external\fpng;$(ProjectDir)..\external\flatbuffers-2.0.0\include;$(ProjectDir)..\external\dxc\inc;$(ProjectDir)..\include;$(ProjectDir)..\external\mikktspace;$(ProjectDir)..\external\xxhash;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <EnableEnhancedInstructionSet>AdvancedVectorExtensions</EnableEnhancedInstructionSet>
     </ClCompile>
     <Link>

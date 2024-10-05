@@ -194,6 +194,8 @@ private:
     std::vector<SceneInstance>              m_Instances;
     std::vector<asdx::Blas>                 m_BLAS;
     asdx::Tlas                              m_TLAS;
+    std::vector<asdx::AsScratchBuffer>      m_ScratchBLAS;
+    asdx::AsScratchBuffer                   m_ScratchTLAS;
     SceneTexture                            m_IBL;
     ModelMgr                                m_ModelMgr;
     std::vector<SceneTexture>               m_Textures;
