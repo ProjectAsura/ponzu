@@ -99,21 +99,6 @@ public:
     ~Renderer();
 
 private:
-    /////////////////////////////////////////////////////////////////////////////
-    //// RayTracingPipe structure
-    /////////////////////////////////////////////////////////////////////////////
-    //struct RayTracingPipe
-    //{
-    //    asdx::RayTracingPipelineState   PipelineState;
-    //    asdx::ShaderTable               RayGen;
-    //    asdx::ShaderTable               Miss;
-    //    asdx::ShaderTable               HitGroup;
-
-    //    bool Init       (ID3D12RootSignature* pRootSig, const void* binary, size_t binarySize);
-    //    void Term       ();
-    //    void Dispatch   (ID3D12GraphicsCommandList6* pCmd, uint32_t width, uint32_t height);
-    //};
-
     //=========================================================================
     // private variables.
     //=========================================================================
@@ -209,8 +194,6 @@ private:
     //      開発用.
     //+++++++++++++++++++
     bool                            m_DebugSetting          = true;
-    //bool                            m_ReloadShader          = false;
-    //bool                            m_RequestReload         = false;
     bool                            m_ForceAccumulationOff  = false;
     bool                            m_EnableWireFrame       = false;
 
@@ -218,14 +201,9 @@ private:
 
     asdx::AppCamera                     m_AppCamera;
     asdx::FileWatcher                   m_ShaderWatcher;
-    //RayTracingPipe                      m_DevPipe;
     asdx::RefPtr<ID3D12RootSignature>   m_DebugRootSig;
     asdx::PipelineState                 m_DebugPipe;
     asdx::PipelineState                 m_WireFramePipe;
-
-    asdx::BitFlag8                  m_RtShaderFlags;
-    int                             m_ReloadShaderState = 0;
-    float                           m_ReloadShaderDisplaySec = 0;
 
     std::list<asdx::IFileUpdateListener*>   m_pShaderReloadListener;
 #endif

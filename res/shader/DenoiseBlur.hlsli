@@ -111,17 +111,18 @@ void main
     { return; }
 
     float2 uv = (float2(remappedId) + 0.5f.xx) / float2(ScreenSize);
-    float  z  = DepthBuffer.SampleLevel(PointClamp, uv, 0.0f);
+    
+    float z = DepthBuffer.SampleLevel(PointClamp, uv, 0.0f);
 
     // 背景なら処理しない.
     if (z >= 1.0f)
     {
         // ブラー結果を出力.
-        DenoisedBuffer  [remappedId] = InputBuffer.SampleLevel(PointClamp, uv, 0.0f);
+        DenoisedBuffer[remappedId] = InputBuffer.SampleLevel(PointClamp, uv, 0.0f);
         return;
     }
     const uint  MaxAccumCount = 128;
-
+    
     // アキュムレーションフレーム数.
     uint accumCount = AccumCountBuffer[remappedId];
     accumCount = min(accumCount, MaxAccumCount);
@@ -190,6 +191,6 @@ void main
     if (totalWeight > 0)
     { result *= rcp(totalWeight); }
 
-    DenoisedBuffer  [remappedId] = result;
+    DenoisedBuffer[remappedId] = result;
 }
 

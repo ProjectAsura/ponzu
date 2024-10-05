@@ -23,7 +23,7 @@ namespace r3d {
 //-----------------------------------------------------------------------------
 bool ModelMgr::Init
 (
-    ID3D12GraphicsCommandList6* pCmdList,
+    ID3D12GraphicsCommandList4* pCmdList,
     uint32_t maxInstanceCount,
     uint32_t maxMaterialCount
 )

@@ -155,7 +155,7 @@ public:
     //! @retval false   初期化に失敗.
     //-------------------------------------------------------------------------
     bool Init(
-        ID3D12GraphicsCommandList6* pCmdList,
+        ID3D12GraphicsCommandList4* pCmdList,
         uint32_t maxInstanceCount,
         uint32_t maxMaterialCount);
 

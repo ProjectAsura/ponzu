@@ -97,7 +97,7 @@ inline void CopySubresource
 //-----------------------------------------------------------------------------
 void UpdateTexture
 (
-    ID3D12GraphicsCommandList6*     pCmdList,
+    ID3D12GraphicsCommandList*      pCmdList,
     ID3D12Resource*                 pDstResource,
     const r3d::ResTexture*          pResTexture
 )
@@ -268,7 +268,7 @@ uint32_t CalcHashTag(const std::string& name)
 //-----------------------------------------------------------------------------
 bool SceneTexture::Init
 (
-    ID3D12GraphicsCommandList6* pCmdList,
+    ID3D12GraphicsCommandList4* pCmdList,
     const void*                 resTexture,
     uint32_t                    componentMapping
 )
@@ -471,7 +471,7 @@ asdx::IShaderResourceView* SceneTexture::GetView() const
 //-----------------------------------------------------------------------------
 //      バイナリからからロードします.
 //-----------------------------------------------------------------------------
-bool Scene::Init(const char* path, ID3D12GraphicsCommandList6* pCmdList)
+bool Scene::Init(const char* path, ID3D12GraphicsCommandList4* pCmdList)
 {
     if (!m_ModelMgr.Init(pCmdList, UINT16_MAX, UINT16_MAX))
     {
@@ -510,8 +510,7 @@ bool Scene::Init(const char* path, ID3D12GraphicsCommandList6* pCmdList)
     assert(resScene != nullptr);
 
     auto pDevice   = asdx::GetD3D12Device();
-    auto buildFlag = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE |
-        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE;
+    auto buildFlag = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
 
     // IBLテクスチャのセットアップ.
     {
@@ -613,7 +612,7 @@ bool Scene::Init(const char* path, ID3D12GraphicsCommandList6* pCmdList)
                 ELOGA("Error : AsScratchBuffer::Init() Failed. index = %llu", i);
                 return false;
             }
-            RTC_DEBUG_CODE(m_ScratchBLAS[i].SetDebugName(L"ScratchBLAS"));
+            RTC_DEBUG_CODE(m_ScratchBLAS[i].SetName(L"ScratchBLAS"));
 
             m_BLAS[i].Build(pCmdList, m_ScratchBLAS[i].GetGpuAddress());
         }
@@ -723,7 +722,7 @@ bool Scene::Init(const char* path, ID3D12GraphicsCommandList6* pCmdList)
             ELOGA("Error : AsScratchBuffer::Init() Failed.");
             return false;
         }
-        RTC_DEBUG_CODE(m_ScratchTLAS.SetDebugName(L"ScratchTLAS"));
+        RTC_DEBUG_CODE(m_ScratchTLAS.SetName(L"ScratchTLAS"));
 
         m_TLAS.Build(pCmdList, m_ScratchTLAS.GetGpuAddress());
     }
@@ -836,7 +835,7 @@ ID3D12Resource* Scene::GetTLAS() const
 //-----------------------------------------------------------------------------
 //      描画処理を行います.
 //-----------------------------------------------------------------------------
-void Scene::Draw(ID3D12GraphicsCommandList6* pCmdList)
+void Scene::Draw(ID3D12GraphicsCommandList4* pCmdList)
 {
     auto count = m_Instances.size();
     for(auto i=0u; i<count; ++i)
@@ -926,7 +925,7 @@ bool Scene::IsReloading() const
 //-----------------------------------------------------------------------------
 //      巡回処理.
 //-----------------------------------------------------------------------------
-void Scene::Polling(ID3D12GraphicsCommandList6* pCmdList)
+void Scene::Polling(ID3D12GraphicsCommandList4* pCmdList)
 {
     if (!m_RequestTerm) 
         return;

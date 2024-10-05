@@ -95,7 +95,7 @@ public:
     //! @brief      初期化処理を行います.
     //-------------------------------------------------------------------------
     bool Init(
-        ID3D12GraphicsCommandList6* pCmdList,
+        ID3D12GraphicsCommandList4* pCmdList,
         const void*                 resTexture,
         uint32_t                    componentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING);
 
@@ -140,7 +140,7 @@ public:
     //=========================================================================
     // public methods.
     //=========================================================================
-    bool Init(const char* path, ID3D12GraphicsCommandList6* pCmdList);
+    bool Init(const char* path, ID3D12GraphicsCommandList4* pCmdList);
     void Term();
 
     asdx::IConstantBufferView* GetParamCBV  () const;
@@ -152,7 +152,7 @@ public:
     ID3D12Resource*            GetTLAS      () const;
     uint32_t                   GetLightCount() const;
 
-    void Draw(ID3D12GraphicsCommandList6* pCmdList);
+    void Draw(ID3D12GraphicsCommandList4* pCmdList);
 
     uint32_t FindLightIndex   (uint32_t hashTag) const;
     uint32_t FindInstanceIndex(uint32_t hashTag) const;
@@ -160,7 +160,7 @@ public:
 #if !CAMP_RELEASE
     void Reload(const char* path);
     bool IsReloading() const;
-    void Polling(ID3D12GraphicsCommandList6* pCmdList);
+    void Polling(ID3D12GraphicsCommandList4* pCmdList);
 #endif
 
 private:

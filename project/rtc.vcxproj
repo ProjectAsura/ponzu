@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <Import Project="packages\Microsoft.Direct3D.D3D12.1.610.5\build\native\Microsoft.Direct3D.D3D12.props" Condition="Exists('packages\Microsoft.Direct3D.D3D12.1.610.5\build\native\Microsoft.Direct3D.D3D12.props')" />
+  <Import Project="packages\Microsoft.Direct3D.D3D12.1.614.1\build\native\Microsoft.Direct3D.D3D12.props" Condition="Exists('packages\Microsoft.Direct3D.D3D12.1.614.1\build\native\Microsoft.Direct3D.D3D12.props')" />
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
       <Configuration>Debug</Configuration>
@@ -148,7 +148,7 @@
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="C:\Users\Pocol\Documents\01_WS\Github\asdx12\project\asdx12.vcxproj">
+    <ProjectReference Include="..\external\asdx12\project\asdx12.vcxproj">
       <Project>{ecd906d6-5deb-4b5b-b919-05c147194c1d}</Project>
     </ProjectReference>
   </ItemGroup>
@@ -295,7 +295,7 @@
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;ENABLE_OVERRIDE;_DEBUG;_CONSOLE;ASDX_ENABLE_SINGLE_THREAD=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <AdditionalIncludeDirectories>$(ProjectDir)..\external\asdx12\include;$(ProjectDir)..\external\fpng;$(ProjectDir)..\external\flatbuffers-2.0.0\include;$(ProjectDir)..\external\dxc\inc;$(ProjectDir)..\include;$(ProjectDir)..\external\mikktspace;$(ProjectDir)..\external\xxhash;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <EnableEnhancedInstructionSet>AdvancedVectorExtensions</EnableEnhancedInstructionSet>
     </ClCompile>
     <Link>
@@ -305,7 +305,7 @@
       <AdditionalDependencies>dxcompiler.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <FxCompile>
-      <ShaderModel>6.0</ShaderModel>
+      <ShaderModel>6.6</ShaderModel>
       <VariableName>%(Filename)</VariableName>
       <HeaderFileOutput>$(ProjectDir)..\res\shader\Compile\%(Filename).inc</HeaderFileOutput>
       <AdditionalIncludeDirectories>$(ProjectDir)..\res\shader;$(ProjectDir)..\external\asdx12\res\shaders;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
@@ -328,7 +328,7 @@ xcopy $(ProjectDir)..\external\dxc\bin\x64\dxil.dll $(TargetDir) /e /y /c</Comma
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;ENABLE_OVERRIDE;NDEBUG;_CONSOLE;ASDX_ENABLE_SINGLE_THREAD=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <AdditionalIncludeDirectories>$(ProjectDir)..\external\asdx12\include;$(ProjectDir)..\external\fpng;$(ProjectDir)..\external\flatbuffers-2.0.0\include;$(ProjectDir)..\external\dxc\inc;$(ProjectDir)..\include;$(ProjectDir)..\external\mikktspace;$(ProjectDir)..\external\xxhash;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <EnableEnhancedInstructionSet>AdvancedVectorExtensions</EnableEnhancedInstructionSet>
     </ClCompile>
     <Link>
@@ -339,7 +339,7 @@ xcopy $(ProjectDir)..\external\dxc\bin\x64\dxil.dll $(TargetDir) /e /y /c</Comma
     </Link>
     <FxCompile>
       <AdditionalIncludeDirectories>$(ProjectDir)..\res\shader;$(ProjectDir)..\external\asdx12\res\shaders;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <ShaderModel>6.0</ShaderModel>
+      <ShaderModel>6.6</ShaderModel>
       <VariableName>%(Filename)</VariableName>
       <HeaderFileOutput>$(ProjectDir)..\res\shader\Compile\%(Filename).inc</HeaderFileOutput>
     </FxCompile>
@@ -360,7 +360,7 @@ xcopy $(ProjectDir)..\external\dxc\bin\x64\dxil.dll $(TargetDir) /e /y /c</Comma
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;ENABLE_OVERRIDE;NDEBUG;_CONSOLE;CAMP_RELEASE=1;ASDX_ENABLE_SINGLE_THREAD=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>$(ProjectDir)..\external\asdx12\include;$(ProjectDir)..\external\fpng;$(ProjectDir)..\external\flatbuffers-2.0.0\include;$(ProjectDir)..\external\dxc\inc;$(ProjectDir)..\include;$(ProjectDir)..\external\mikktspace;$(ProjectDir)..\external\xxhash;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <EnableEnhancedInstructionSet>AdvancedVectorExtensions</EnableEnhancedInstructionSet>
     </ClCompile>
     <Link>
@@ -389,14 +389,14 @@ xcopy $(ProjectDir)..\external\dxc\bin\x64\dxil.dll $(TargetDir) /e /y /c</Comma
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
     <Import Project="packages\WinPixEventRuntime.1.0.230302001\build\WinPixEventRuntime.targets" Condition="Exists('packages\WinPixEventRuntime.1.0.230302001\build\WinPixEventRuntime.targets')" />
-    <Import Project="packages\Microsoft.Direct3D.D3D12.1.610.5\build\native\Microsoft.Direct3D.D3D12.targets" Condition="Exists('packages\Microsoft.Direct3D.D3D12.1.610.5\build\native\Microsoft.Direct3D.D3D12.targets')" />
+    <Import Project="packages\Microsoft.Direct3D.D3D12.1.614.1\build\native\Microsoft.Direct3D.D3D12.targets" Condition="Exists('packages\Microsoft.Direct3D.D3D12.1.614.1\build\native\Microsoft.Direct3D.D3D12.targets')" />
   </ImportGroup>
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
     <PropertyGroup>
       <ErrorText>このプロジェクトは、このコンピューター上にない NuGet パッケージを参照しています。それらのパッケージをダウンロードするには、[NuGet パッケージの復元] を使用します。詳細については、http://go.microsoft.com/fwlink/?LinkID=322105 を参照してください。見つからないファイルは {0} です。</ErrorText>
     </PropertyGroup>
     <Error Condition="!Exists('packages\WinPixEventRuntime.1.0.230302001\build\WinPixEventRuntime.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\WinPixEventRuntime.1.0.230302001\build\WinPixEventRuntime.targets'))" />
-    <Error Condition="!Exists('packages\Microsoft.Direct3D.D3D12.1.610.5\build\native\Microsoft.Direct3D.D3D12.props')" Text="$([System.String]::Format('$(ErrorText)', 'packages\Microsoft.Direct3D.D3D12.1.610.5\build\native\Microsoft.Direct3D.D3D12.props'))" />
-    <Error Condition="!Exists('packages\Microsoft.Direct3D.D3D12.1.610.5\build\native\Microsoft.Direct3D.D3D12.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\Microsoft.Direct3D.D3D12.1.610.5\build\native\Microsoft.Direct3D.D3D12.targets'))" />
+    <Error Condition="!Exists('packages\Microsoft.Direct3D.D3D12.1.614.1\build\native\Microsoft.Direct3D.D3D12.props')" Text="$([System.String]::Format('$(ErrorText)', 'packages\Microsoft.Direct3D.D3D12.1.614.1\build\native\Microsoft.Direct3D.D3D12.props'))" />
+    <Error Condition="!Exists('packages\Microsoft.Direct3D.D3D12.1.614.1\build\native\Microsoft.Direct3D.D3D12.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\Microsoft.Direct3D.D3D12.1.614.1\build\native\Microsoft.Direct3D.D3D12.targets'))" />
   </Target>
 </Project>
