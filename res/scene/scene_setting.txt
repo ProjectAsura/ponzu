@@ -1,5 +1,5 @@
 export {
-   -Path: ..\res\scene\rtcamp_2023.scn
+   -Path: ..\res\scene\rtcamp_2024.scn
 };
 
 ibl {

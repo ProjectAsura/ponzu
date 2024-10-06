@@ -1,7 +1,7 @@
 # 24fps - 10s animation = 240frame
 
 export {
-   -Path: ..\res\scene\rtcamp_2023.cam
+   -Path: ..\res\scene\rtcamp_2024.cam
 };
 
 # 真上から開始.

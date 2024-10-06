@@ -563,7 +563,7 @@ bool Renderer::SystemSetup()
             return false;
         }
 
-        m_CaptureTarget.SetName(L"CaptureTarget");
+        RTC_DEBUG_CODE(m_CaptureTarget.SetName(L"CaptureTarget"));
     }
 
     // リードバックテクスチャ生成.
@@ -601,9 +601,9 @@ bool Renderer::SystemSetup()
             }
         }
 
-        m_ReadBackTexture[0]->SetName(L"ReadBackTexture0");
-        m_ReadBackTexture[1]->SetName(L"ReadBackTexture1");
-        m_ReadBackTexture[2]->SetName(L"ReadBackTexture2");
+        RTC_DEBUG_CODE(m_ReadBackTexture[0]->SetName(L"ReadBackTexture0"));
+        RTC_DEBUG_CODE(m_ReadBackTexture[1]->SetName(L"ReadBackTexture1"));
+        RTC_DEBUG_CODE(m_ReadBackTexture[2]->SetName(L"ReadBackTexture2"));
 
         UINT   rowCount     = 0;
         UINT64 pitchSize    = 0;
@@ -673,7 +673,7 @@ bool Renderer::SystemSetup()
             return false;
         }
 
-        m_Radiance.SetName(L"Radiance");
+        RTC_DEBUG_CODE(m_Radiance.SetName(L"Radiance"));
     }
 
     // トーンマップターゲット.
@@ -695,7 +695,7 @@ bool Renderer::SystemSetup()
             return false;
         }
 
-        m_Tonemapped.SetName(L"TonemapBuffer");
+        RTC_DEBUG_CODE(m_Tonemapped.SetName(L"TonemapBuffer"));
     }
 
     // レイトレ用ルートシグニチャ生成.
@@ -849,8 +849,8 @@ bool Renderer::SystemSetup()
         m_CurrHistoryIndex = 0;
         m_PrevHistoryIndex = 1;
 
-        m_ColorHistory[0].SetName(L"ColorHistory0");
-        m_ColorHistory[1].SetName(L"ColorHistory1");
+        RTC_DEBUG_CODE(m_ColorHistory[0].SetName(L"ColorHistory0"));
+        RTC_DEBUG_CODE(m_ColorHistory[1].SetName(L"ColorHistory1"));
     }
 
     // 定数バッファ初期化.
@@ -886,7 +886,7 @@ bool Renderer::SystemSetup()
             return false;
         }
 
-        m_Albedo.SetName(L"AlbedoBuffer");
+        RTC_DEBUG_CODE(m_Albedo.SetName(L"AlbedoBuffer"));
     }
 
     // 法線バッファ.
@@ -912,7 +912,7 @@ bool Renderer::SystemSetup()
             return false;
         }
 
-        m_Normal.SetName(L"NormalBuffer");
+        RTC_DEBUG_CODE(m_Normal.SetName(L"NormalBuffer"));
     }
 
     // ラフネスバッファ
@@ -938,7 +938,7 @@ bool Renderer::SystemSetup()
             return false;
         }
 
-        m_Roughness.SetName(L"RoughnessBuffer");
+        RTC_DEBUG_CODE(m_Roughness.SetName(L"RoughnessBuffer"));
     }
 
     // 速度バッファ
@@ -964,7 +964,7 @@ bool Renderer::SystemSetup()
             return false;
         }
 
-        m_Velocity.SetName(L"VelocityBuffer");
+        RTC_DEBUG_CODE(m_Velocity.SetName(L"VelocityBuffer"));
     }
 
     // ビジビリティバッファ.
@@ -990,7 +990,7 @@ bool Renderer::SystemSetup()
             return false;
         }
 
-        m_VBuffer.SetName(L"VisibilityBuffer");
+        RTC_DEBUG_CODE(m_VBuffer.SetName(L"VisibilityBuffer"));
     }
 
     // 深度ターゲット生成.
@@ -1014,7 +1014,7 @@ bool Renderer::SystemSetup()
             return false;
         }
 
-        m_Depth.SetName(L"DepthBuffer");
+        RTC_DEBUG_CODE(m_Depth.SetName(L"DepthBuffer"));
     }
 
     // ヒット距離ターゲット生成.
@@ -1040,7 +1040,7 @@ bool Renderer::SystemSetup()
             return false;
         }
 
-        m_HitDistance.SetName(L"HitDistanceBuffer");
+        RTC_DEBUG_CODE(m_HitDistance.SetName(L"HitDistanceBuffer"));
     }
 
     // アキュムレーションカウントターゲット生成.
@@ -1066,7 +1066,7 @@ bool Renderer::SystemSetup()
             return false;
         }
 
-        m_AccumulationCount.SetName(L"AccumulationCount");
+        RTC_DEBUG_CODE(m_AccumulationCount.SetName(L"AccumulationCount"));
     }
 
     // アキュムレーションカラーターゲット生成.
@@ -1095,8 +1095,8 @@ bool Renderer::SystemSetup()
             }
         }
 
-        m_AccumulationColorHistory[0].SetName(L"AccumulationColor0");
-        m_AccumulationColorHistory[1].SetName(L"AccumulationColor1");
+        RTC_DEBUG_CODE(m_AccumulationColorHistory[0].SetName(L"AccumulationColor0"));
+        RTC_DEBUG_CODE(m_AccumulationColorHistory[1].SetName(L"AccumulationColor1"));
     }
 
     // スタビライゼーションカラーターゲット生成.
@@ -1125,8 +1125,8 @@ bool Renderer::SystemSetup()
             }
         }
 
-        m_StabilizationColorHistory[0].SetName(L"StabilizationColor0");
-        m_StabilizationColorHistory[1].SetName(L"StabilizationColor1");
+        RTC_DEBUG_CODE(m_StabilizationColorHistory[0].SetName(L"StabilizationColor0"));
+        RTC_DEBUG_CODE(m_StabilizationColorHistory[1].SetName(L"StabilizationColor1"));
     }
 
     // ブラーターゲット生成.
@@ -1158,8 +1158,8 @@ bool Renderer::SystemSetup()
             return false;
         }
 
-        m_BlurTarget0.SetName(L"BlurTarget0");
-        m_BlurTarget1.SetName(L"BlurTarget1");
+        RTC_DEBUG_CODE(m_BlurTarget0.SetName(L"BlurTarget0"));
+        RTC_DEBUG_CODE(m_BlurTarget1.SetName(L"BlurTarget1"));
     }
 
     // G-Buffer ルートシグニチャ生成.
@@ -2308,10 +2308,6 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
 
         asdx::UAVBarrier(pCmd, m_AccumulationColorHistory[m_CurrHistoryIndex].GetResource());
     }
-
-    //// Mip Generation and History Fix.
-    //{
-    //}
 
     // ブラー処理.
     {

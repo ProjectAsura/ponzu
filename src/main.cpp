@@ -16,7 +16,7 @@
 int main(int argc, char** argv)
 {
     r3d::SceneDesc desc = {};
-    desc.RenderTimeSec      = 299.0;
+    desc.RenderTimeSec      = 255.9;
     desc.OutputWidth        = 1920;
     desc.OutputHeight       = 1080;
     desc.RenderWidth        = 1920;//1920;//2560;
@@ -24,8 +24,8 @@ int main(int argc, char** argv)
     desc.FPS                = 23.9;
     desc.AnimationTimeSec   = 10.0;
 #if 1
-    desc.SceneFilePath      = "../res/scene/rtcamp_2023.scn";
-    desc.CameraFilePath     = "../res/scene/rtcamp_2023.cam";
+    desc.SceneFilePath      = "../res/scene/rtcamp_2024.scn";
+    desc.CameraFilePath     = "../res/scene/rtcamp_2024.cam";
 #else
     desc.SceneFilePath      = "../res/scene/test_scene.scn";
     desc.CameraFilePath     = "../res/scene/test_camera.cam";
