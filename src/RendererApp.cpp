@@ -323,7 +323,7 @@ unsigned Export(void* args)
         data->Converted))
     {
         char path[256] = {};
-        sprintf_s(path, "output_%03ld.png", data->FrameIndex);
+        sprintf_s(path, "%03ld.png", data->FrameIndex);
 
         FILE* pFile = nullptr;
         auto err = fopen_s(&pFile, path, "wb");
