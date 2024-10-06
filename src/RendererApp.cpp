@@ -2783,6 +2783,21 @@ void Renderer::Draw2D(float elapsedSec)
                 printf_s("angleX : %f[rad] (%f[deg])\n", param.Rotate.x, asdx::ToDegree(param.Rotate.x));
                 printf_s("angleY : %f[rad] (%f[deg])\n", param.Rotate.y, asdx::ToDegree(param.Rotate.y));
             }
+            if (ImGui::Button(u8"シェーダリビルド"))
+            {
+                m_RtPipe                    .RequestRebuild();
+                m_ModelPipe                 .RequestRebuild();
+                m_TonemapPipe               .RequestRebuild();
+                m_TaaPipe                   .RequestRebuild();
+                m_CopyPipe                  .RequestRebuild();
+                m_PreBlurPipe               .RequestRebuild();
+                m_TemporalAccumulationPipe  .RequestRebuild();
+                m_DenoiserPipe              .RequestRebuild();
+                m_TemporalStabilizationPipe .RequestRebuild();
+                m_PostBlurPipe              .RequestRebuild();
+
+                m_Dirty = true;
+            }
             if (ImGui::Button(u8"シーン設定 リロード"))
             {
                 SceneExporter exporter;
