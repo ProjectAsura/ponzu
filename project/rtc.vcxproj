@@ -36,6 +36,7 @@
     <ClCompile Include="..\src\ModelManager.cpp" />
     <ClCompile Include="..\src\OBJLoader.cpp" />
     <ClCompile Include="..\src\RendererApp.cpp" />
+    <ClCompile Include="..\src\RTPMPass.cpp" />
     <ClCompile Include="..\src\Scene.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -48,6 +49,7 @@
     <ClInclude Include="..\include\ModelManager.h" />
     <ClInclude Include="..\include\OBJLoader.h" />
     <ClInclude Include="..\include\RendererApp.h" />
+    <ClInclude Include="..\include\RTPMPass.h" />
     <ClInclude Include="..\include\Scene.h" />
   </ItemGroup>
   <ItemGroup>
@@ -104,6 +106,21 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Compute</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">4.0</ShaderModel>
     </FxCompile>
+    <FxCompile Include="..\res\shader\RTPMPass\RTPM_GeneratePhoton.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Library</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Master|x64'">Library</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Library</ShaderType>
+    </FxCompile>
+    <FxCompile Include="..\res\shader\RTPMPass\RTPM_PhotonCulling.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Master|x64'">Compute</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
+    </FxCompile>
+    <FxCompile Include="..\res\shader\RTPMPass\RTPM_StochasticCollectPhoton.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Library</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Master|x64'">Library</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Library</ShaderType>
+    </FxCompile>
     <FxCompile Include="..\res\shader\TemporalAccumulationCS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Master|Win32'">Compute</ShaderType>
@@ -144,6 +161,7 @@
     <None Include="..\res\shader\DenoiseBlur.hlsli" />
     <None Include="..\res\shader\Denoiser.hlsli" />
     <None Include="..\res\shader\Reservoir.hlsli" />
+    <None Include="..\res\shader\RTPMPass\RTPM_Common.hlsli" />
     <None Include="..\res\shader\SceneParam.hlsli" />
     <None Include="packages.config" />
   </ItemGroup>

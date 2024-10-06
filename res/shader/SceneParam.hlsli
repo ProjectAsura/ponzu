@@ -13,12 +13,14 @@ struct SceneParameter
 {
     float4x4 View;
     float4x4 Proj;
+    float4x4 ViewProj;
     float4x4 InvView;
     float4x4 InvProj;
     float4x4 InvViewProj;
 
     float4x4 PrevView;
     float4x4 PrevProj;
+    float4x4 PrevViewProj;
     float4x4 PrevInvView;
     float4x4 PrevInvProj;
     float4x4 PrevInvViewProj;

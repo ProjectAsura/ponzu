@@ -168,12 +168,14 @@ struct SceneParam
 {
     asdx::Matrix    View;
     asdx::Matrix    Proj;
+    asdx::Matrix    ViewProj;
     asdx::Matrix    InvView;
     asdx::Matrix    InvProj;
     asdx::Matrix    InvViewProj;
 
     asdx::Matrix    PrevView;
     asdx::Matrix    PrevProj;
+    asdx::Matrix    PrevViewProj;
     asdx::Matrix    PrevInvView;
     asdx::Matrix    PrevInvProj;
     asdx::Matrix    PrevInvViewProj;
@@ -1775,7 +1777,6 @@ void Renderer::OnTerm()
     #if RTC_TARGET == RTC_DEVELOP
     // 開発用関連.
     {
-        //m_DevPipe       .Term();
         m_ShaderWatcher .Term();
         m_DebugPipe     .Term();
         m_DebugRootSig  .Reset();
@@ -1996,11 +1997,13 @@ void Renderer::ChangeFrame(uint32_t index)
         SceneParam param = {};
         param.View                  = m_CurrView;
         param.Proj                  = m_CurrProj;
+        param.ViewProj              = m_CurrView * m_CurrProj;
         param.InvView               = m_CurrInvView;
         param.InvProj               = m_CurrInvProj;
         param.InvViewProj           = m_CurrInvProj * m_CurrInvView;
         param.PrevView              = m_PrevView;
         param.PrevProj              = m_PrevProj;
+        param.PrevViewProj          = m_PrevView * m_PrevProj;
         param.PrevInvView           = m_PrevInvView;
         param.PrevInvProj           = m_PrevInvProj;
         param.PrevInvViewProj       = m_PrevInvViewProj;

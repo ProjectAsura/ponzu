@@ -34,6 +34,9 @@
     <Filter Include="ソース ファイル\external\xxhash">
       <UniqueIdentifier>{9ba7e71c-e482-46c9-8f11-507e5b258e15}</UniqueIdentifier>
     </Filter>
+    <Filter Include="リソース ファイル\RTPM">
+      <UniqueIdentifier>{d05fada8-db69-4d1a-83d7-86cc001062ba}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\main.cpp">
@@ -61,6 +64,9 @@
       <Filter>ソース ファイル\external\xxhash</Filter>
     </ClCompile>
     <ClCompile Include="..\src\CameraSequence.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\RTPMPass.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
   </ItemGroup>
@@ -93,6 +99,9 @@
       <Filter>ソース ファイル\external\xxhash</Filter>
     </ClInclude>
     <ClInclude Include="..\include\CameraSequence.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\RTPMPass.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
   </ItemGroup>
@@ -130,6 +139,15 @@
     <FxCompile Include="..\res\shader\PreBlurCS.hlsl">
       <Filter>リソース ファイル</Filter>
     </FxCompile>
+    <FxCompile Include="..\res\shader\RTPMPass\RTPM_GeneratePhoton.hlsl">
+      <Filter>リソース ファイル\RTPM</Filter>
+    </FxCompile>
+    <FxCompile Include="..\res\shader\RTPMPass\RTPM_PhotonCulling.hlsl">
+      <Filter>リソース ファイル\RTPM</Filter>
+    </FxCompile>
+    <FxCompile Include="..\res\shader\RTPMPass\RTPM_StochasticCollectPhoton.hlsl">
+      <Filter>リソース ファイル\RTPM</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
@@ -147,6 +165,9 @@
     </None>
     <None Include="..\res\shader\DenoiseBlur.hlsli">
       <Filter>リソース ファイル</Filter>
+    </None>
+    <None Include="..\res\shader\RTPMPass\RTPM_Common.hlsli">
+      <Filter>リソース ファイル\RTPM</Filter>
     </None>
   </ItemGroup>
 </Project>

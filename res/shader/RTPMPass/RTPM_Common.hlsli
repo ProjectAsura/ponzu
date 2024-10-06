@@ -1,60 +1,26 @@
 ﻿//-----------------------------------------------------------------------------
-// File : Common.hlsli
-// Desc : Common Uility.
+// File : RTPM_Common.hlsli
+// Desc : RTPM Common Utilities.
 // Copyright(c) Project Asura. All right reserved.
 //-----------------------------------------------------------------------------
-#ifndef COMMON_HLSLI
-#define COMMON_HLSLI
+#ifndef RTPM_COMMON_HLSLI
+#define RTPM_COMMON_HLSLI
 
 //-----------------------------------------------------------------------------
 // Includes
 //-----------------------------------------------------------------------------
-#include <Math.hlsli>
-#include <BRDF.hlsli>
-#include <SceneParam.hlsli>
-#include <Samplers.hlsli>
+#include "Math.hlsli"
+#include "BRDF.hlsli"
+#include "SceneParam.hlsli"
+#include "Samplers.hlsli"
 
-#define ENABLE_TEXTURED_MATERIAL    (0) // テクスチャ付きマテリアルを有効にする場合は 1.
+#define ENABLE_TEXTURED_MATERIAL    (0)     // テクスチャ付きマテリアルを有効にする場合は 1.
+#define T_MIN                       (1e-6f) // シーンの大きさによって適切な値が変わるので，適宜調整.
 
-#define INVALID_ID          (-1)
-#define STANDARD_RAY_INDEX  (0)
-#define SHADOW_RAY_INDEX    (1)
-#define T_MIN               (1e-6f) // シーンの大きさによって適切な値が変わるので，適宜調整.
-
-//-----------------------------------------------------------------------------
-// Type Definitions
-//-----------------------------------------------------------------------------
-typedef BuiltInTriangleIntersectionAttributes HitArgs;
 typedef RaytracingAccelerationStructure       RayTracingAS;
 
+static const uint INVALID_ID = 0xFFFFFFFF;
 
-///////////////////////////////////////////////////////////////////////////////
-// Payload structure
-///////////////////////////////////////////////////////////////////////////////
-struct Payload
-{
-    uint    InstanceId;
-    uint    PrimitiveId;
-    float2  Barycentrics;
-    
-    void Clear()
-    {
-        InstanceId   = INVALID_ID;
-        PrimitiveId  = INVALID_ID;
-        Barycentrics = 0.0f.xx;
-    }
-
-    bool HasHit(uint instanceId, uint primitiveId)
-    {
-        if (InstanceId == INVALID_ID) {
-            return false;
-        }
-        if (InstanceId == instanceId && PrimitiveId == primitiveId) {
-            return false;
-        }
-        return true;
-    }
-};
 
 ///////////////////////////////////////////////////////////////////////////////
 // ResVertex structure
@@ -127,9 +93,26 @@ struct Material
     float   Ior;            // 屈折率.
 };
 
-//=============================================================================
-// Constants
-//=============================================================================
+struct AABB
+{
+    float3  Min;
+    float3  Max;
+    
+    float3 Center()
+    { return (Max + Min) * 0.5f; }
+};
+
+
+struct HitInfo
+{
+    uint   InstanceId;
+    uint   PrimitiveIndex;
+    float2 BaryCentrics;
+
+    bool IsValid()
+    { return InstanceId != INVALID_ID; }
+};
+
 #define LIGHT_TYPE_POINT        (1)
 #define LIGHT_TYPE_DIRECTIONAL  (2)
 
@@ -151,14 +134,83 @@ struct Material
 #define MATERIAL_ID_OFFSET  (8)
 
 
+AABB CalcPhotonAABB(float3 center, float radius)
+{
+    AABB result;
+    result.Min = center - radius.xxx;
+    result.Max = center + radius.xxx;
+    return result;
+}
+
+uint4 PackHitInfo(HitInfo value)
+{
+    uint4 result;
+    result.x = value.InstanceId;
+    result.y = value.PrimitiveIndex;
+    result.z = asuint(value.BaryCentrics.x);
+    result.w = asuint(value.BaryCentrics.y);
+    return result;
+}
+
+HitInfo UnpackHitInfo(uint4 value)
+{
+    HitInfo result;
+    result.InstanceId     = value.x;
+    result.PrimitiveIndex = value.y;
+    result.BaryCentrics.x = asfloat(value.z);
+    result.BaryCentrics.y = asfloat(value.w);
+    return result;
+}
+
+//-----------------------------------------------------------------------------
+//      int3 を uint64_t にパッキングします.
+//-----------------------------------------------------------------------------
+uint64_t Pack64(int3 cell)
+{
+    uint64_t key = 0;
+    uint64_t cells = cell.x;
+ 
+    cells &= 0x1FFFFF;
+    key |= cells << 42;
+    cells = cell.y;
+
+    cells &= 0x1FFFFF;
+    key |= cells << 21;
+    cells = cell.z;
+
+    cells &= 0x1FFFFF;
+    key |= cells;
+
+    return key;
+}
+
+//-----------------------------------------------------------------------------
+//      ハッシュ値を求めます.
+//-----------------------------------------------------------------------------
+uint WangHash(int3 cell)
+{
+    uint64_t key = Pack64(cell);
+
+    // Thomas Wang, "Integer Hash Function",
+    // http://web.archive.org/web/20071223173210/http://www.concentric.net/~Ttwang/tech/inthash.htm
+    // 64 bit to 32 bit Hash Functions.
+    key = (~key) + (key << 18);
+    key = key ^ (key >> 31);
+    key *= 21;
+    key = key ^ (key >> 11);
+    key = key + (key << 6);
+    uint res = uint(key) ^ uint(key >> 22);
+    return res;
+}
+
+
 //=============================================================================
 // Resources
 //=============================================================================
 ConstantBuffer<SceneParameter>  SceneParam  : register(b0);
-RayTracingAS                    SceneAS     : register(t0);
-ByteAddressBuffer               Instances   : register(t1);
-StructuredBuffer<ResMaterial>   Materials   : register(t2);
-ByteAddressBuffer               Transforms  : register(t3);
+ByteAddressBuffer               Instances   : register(t0);
+StructuredBuffer<ResMaterial>   Materials   : register(t1);
+ByteAddressBuffer               Transforms  : register(t2);
 
 
 //-----------------------------------------------------------------------------
@@ -408,37 +460,6 @@ RayDesc GeneratePinholeCameraRay(float2 pixel)
     ray.TMax        = FLT_MAX;
 
     return ray;
-}
-
-//-----------------------------------------------------------------------------
-//      シャドウレイをキャストします.
-//-----------------------------------------------------------------------------
-bool CastShadowRay(float3 pos, float3 normal, float3 dir, float tmax, uint instanceId, uint primitiveId)
-{
-    RayDesc ray;
-    ray.Origin      = pos + normal * T_MIN;
-    ray.Direction   = dir;
-    ray.TMin        = T_MIN;
-    ray.TMax        = tmax;
-
-    Payload payload;
-    payload.Clear();
-    
-    uint flags = RAY_FLAG_SKIP_CLOSEST_HIT_SHADER;
-    flags |= RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH;
-    flags |= RAY_FLAG_CULL_FRONT_FACING_TRIANGLES;
-
-    TraceRay(
-        SceneAS,
-        flags,
-        0xFF,
-        SHADOW_RAY_INDEX,
-        0,
-        SHADOW_RAY_INDEX,
-        ray,
-        payload);
-
-    return payload.HasHit(instanceId, primitiveId);
 }
 
 //-----------------------------------------------------------------------------
@@ -781,4 +802,4 @@ float2 SampleMipMap(Texture2D T, float2 u, out float weight) // weight = 1.0f / 
     return float2((float)x / (float)width, (float)y / (float)height);
 }
 
-#endif//COMMON_HLSLI
+#endif//RTPM_COMMON_HLSLI
