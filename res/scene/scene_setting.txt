@@ -281,7 +281,14 @@ instance {
 };
 
 directional_light {
-   -Direction: 0.0 -1.0 1.0
-   -Intensity: 2.0 2.0 2.0
+   -Tag: MainDir
+   -Direction: 0.0 -1.0 0.5
+   -Intensity: 3.0 3.0 3.0
 };
 
+point_light {
+   -Tag: PointLight0
+   -Position: 2000.0 2000.0 0.0
+   -Radius: 1.0
+   -Intensity: 0.0 1.0 0.5
+};

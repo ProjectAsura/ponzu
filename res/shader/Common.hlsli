@@ -336,10 +336,14 @@ float3 GetLightIntensity(Light light, float dist)
 {
     if (light.Type == LIGHT_TYPE_POINT)
     {
+    #if 0
         const float radiusSq    = light.Radius * light.Radius;
         const float distSq      = dist * dist;
-        const float attenuation = 2.0f / (distSq + radiusSq + dist * sqrt(distSq + radiusSq));
+        const float attenuation = 2.0f / (distSq + radiusSq + dist * sqrt(max(distSq + radiusSq, 0.0f)));
         return light.Intensity * attenuation;
+    #else
+        return light.Intensity / max(light.Radius * light.Radius, 1e-6f);
+    #endif
     }
     else if (light.Type == LIGHT_TYPE_DIRECTIONAL)
     {
@@ -363,7 +367,7 @@ void GetLightData(Light light, float3 hitPos, out float3 lightVector, out float 
     }
     else if (light.Type == LIGHT_TYPE_DIRECTIONAL)
     {
-        lightVector   = -light.Position; // ライトに向かう方向.
+        lightVector   = light.Position;
         lightDistance = FLT_MAX;
     }
     else

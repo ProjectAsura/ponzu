@@ -1296,7 +1296,7 @@ bool SceneExporter::LoadFromTXT(const char* path, std::string& exportPath)
             Light light;
             light.HashTag   = CalcHashTag(tag);
             light.Type      = LIGHT_TYPE_DIRECTIONAL;
-            light.Position  = direction;
+            light.Position  = -direction;
             light.Intensity = intensity;
             light.Radius    = 1.0f;
 
