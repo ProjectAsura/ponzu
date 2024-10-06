@@ -198,6 +198,8 @@ struct SceneParam
     float           FovY;
     float           NearClip;
     float           FarClip;
+
+    asdx::Vector4   CameraPosition; // World Space.
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -659,7 +661,7 @@ bool Renderer::SystemSetup()
         desc.Width              = m_SceneDesc.RenderWidth;
         desc.Height             = m_SceneDesc.RenderHeight;
         desc.DepthOrArraySize   = 1;
-        desc.Format             = DXGI_FORMAT_R16G16B16A16_FLOAT;
+        desc.Format             = DXGI_FORMAT_R32G32B32A32_FLOAT;
         desc.MipLevels          = 1;
         desc.SampleDesc.Count   = 1;
         desc.SampleDesc.Quality = 0;
@@ -965,6 +967,32 @@ bool Renderer::SystemSetup()
         m_Velocity.SetName(L"VelocityBuffer");
     }
 
+    // ビジビリティバッファ.
+    {
+        asdx::TargetDesc desc;
+        desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        desc.Width              = m_SceneDesc.RenderWidth;
+        desc.Height             = m_SceneDesc.RenderHeight;
+        desc.DepthOrArraySize   = 1;
+        desc.MipLevels          = 1;
+        desc.Format             = DXGI_FORMAT_R32G32B32A32_UINT;
+        desc.SampleDesc.Count   = 1;
+        desc.SampleDesc.Quality = 0;
+        desc.InitState          = D3D12_RESOURCE_STATE_COMMON;
+        desc.ClearColor[0]      = 0.0f;
+        desc.ClearColor[1]      = 0.0f;
+        desc.ClearColor[2]      = 0.0f;
+        desc.ClearColor[3]      = 0.0f;
+
+        if (!m_VBuffer.Init(&desc))
+        {
+            ELOGA("Error : Visibility Buffer Init Failed.");
+            return false;
+        }
+
+        m_VBuffer.SetName(L"VisibilityBuffer");
+    }
+
     // 深度ターゲット生成.
     {
         asdx::TargetDesc desc;
@@ -1175,11 +1203,12 @@ bool Renderer::SystemSetup()
         desc.RasterizerState                = asdx::Preset::CullNone;
         desc.SampleMask                     = D3D12_DEFAULT_SAMPLE_MASK;
         desc.PrimitiveTopologyType          = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-        desc.NumRenderTargets               = 4;
+        desc.NumRenderTargets               = 5;
         desc.RTVFormats[0]                  = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;  // Albedo
         desc.RTVFormats[1]                  = DXGI_FORMAT_R16G16_FLOAT;         // Normal.
         desc.RTVFormats[2]                  = DXGI_FORMAT_R8_UNORM;             // Roughness.
         desc.RTVFormats[3]                  = DXGI_FORMAT_R16G16_FLOAT;         // Velocity.
+        desc.RTVFormats[4]                  = DXGI_FORMAT_R32G32B32A32_UINT;    // V-Buffer.
         desc.DSVFormat                      = DXGI_FORMAT_D32_FLOAT;            // Depth.
         desc.InputLayout.NumElements        = _countof(kModelElements);
         desc.InputLayout.pInputElementDescs = kModelElements;
@@ -1518,11 +1547,12 @@ bool Renderer::SystemSetup()
         desc.RasterizerState                = asdx::Preset::CullNone;//asdx::RASTERIZER_DESC(asdx::RASTERIZER_STATE_CULL_NONE);
         desc.SampleMask                     = D3D12_DEFAULT_SAMPLE_MASK;
         desc.PrimitiveTopologyType          = D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE;
-        desc.NumRenderTargets               = 4;
+        desc.NumRenderTargets               = 5;
         desc.RTVFormats[0]                  = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;  // Albedo
         desc.RTVFormats[1]                  = DXGI_FORMAT_R16G16_FLOAT;         // Normal.
         desc.RTVFormats[2]                  = DXGI_FORMAT_R8_UNORM;             // Roughness.
         desc.RTVFormats[3]                  = DXGI_FORMAT_R16G16_FLOAT;         // Velocity.
+        desc.RTVFormats[4]                  = DXGI_FORMAT_R32G32B32A32_UINT;    // V-Buffer.
         desc.DSVFormat                      = DXGI_FORMAT_D32_FLOAT;            // Depth.
         desc.InputLayout.NumElements        = _countof(kModelElements);
         desc.InputLayout.pInputElementDescs = kModelElements;
@@ -1812,6 +1842,7 @@ void Renderer::OnTerm()
         m_AccumulationCount .Term();
         m_Tonemapped        .Term();
         m_Depth             .Term();
+        m_VBuffer           .Term();
         m_Velocity          .Term();
         m_Roughness         .Term();
         m_Normal            .Term();
@@ -2025,6 +2056,7 @@ void Renderer::ChangeFrame(uint32_t index)
         param.FovY                  = fovY;
         param.NearClip              = nearClip;
         param.FarClip               = farClip;
+        param.CameraPosition        = asdx::Vector4(m_Camera.GetPosition(), 0.0f);
 
         m_SceneParam.SwapBuffer();
         m_SceneParam.Update(&param, sizeof(param));
@@ -2073,12 +2105,14 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         m_Normal    .ChangeState(pCmd, D3D12_RESOURCE_STATE_RENDER_TARGET);
         m_Roughness .ChangeState(pCmd, D3D12_RESOURCE_STATE_RENDER_TARGET);
         m_Velocity  .ChangeState(pCmd, D3D12_RESOURCE_STATE_RENDER_TARGET);
+        m_VBuffer   .ChangeState(pCmd, D3D12_RESOURCE_STATE_RENDER_TARGET);
         m_Depth     .ChangeState(pCmd, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 
         auto pRTV0 = m_Albedo   .GetRTV();
         auto pRTV1 = m_Normal   .GetRTV();
         auto pRTV2 = m_Roughness.GetRTV();
         auto pRTV3 = m_Velocity .GetRTV();
+        auto pRTV4 = m_VBuffer  .GetRTV();
         auto pDSV  = m_Depth    .GetDSV();
 
         float clearColor [4] = { 0.0f, 0.0f, 0.0f, 1.0f };
@@ -2087,6 +2121,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         pCmd->ClearRenderTargetView(pRTV1->GetHandleCPU(), clearColor, 0, nullptr);
         pCmd->ClearRenderTargetView(pRTV2->GetHandleCPU(), clearColor, 0, nullptr);
         pCmd->ClearRenderTargetView(pRTV3->GetHandleCPU(), clearColor, 0, nullptr);
+        pCmd->ClearRenderTargetView(pRTV4->GetHandleCPU(), clearColor, 0, nullptr);
         pCmd->ClearDepthStencilView(pDSV->GetHandleCPU(), D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
 
         D3D12_CPU_DESCRIPTOR_HANDLE handleRTVs[] = {
@@ -2094,6 +2129,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
             pRTV1->GetHandleCPU(),
             pRTV2->GetHandleCPU(),
             pRTV3->GetHandleCPU(),
+            pRTV4->GetHandleCPU(),
         };
 
         auto handleDSV = pDSV->GetHandleCPU();

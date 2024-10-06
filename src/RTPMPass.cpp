@@ -85,13 +85,15 @@ bool RTPMPass::Init(ID3D12Device5* pDevice, uint32_t w, uint32_t h)
 
     // フォトンカリング用ルートシグニチャ生成.
     {
+        auto cs = D3D12_SHADER_VISIBILITY_ALL;
+
     }
 
     // フォトンカリングパイプラインを初期化.
     {
         D3D12_COMPUTE_PIPELINE_STATE_DESC desc = {};
         desc.pRootSignature = m_PhotonCullingRootSig.GetPtr();
-        desc.CS = { RTPM_PhotonCulling, sizeof(RTPM_PhotonCulling) };
+        desc.CS             = { RTPM_PhotonCulling, sizeof(RTPM_PhotonCulling) };
         
         if (!m_PhotonCullingPipe.Init(pDevice, &desc))
         {
@@ -102,21 +104,30 @@ bool RTPMPass::Init(ID3D12Device5* pDevice, uint32_t w, uint32_t h)
 
     // フォトン生成用ルートシグニチャ生成.
     {
+        auto lib = D3D12_SHADER_VISIBILITY_ALL;
+
     }
 
-    // フォトン生成パイプラインを初期化.
+    // フォトン生成レイトレーシングパイプラインを初期化.
     {
-        struct RayPayload
+        struct Payload
         {
-            uint32_t dummy;
+            asdx::Vector3 Throughput;
+            uint32_t      EncodedFaceNormal;
+            asdx::Vector3 Origin;
+            uint32_t      Terminated;
+            asdx::Vector3 Direction;
+            uint32_t      DiffuseHit;
+            uint32_t      Seed[4];
         };
 
         std::vector<D3D12_HIT_GROUP_DESC> groups;
+        groups.resize(1);
+        groups[0].ClosestHitShaderImport = L"OnClosestHit";
+        groups[0].HitGroupExport         = L"StandardHit";
+        groups[0].Type                   = D3D12_HIT_GROUP_TYPE_TRIANGLES;
 
-
-        std::vector<std::wstring> miss{
-
-        };
+        std::vector<std::wstring> miss{ L"OnMiss" };
 
         asdx::RayTracingPipelineStateDesc desc;
         desc.pGlobalRootSignature   = m_GeneratePhotonRootSig.GetPtr();
@@ -124,9 +135,9 @@ bool RTPMPass::Init(ID3D12Device5* pDevice, uint32_t w, uint32_t h)
         desc.RayGeneration          = L"OnRayGeneration";
         desc.HitGroups              = groups;
         desc.MissTable              = miss;
-        desc.MaxPayloadSize         = sizeof(RayPayload);
+        desc.MaxPayloadSize         = sizeof(Payload);
         desc.MaxAttributeSize       = sizeof(asdx::Vector2);
-        desc.MaxTraceRecursionDepth = m_MaxBounce;
+        desc.MaxTraceRecursionDepth = 16;
 
         if (!m_GeneratePhotonPipe.Init(pDevice, desc))
         {
@@ -137,30 +148,37 @@ bool RTPMPass::Init(ID3D12Device5* pDevice, uint32_t w, uint32_t h)
 
     // フォトン収集用ルートシグニチャ生成.
     {
+        auto lib = D3D12_SHADER_VISIBILITY_ALL;
+
     }
 
-    // フォトン収集パイプラインを初期化.
+    // フォトン収集レイトレーシングパイプラインを初期化.
     {
-        struct RayPayload
+        struct Payload
         {
-            uint32_t dumy;
+            uint32_t    Counter;
+            uint32_t    PhotonList[3];
+            uint32_t    Seed[4];
         };
 
         std::vector<D3D12_HIT_GROUP_DESC> groups;
+        groups.resize(1);
+        groups[0].AnyHitShaderImport        = L"OnAnyHit";
+        groups[0].IntersectionShaderImport  = L"OnIntersection";
+        groups[0].HitGroupExport            = L"StandardHit";
+        groups[0].Type                      = D3D12_HIT_GROUP_TYPE_PROCEDURAL_PRIMITIVE;
 
-
-        std::vector<std::wstring> miss{
-        };
+        std::vector<std::wstring> miss{};
 
         asdx::RayTracingPipelineStateDesc desc;
-        desc.pGlobalRootSignature = m_CollectPhotonRootSig.GetPtr();
-        desc.DXILLibrary = { RTPM_StochasticCollectPhoton, sizeof(RTPM_StochasticCollectPhoton) };
-        desc.RayGeneration = L"OnRayGeneration";
-        desc.HitGroups = groups;
-        desc.MissTable = miss;
-        desc.MaxPayloadSize = sizeof(RayPayload);
-        desc.MaxAttributeSize = sizeof(asdx::Vector2);
-        desc.MaxTraceRecursionDepth = m_MaxBounce;
+        desc.pGlobalRootSignature   = m_CollectPhotonRootSig.GetPtr();
+        desc.DXILLibrary            = { RTPM_StochasticCollectPhoton, sizeof(RTPM_StochasticCollectPhoton) };
+        desc.RayGeneration          = L"OnRayGeneration";
+        desc.HitGroups              = groups;
+        desc.MissTable              = miss;
+        desc.MaxPayloadSize         = sizeof(Payload);
+        desc.MaxAttributeSize       = sizeof(asdx::Vector2);
+        desc.MaxTraceRecursionDepth = 16;
 
         if (!m_CollectPhotonPipe.Init(pDevice, desc))
         {
@@ -183,6 +201,14 @@ bool RTPMPass::Init(ID3D12Device5* pDevice, uint32_t w, uint32_t h)
         return false;
     }
 
+    // スループットバッファ生成.
+    {
+    }
+
+    // カリングハッシュバッファ生成.
+    {
+    }
+
     return true;
 }
 
@@ -195,10 +221,12 @@ void RTPMPass::Term()
     m_GeneratePhotonPipe.Term();
     m_CollectPhotonPipe .Term();
 
-    m_VBuffer         .Term();
-    m_ViewDirBuffer   .Term();
-    m_ThroughputBuffer.Term();
-    m_CullingBuffer   .Term();
+    m_PhotonCullingRootSig .Reset();
+    m_GeneratePhotonRootSig.Reset();
+    m_CollectPhotonRootSig .Reset();
+
+    m_ThroughputBuffer  .Term();
+    m_CullingHashBuffer .Term();
 
     m_CausticBuffer.Term();
     m_GlobalBuffer .Term();
@@ -214,20 +242,20 @@ void RTPMPass::Term()
     m_PhotonBLAS.clear();
 
     m_PhotonTLAS.Term();
-
 }
 
 //-----------------------------------------------------------------------------
 //      描画処理を行います.
 //-----------------------------------------------------------------------------
-void RTPMPass::Render(ID3D12GraphicsCommandList4* pCmd, const Scene& scene)
+void RTPMPass::Render(ID3D12GraphicsCommandList4* pCmd, const Scene& scene,D3D12_GPU_VIRTUAL_ADDRESS sceneParamAddress, bool reset)
 {
     if (pCmd == nullptr || scene.GetTLAS() == nullptr)
     { return; }
 
     // 半径をリセット.
-    if (m_FrameCount == 0)
+    if (reset)
     {
+        m_FrameCount    = 0;
         m_CausticRadius = m_CausticRadiusStart;
         m_GlobalRadius  = m_GlobalRadiusStart;
     }
@@ -258,7 +286,11 @@ void RTPMPass::Render(ID3D12GraphicsCommandList4* pCmd, const Scene& scene)
 //-----------------------------------------------------------------------------
 void RTPMPass::PhotonCulling(ID3D12GraphicsCommandList4* pCmd)
 {
-    // カウンターとAABBをリセット.
+    // カリングハッシュバッファをクリア.
+    {
+    }
+
+    // 定数バッファ更新.
     {
     }
 
@@ -271,7 +303,7 @@ void RTPMPass::PhotonCulling(ID3D12GraphicsCommandList4* pCmd)
         pCmd->Dispatch(threadX, threadY, 1);
     }
 
-    asdx::UAVBarrier(pCmd, m_CullingBuffer.GetResource());
+    asdx::UAVBarrier(pCmd, m_CullingHashBuffer.GetResource());
 }
 
 //-----------------------------------------------------------------------------
@@ -329,6 +361,5 @@ void RTPMPass::UpdateRadius()
     m_GlobalRadius  = std::max(m_GlobalRadius,  kMinPhotonRadius);
     m_CausticRadius = std::max(m_CausticRadius, kMinPhotonRadius);
 }
-
 
 } // namespace r3d

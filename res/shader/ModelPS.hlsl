@@ -13,9 +13,9 @@
 #define ENABLE_TEXTURED_MATERIAL (0)
 
 ///////////////////////////////////////////////////////////////////////////////
-// VSOutput structure
+// PSInput structure
 ///////////////////////////////////////////////////////////////////////////////
-struct VSOutput
+struct PSInput
 {
     float4 Position     : SV_POSITION;
     float3 Normal       : NORMAL;
@@ -23,6 +23,9 @@ struct VSOutput
     float2 TexCoord     : TEXCOORD0;
     float4 CurrProjPos  : CURR_PROJ_POS;
     float4 PrevProjPos  : PREV_PROJ_POS;
+
+    float3                 Barycentrics : SV_Barycentrics;
+    nointerpolation uint   PrimitiveId  : SV_PrimitiveID;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -30,10 +33,11 @@ struct VSOutput
 ///////////////////////////////////////////////////////////////////////////////
 struct PSOutput
 {
-    float4 Albedo    : SV_TARGET0;
-    float2 Normal    : SV_TARGET1;
-    float  Roughness : SV_TARGET2;
-    float2 Velocity  : SV_TARGET3;
+    float4 Albedo     : SV_TARGET0;
+    float2 Normal     : SV_TARGET1;
+    float  Roughness  : SV_TARGET2;
+    float2 Velocity   : SV_TARGET3;
+    uint4  Visibility : SV_TARGET4;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -100,7 +104,7 @@ SamplerState                    LinearWrap  : register(s0);
 //-----------------------------------------------------------------------------
 //      メインエントリーポイントです.
 //-----------------------------------------------------------------------------
-PSOutput main(const VSOutput input)
+PSOutput main(const PSInput input)
 {
     PSOutput output = (PSOutput)0;
 
@@ -137,6 +141,11 @@ PSOutput main(const VSOutput input)
     output.Roughness = material.Roughness;
     output.Velocity  = velocity;
 #endif
+    
+    output.Visibility.x = ObjectParam.InstanceId;
+    output.Visibility.y = input.PrimitiveId;
+    output.Visibility.z = asuint(input.Barycentrics.x);
+    output.Visibility.w = asuint(input.Barycentrics.y);
 
     return output;
 }

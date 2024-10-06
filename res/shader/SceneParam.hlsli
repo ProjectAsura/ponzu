@@ -43,6 +43,8 @@ struct SceneParameter
     float   FovY;
     float   NearClip;
     float   FarClip;
+
+    float4  CameraPosition;
 };
 
 #endif//SCENE_PARAM_HLSLI

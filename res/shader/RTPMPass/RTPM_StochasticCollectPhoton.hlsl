@@ -56,13 +56,12 @@ struct PassParameter
 ConstantBuffer<PassParameter>   PassParam       : register(b1);
 RayTracingAS                    PhotonAS        : register(t3);
 Texture2D<uint4>                VBuffer         : register(t4);
-Texture2D<float4>               WorldViewDir    : register(t5);
-Texture2D<float4>               ThroughputMap   : register(t6);
-Texture2D<float4>               EmissiveMap     : register(t7);
-Texture2D<float4>               PhotonFlux[2]   : register(t8);
-Texture2D<float4>               PhotonDir[2]    : register(t10);
-StructuredBuffer<AABB>          PhotonAABB[2]   : register(t12);
-RWTexture2D<float4>             PhotonImage     : register(u0);
+Texture2D<float4>               ThroughputMap   : register(t5);
+Texture2D<float4>               EmissiveMap     : register(t6);
+Texture2D<float4>               PhotonFlux[2]   : register(t7);
+Texture2D<float4>               PhotonDir[2]    : register(t9);
+StructuredBuffer<AABB>          PhotonAABB[2]   : register(t11);
+RWTexture2D<float4>             OutputImage     : register(u0);
 
 //-----------------------------------------------------------------------------
 //      球との交差判定を行います.
@@ -160,8 +159,6 @@ void OnRayGeneration()
     const uint2 launchId  = DispatchRaysIndex().xy;
     const uint2 launchDim = DispatchRaysDimensions().xy;
 
-    float3 V = -WorldViewDir[launchId].xyz;
-
     // Payloadを準備.
     Payload payload;
     payload.Counter     = 0;
@@ -183,6 +180,9 @@ void OnRayGeneration()
     float3 T = RecalcTangent(N, vertex.Tangent);
     B = normalize(cross(T, N));
 
+    // 視線ベクトル.
+    float3 V = -normalize(vertex.Position - SceneParam.CameraPosition.xyz);
+
     // 幾何法線.
     float3 gN = vertex.GeometryNormal;
 
@@ -197,7 +197,7 @@ void OnRayGeneration()
     float3 dir;
     float  pdf;
     float3 bsdf = EvaluateMaterial(V, T, B, N, u, 1.0f, material, dir, pdf);
-    bsdf /= pdf;
+    bsdf = SaturateFloat(bsdf / pdf);
 
     // レイを設定.
     RayDesc ray;
@@ -207,7 +207,7 @@ void OnRayGeneration()
     ray.Direction   = vertex.GeometryNormal;
 
     // レイフラグ設定.
-    uint rayFlags = RAY_FLAG_SKIP_CLOSEST_HIT_SHADER | RAY_FLAG_SKIP_TRIANGLES;
+    const uint rayFlags = RAY_FLAG_SKIP_CLOSEST_HIT_SHADER | RAY_FLAG_SKIP_TRIANGLES;
 
     // 放射輝度.
     float3 radiance = 0.0f.xxx;
@@ -249,13 +249,13 @@ void OnRayGeneration()
     // アキュムレーション.
     if (SceneParam.AccumulatedFrames > 0)
     {
-        float3 last = PhotonImage[launchId].xyz;
-        float frameCount = float(SceneParam.AccumulatedFrames);
+        float3 last = OutputImage[launchId].xyz;
+        float  frameCount = float(SceneParam.AccumulatedFrames);
         last *= frameCount;
         radiance += last;
         radiance /= (frameCount + 1.0f);
     }
 
     // ライティング結果を格納.
-    PhotonImage[launchId] = float4(radiance, 1.0f);
+    OutputImage[launchId] = float4(radiance, 1.0f);
 }

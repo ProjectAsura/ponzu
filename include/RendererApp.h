@@ -131,6 +131,7 @@ private:
     asdx::ColorTarget               m_Normal;                       // G-Buffer 法線.
     asdx::ColorTarget               m_Roughness;                    // G-Buffer ラフネス.
     asdx::ColorTarget               m_Velocity;                     // G-Buffer 速度.
+    asdx::ColorTarget               m_VBuffer;                      // V-Buffer (instanceId, primitiveId, barycentrics).
     asdx::DepthTarget               m_Depth;                        // 深度.
     asdx::ComputeTarget             m_Tonemapped;                   // トーンマップ適用済み.
     asdx::ComputeTarget             m_ColorHistory[2];              // カラーヒストリーバッファ.
