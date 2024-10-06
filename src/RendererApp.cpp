@@ -765,14 +765,15 @@ bool Renderer::SystemSetup()
 
 #if RTC_TARGET == RTC_DEVELOP
         std::vector<std::string> deps{
-            "../external/asdx12/res/Math.hlsli",
-            "../external/asdx12/res/BRDF.hlsli",
+            "../external/asdx12/res/shaders/Math.hlsli",
+            "../external/asdx12/res/shaders/BRDF.hlsli",
             "../res/shader/SceneParam.hlsli",
             "../res/shader/Common.hlsli",
         };
         m_RtPipe.SetIncludeDirs(kIncludeDirs);
         m_RtPipe.SetDependencies(deps);
         m_RtPipe.SetReloadPathLib("../res/shader/RtCamp.hlsl", "lib_6_6");
+        m_pShaderReloadListener.push_back(&m_RtPipe);
 #endif
     }
 

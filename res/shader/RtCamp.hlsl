@@ -7,7 +7,7 @@
 //-----------------------------------------------------------------------------
 // Includes
 //-----------------------------------------------------------------------------
-#include <Common.hlsli>
+#include "Common.hlsli"
 
 #define FURNANCE_TEST           (0)
 #define RIS_CANDIDATES_LIGHTS   (8)
@@ -125,7 +125,7 @@ bool SampleLightRIS
 
             // 裏面向きのライトは無視.
             float3 L = normalize(lightVector);
-            if (dot(surfaceNormal, L) < 1e-5f)
+            if (dot(surfaceNormal, L) < 1e-6f)
             { continue; }
 
             float candidatePdfG = Luminance(GetLightIntensity(candidateLight, lightDistance));
@@ -498,47 +498,8 @@ void OnGenerateRay()
         // 自己発光による放射輝度.
         Lo += W * material.Emissive;
 
-#if 1
-        // Next Event Estimation.
-        {
-            // BSDFがデルタ関数を持たない場合のみ.
-            if (!HasDelta(material))
-            {
-                // 物体からのレイの入出を考慮した法線.
-                float3 Nm = dot(N, V) < 0.0f ? N : -N;
-
-                // 光源をサンプリング.
-                float lightWeight;
-                float2 st = SampleMipMap(BackGround, float2(Random(seed), Random(seed)), lightWeight);
-
-                // 方向ベクトルに変換.
-                float3 dir = FromSphereMapCoord(st);
-
-                if (!CastShadowRay(vertex.Position, geometryNormal, dir, SceneParam.FarClip, instanceId, primitiveId))
-                {
-                    // シャドウレイを飛ばして，光源上のサンプリングとレイ原点の間に遮断が無い場合.
-                    float cosShadow = abs(dot(Nm, dir));
-                    float cosLight = 1.0f;
-
-                    // BSDF.
-                    float3 fs = SampleMaterial(V, Nm, dir, Random(seed), ior, material);
-
-                    // 幾何項.
-                    float G = (cosShadow * cosLight);
-
-                    // ライト.
-#if FURNANCE_TEST
-                    float3 Le = kFurnaceColor;
-#else
-                    float3 Le = SampleIBL(dir);
-#endif
-                    Lo += W * (fs * Le * G) * lightWeight / (4.0f * F_PI);
-                }
-            }
-        }
-#else
-        // Next Event Estimation.
-        if (!HasDelta(material))
+        // 直接光を評価.
+        //if (!HasDelta(material))
         {
             Light light;
             float lightWeight;
@@ -562,7 +523,6 @@ void OnGenerateRay()
                 }
             }
         }
-#endif
 
         // 最後のバウンスであれば早期終了(BRDFをサンプルしてもロジック的に反映されないため).
         if (bounce == MaxBounce - 1)

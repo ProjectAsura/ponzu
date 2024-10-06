@@ -9,10 +9,10 @@
 //-----------------------------------------------------------------------------
 // Includes
 //-----------------------------------------------------------------------------
-#include <Math.hlsli>
-#include <BRDF.hlsli>
-#include <SceneParam.hlsli>
-#include <Samplers.hlsli>
+#include "Math.hlsli"
+#include "BRDF.hlsli"
+#include "SceneParam.hlsli"
+#include "Samplers.hlsli"
 
 #define ENABLE_TEXTURED_MATERIAL    (0) // テクスチャ付きマテリアルを有効にする場合は 1.
 
@@ -363,7 +363,7 @@ void GetLightData(Light light, float3 hitPos, out float3 lightVector, out float 
     }
     else if (light.Type == LIGHT_TYPE_DIRECTIONAL)
     {
-        lightVector   = -light.Position;
+        lightVector   = -light.Position; // ライトに向かう方向.
         lightDistance = FLT_MAX;
     }
     else
