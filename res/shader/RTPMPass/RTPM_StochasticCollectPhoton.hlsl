@@ -184,11 +184,10 @@ void OnRayGeneration()
     float3 V = -normalize(vertex.Position - SceneParam.CameraPosition.xyz);
 
     // 幾何法線.
-    float3 gN = vertex.GeometryNormal;
+    float3 Ng = vertex.GeometryNormal;
 
-    // 法線が潜る場合は反転させる.
-    if (dot(gN, V) < 0.0f)
-    { gN = -gN; }
+    // 物体からのレイの入出を考慮した法線.
+    Ng = (dot(Ng, -V) <= 0.0f) ? Ng : -Ng;
  
     // 乱数生成.
     float3 u = float3(Random(payload.Seed), Random(payload.Seed), Random(payload.Seed));
@@ -218,7 +217,7 @@ void OnRayGeneration()
         // 検索の為にトレース.
         TraceRay(PhotonAS, rayFlags, 1, 0, 0, 0, ray, payload);
 
-        float3 radiancePhotons = PhotonContribution(payload, bsdf, gN, true);
+        float3 radiancePhotons = PhotonContribution(payload, bsdf, Ng, true);
         float  w = 1.0f / (F_PI * PassParam.CausticRadius * PassParam.CausticRadius);
         radiance += w * radiancePhotons;
 
@@ -232,7 +231,7 @@ void OnRayGeneration()
         // 検索の為にトレース.
         TraceRay(PhotonAS, rayFlags, 2, 0, 0, 0, ray, payload);
 
-        float3 radiancePhotons = PhotonContribution(payload, bsdf, gN, false);
+        float3 radiancePhotons = PhotonContribution(payload, bsdf, Ng, false);
         float  w = 1.0f / (F_PI * PassParam.GlobalRadius * PassParam.GlobalRadius);
         radiance += w * radiancePhotons;
 
