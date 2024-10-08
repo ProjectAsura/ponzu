@@ -588,17 +588,16 @@ float3 EvaluateMaterial
     float3 Nm = (into) ? N : -N;
     float3 Tm = (into) ? T : -T;
     float3 Bm = (into) ? B : -B;
-    
+
     // 屈折半透明.
     if (IsDielectric(material))
     {
         // Snellの法則.
-        float n1 = ior;
-        float n2 = material.Ior;
+        float n1 = (into) ? ior : material.Ior;
+        float n2 = (into) ? material.Ior : ior;
 
         // 相対屈折率.
-        float eta = (into) ? (n1/n2) : (n2/n1);
-        eta = SaturateFloat(eta);
+        float eta = SaturateFloat(n1 / n2);
 
         // cos(θ_1).
         float cosT1 = dot(V, Nm);
@@ -625,7 +624,7 @@ float3 EvaluateMaterial
         float F0 = SaturateFloat(Pow2(a) / Pow2(b));
 
         // Schlickの近似によるフレネル項.
-        float c  = 1.0f - ((into) ? -cosT1 : dot(V, -Nm));
+        float c  = (into) ? -cosT1 : dot(refraction, -Nm);
         float Fr = F_Schlick(F0, c);
 
         // 屈折光による放射輝度.

@@ -484,11 +484,12 @@ void OnGenerateRay()
         float3 T = RecalcTangent(N, vertex.Tangent);
         B = normalize(cross(T, N));
 
-        float3 gN = vertex.GeometryNormal;
+        float3 Ng = vertex.GeometryNormal;
         float3 V  = ray.Direction;
 
-        gN = (dot(gN, V) <= 0.0f) ? gN : -gN;
-        
+        // 物体からのレイの入出を考慮した法線.
+        Ng = (dot(Ng, V) <= 0.0f) ? Ng : -Ng;
+
         if (bounce == 0)
         { prevPosition = vertex.Position; }
         else if (bounce == 1)
@@ -502,7 +503,7 @@ void OnGenerateRay()
         {
             Light light;
             float lightWeight;
-            if (SampleLightRIS(seed, vertex.Position, N, light, lightWeight))
+            if (SampleLightRIS(seed, vertex.Position, Ng, light, lightWeight))
             {
                 float3 lightVector;
                 float lightDistance;
@@ -551,11 +552,17 @@ void OnGenerateRay()
         if (all(W <= (0.0f).xxx))
         { break; }
 
-        // 屈折率更新.
-        ior = IsDielectric(material) ? material.Ior : 1.0f;
+        if (IsDielectric(material))
+        {
+            // 屈折率更新.
+            ior = material.Ior;
+ 
+            // 屈折側になるので，オフセット計算に使用する法線は逆転する.
+            Ng = -Ng;
+        }
 
         // レイを更新.
-        ray.Origin    = OffsetRay(vertex.Position, gN);
+        ray.Origin    = OffsetRay(vertex.Position, Ng);
         ray.Direction = dir;
     }
 
