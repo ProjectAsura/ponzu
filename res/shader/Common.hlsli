@@ -477,20 +477,19 @@ float3 SampleMaterial
 )
 {
     // 物体からのレイの入出を考慮した法線.
-    float3 Nm = dot(N, V) < 0.0f ? -N : N;
+    bool into = dot(N, V) <= 0.0f;
+    float3 Nm = (into) ? N : -N;
 
     // 透明屈折.
     if (IsDielectric(material))
     {
-        // レイがオブジェクトから出射するか入射するか?
-        bool into = dot(N, Nm) > 0.0f;
-        
         // Snellの法則.
-        float n1 = (into) ? ior : material.Ior;
-        float n2 = (into) ? material.Ior : ior;
+        float n1 = ior;
+        float n2 = material.Ior;
 
         // 相対屈折率.
-        float eta = SaturateFloat(n1 / n2);
+        float eta = (into) ? (n1/n2) : (n2/n1);
+        eta = SaturateFloat(eta);
 
         // cos(θ_1).
         float cosT1 = dot(V, Nm);
@@ -499,7 +498,7 @@ float3 SampleMaterial
         float cos2T2 = 1.0f - Pow2(eta) * (1.0f - Pow2(cosT1));
 
         // 反射ベクトル.
-        float3 reflection = normalize(reflect(-V, Nm));
+        float3 reflection = normalize(reflect(V, Nm));
 
         // 全反射チェック.
         if (cos2T2 <= 0.0f)
@@ -508,14 +507,14 @@ float3 SampleMaterial
         }
 
         // 屈折ベクトル.
-        float3 refraction = normalize(refract(-V, Nm, eta));
+        float3 refraction = normalize(refract(V, Nm, eta));
 
         float a = n2 - n1;
         float b = n2 + n1;
         float F0 = SaturateFloat(Pow2(a) / Pow2(b));
 
         // Schlickの近似によるフレネル項.
-        float c = saturate((n1 > n2) ? dot(-Nm, refraction) : cosT1); // n1 > n2 なら cos(θ_2).
+        float c  = 1.0f - ((into) ? -cosT1 : dot(V, -Nm));
         float Fr = F_Schlick(F0, c);
 
         // 屈折光による放射輝度.
@@ -558,7 +557,7 @@ float3 SampleMaterial
 
         float NdotL = abs(dot(Nm, L));
         float NdotH = abs(dot(Nm, H));
-        float VdotH = abs(dot(V, H));
+        float VdotH = abs(dot(V,  H));
         float NdotV = abs(dot(Nm, V));
         
         float  G = G2_Smith(a, NdotL, NdotV) * (4.0f * NdotH * NdotV);
@@ -573,7 +572,7 @@ float3 SampleMaterial
 //-----------------------------------------------------------------------------
 float3 EvaluateMaterial
 (
-    float3      V,          // 視線ベクトル.(-Vでレイの方向ベクトルになる).
+    float3      V,          // レイの方向ベクトル.
     float3      T,          // 接線ベクトル.
     float3      B,          // 従接線ベクトル.
     float3      N,          // 法線ベクトル.
@@ -585,23 +584,21 @@ float3 EvaluateMaterial
 )
 {
     // 物体からのレイの入出を考慮した法線.
-    bool reverse = dot(N, V) < 0.0f;
-    float3 Nm = (reverse) ? -N : N;
-    float3 Tm = (reverse) ? -T : T;
-    float3 Bm = (reverse) ? -B : B;
+    bool into = dot(N, V) <= 0.0f;
+    float3 Nm = (into) ? N : -N;
+    float3 Tm = (into) ? T : -T;
+    float3 Bm = (into) ? B : -B;
     
     // 屈折半透明.
     if (IsDielectric(material))
     {
-        // レイがオブジェクトから出射するか入射するか?
-        bool into = dot(N, Nm) > 0.0f;
-    
         // Snellの法則.
-        float n1 = (into) ? ior : material.Ior;
-        float n2 = (into) ? material.Ior : ior;
+        float n1 = ior;
+        float n2 = material.Ior;
 
         // 相対屈折率.
-        float eta = SaturateFloat(n1 / n2);
+        float eta = (into) ? (n1/n2) : (n2/n1);
+        eta = SaturateFloat(eta);
 
         // cos(θ_1).
         float cosT1 = dot(V, Nm);
@@ -610,7 +607,7 @@ float3 EvaluateMaterial
         float cos2T2 = 1.0f - Pow2(eta) * (1.0f - Pow2(cosT1));
 
         // 反射ベクトル.
-        float3 reflection = normalize(reflect(-V, Nm));
+        float3 reflection = normalize(reflect(V, Nm));
 
         // 全反射チェック.
         if (cos2T2 <= 0.0f)
@@ -621,14 +618,14 @@ float3 EvaluateMaterial
         }
 
         // 屈折ベクトル.
-        float3 refraction = normalize(refract(-V, Nm, eta));
+        float3 refraction = normalize(refract(V, Nm, eta));
 
         float a = n2 - n1;
         float b = n2 + n1;
         float F0 = SaturateFloat(Pow2(a) / Pow2(b));
 
         // Schlickの近似によるフレネル項.
-        float c  = saturate((n1 > n2) ? dot(-Nm, refraction) : cosT1); // n1 > n2 なら cos(θ_2).
+        float c  = 1.0f - ((into) ? -cosT1 : dot(V, -Nm));
         float Fr = F_Schlick(F0, c);
 
         // 屈折光による放射輝度.
@@ -664,7 +661,7 @@ float3 EvaluateMaterial
     // 完全鏡面反射.
     else if (IsPerfectSpecular(material))
     {
-        float3 L = normalize(reflect(-V, Nm));
+        float3 L = normalize(reflect(V, Nm));
         dir = L;
         pdf = 1.0f;
 
@@ -698,11 +695,11 @@ float3 EvaluateMaterial
 
         float3 s = SampleGGX(u.xy, a);
         float3 H = normalize(Tm * s.x + Bm * s.y + Nm * s.z);
-        float3 L = normalize(reflect(-V, H));
+        float3 L = normalize(reflect(V, H));
 
         float NdotL = abs(dot(Nm, L));
         float NdotH = abs(dot(Nm, H));
-        float VdotH = abs(dot(V, H));
+        float VdotH = abs(dot(V,  H));
         float NdotV = abs(dot(Nm, V));
 
         float  D = D_GGX(NdotH, a);

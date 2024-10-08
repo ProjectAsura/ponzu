@@ -262,34 +262,34 @@ void OnGenerateRay()
         
         bool occluded = false;
         
-        // Next Event Estimation.
-        if (!HasDelta(material))
-        {
-            // 物体からのレイの入出を考慮した法線.
-            //float3 Nm = dot(N, -V) < 0.0f ? N : -N;
+        //// Next Event Estimation.
+        //if (!HasDelta(material))
+        //{
+        //    // 物体からのレイの入出を考慮した法線.
+        //    //float3 Nm = dot(N, -V) < 0.0f ? N : -N;
 
-            Light light;
-            float lightWeight;
-            if (SampleLightRIS(seed, vertex.Position, geometryNormal, light, lightWeight))
-            {
-                float3 lightVector;
-                float  lightDistance;
-                GetLightData(light, vertex.Position, lightVector, lightDistance);
+        //    Light light;
+        //    float lightWeight;
+        //    if (SampleLightRIS(seed, vertex.Position, geometryNormal, light, lightWeight))
+        //    {
+        //        float3 lightVector;
+        //        float  lightDistance;
+        //        GetLightData(light, vertex.Position, lightVector, lightDistance);
 
-                float3 dir = normalize(lightVector);
+        //        float3 dir = normalize(lightVector);
 
-                occluded = CastShadowRay(vertex.Position, geometryNormal, dir, lightDistance, instanceId, primitiveId);
-                {
-                    //// BSDF.
-                    //float3 fs = SampleMaterial(V, Nm, dir, Random(seed), material);
+        //        occluded = CastShadowRay(vertex.Position, geometryNormal, dir, lightDistance, instanceId, primitiveId);
+        //        {
+        //            //// BSDF.
+        //            //float3 fs = SampleMaterial(V, Nm, dir, Random(seed), material);
 
-                    //// Light
-                    //float3 Le = GetLightIntensity(light, lightDistance);
+        //            //// Light
+        //            //float3 Le = GetLightIntensity(light, lightDistance);
 
-                    //Lo += W * fs * Le * lightWeight;
-                }
-            }
-        }        
+        //            //Lo += W * fs * Le * lightWeight;
+        //        }
+        //    }
+        //}        
 
         // レイを更新.
         ray.Origin    = OffsetRay(vertex.Position, geometryNormal);
@@ -484,11 +484,10 @@ void OnGenerateRay()
         float3 T = RecalcTangent(N, vertex.Tangent);
         B = normalize(cross(T, N));
 
-        float3 geometryNormal = vertex.GeometryNormal;
-        float3 V = -ray.Direction;
+        float3 gN = vertex.GeometryNormal;
+        float3 V  = ray.Direction;
 
-        if (dot(geometryNormal, V) < 0.0f)
-        { geometryNormal = -geometryNormal; }
+        gN = (dot(gN, V) <= 0.0f) ? gN : -gN;
         
         if (bounce == 0)
         { prevPosition = vertex.Position; }
@@ -511,7 +510,9 @@ void OnGenerateRay()
 
                 float3 dir = normalize(lightVector);
 
-                if (!CastShadowRay(vertex.Position, geometryNormal, dir, lightDistance, instanceId, primitiveId))
+                #if 0 // 重いのでシャドウキャストしない. 正しくないのは目を瞑る.
+                if (!CastShadowRay(vertex.Position, gN, dir, lightDistance, instanceId, primitiveId))
+                #endif
                 {
                     // BSDF.
                     float3 fs = SampleMaterial(V, N, dir, Random(seed), ior, material);
@@ -550,8 +551,11 @@ void OnGenerateRay()
         if (all(W <= (0.0f).xxx))
         { break; }
 
+        // 屈折率更新.
+        ior = IsDielectric(material) ? material.Ior : 1.0f;
+
         // レイを更新.
-        ray.Origin    = OffsetRay(vertex.Position, geometryNormal);
+        ray.Origin    = OffsetRay(vertex.Position, gN);
         ray.Direction = dir;
     }
 

@@ -21,14 +21,14 @@ int main(int argc, char** argv)
     desc.OutputHeight       = 1080;
     desc.RenderWidth        = 1920;//1920;//2560;
     desc.RenderHeight       = 1080;//1080;//1440;
-    desc.FPS                = 23.9;
+    desc.FPS                = 24.0;
     desc.AnimationTimeSec   = 10.0;
 #if 1
-    desc.SceneFilePath      = "../res/scene/rtcamp_2024.scn";
-    desc.CameraFilePath     = "../res/scene/rtcamp_2024.cam";
+    desc.SceneFilePath      = "../etc/scene/rtcamp_2024.scn";
+    desc.CameraFilePath     = "../etc/scene/rtcamp_2024.cam";
 #else
-    desc.SceneFilePath      = "../res/scene/test_scene.scn";
-    desc.CameraFilePath     = "../res/scene/test_camera.cam";
+    desc.SceneFilePath      = "../etc/scene/test_scene.scn";
+    desc.CameraFilePath     = "../etc/scene/test_camera.cam";
 #endif
     r3d::Renderer app(desc);
     app.Run();
