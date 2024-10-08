@@ -1,1 +1,1 @@
-Start-Process ".\rtc.exe"
+.\rtc.exe
