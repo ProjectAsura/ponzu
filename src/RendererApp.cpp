@@ -2859,7 +2859,7 @@ void Renderer::Draw2D(float elapsedSec)
 
             offsetFrame++;
             frameCount--;
-            if (frameCount == 0)
+            if (frameCount <= 0)
             {
                 animating = false;
                 offsetFrame = 0;

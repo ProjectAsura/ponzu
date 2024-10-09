@@ -110,10 +110,11 @@ void SampleLightDirection
     float3          lightDir,
     float2          rnd,
     inout float3    newDir,
-    inout float     lightPdf,
+    inout float     lightPdf
     //float           cosThetaMax = F_PI
 )
 {
+    #if 0
     switch(lightType)
     {
     // Point
@@ -146,6 +147,7 @@ void SampleLightDirection
     float3 T, B;
     CalcONB(lightDir);
     newDir = normalize(newDir.x * T + newDir.y * B + newDir.z * lightDir);
+#endif
 }
 
 //-----------------------------------------------------------------------------
@@ -162,6 +164,8 @@ bool GetLight
     out float   lightPdf
 )
 {
+    return false;
+    #if 0
     int lightId = LightSampleMap[pixelIndex];
     if (lightId == 0)
         return false;
@@ -209,12 +213,13 @@ bool GetLight
 
     //float spotAngle = maxSpotAngle - penumbra * rnd.z;
     SampleLightDirection(lightType, lightDir, rnd.xy, lightDir, lightPdf);
-    
+
     lightFlux = lightIntensity * invPdf;
     if (analytic)
         lightFlux /= float(pixelIndex.x * pixelIndex.y) / lightPdf;
     else
         lightFlux *= lightArea * F_PI; // Lambertian Emitter.
+#endif
     
 }
 
@@ -302,17 +307,20 @@ void OnRayGeneration()
     payload.Init();
     payload.Seed = seed;
 
+    // 乱数生成.
+    float3 u = float3(Random(payload.Seed), Random(payload.Seed), Random(payload.Seed));    
+
     /// ライトデータを取得.
     uint   lightType;
     float3 lightPos;
     float3 lightDir;
     float  lightPdf;
     float3 lightFlux;
-    if (!GetLight(launchId, lightType, lightPos, lightDir, lightFlux, lightPdf))
+    if (!GetLight(launchId, u, lightType, lightPos, lightDir, lightFlux, lightPdf))
         return;
 
     // フォトンを生成.
-    PhotoInfo photon;
+    PhotonInfo photon;
     photon.Dir     = 0.0f.xxx;
     photon.Flux    = 0.0f.xxx;
     photon.FnTheta = 1.0f;
@@ -333,7 +341,7 @@ void OnRayGeneration()
     for(uint i=0; i<SceneParam.MaxBounce && !payload.Terminated; ++i)
     {
         // 光束を更新.
-        photon.Flux = lightFlux * payload.Throughtput;
+        photon.Flux = lightFlux * payload.Throughput;
 
         TraceRay(SceneAS, rayFlags, 0xff, 0, 0, 0, ray, payload);
         if (payload.Terminated)

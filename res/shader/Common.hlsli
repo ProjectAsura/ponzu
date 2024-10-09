@@ -272,24 +272,24 @@ Material GetMaterial(uint instanceId, float2 uv, float mip)
     ResMaterial mat = Materials[materialId];
     
  #if ENABLE_TEXTURED_MATERIAL
-    Texture2D<float4> baseColorMap = ResourceDescriptorHeap[mat.Textures0.x];
+    Texture2D<float4> baseColorMap = ResourceDescriptorHeap[mat.TextureMaps.x];
     float4 bc = baseColorMap.SampleLevel(LinearWrap, uv, mip);
 
-    Texture2D<float4> normalMap = ResourceDescriptorHeap[mat.Textures0.y];
+    Texture2D<float4> normalMap = ResourceDescriptorHeap[mat.TextureMaps.y];
     float3 n = normalMap.SampleLevel(LinearWrap, uv, mip).xyz;
     n = normalize(n * 2.0f - 1.0f);
 
-    Texture2D<float4> ormMap = ResourceDescriptorHeap[mat.Textures0.z];
-    float3 orm = ormiMap.SampleLevel(LinearWrap, uv, mip).rgb;
+    Texture2D<float4> ormMap = ResourceDescriptorHeap[mat.TextureMaps.z];
+    float3 orm = ormMap.SampleLevel(LinearWrap, uv, mip).rgb;
 
-    Texture2D<float4> emissiveMap = ResourceDescriptorHeap[mat.Textures0.w];
+    Texture2D<float4> emissiveMap = ResourceDescriptorHeap[mat.TextureMaps.w];
     float3 e = emissiveMap.SampleLevel(LinearWrap, uv, mip).rgb;
 
     Material param;
     param.BaseColor = bc * mat.BaseColor;
     param.Normal    = n;
-    param.Roughness = ormi.y * mat.Roughness;
-    param.Metalness = ormi.z * mat.Metalness;
+    param.Roughness = orm.y * mat.Roughness;
+    param.Metalness = orm.z * mat.Metalness;
     param.Emissive  = e * mat.Emissive.rgb * mat.Emissive.a;
     param.Ior       = mat.Ior;
 #else

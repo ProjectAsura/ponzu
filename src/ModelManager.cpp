@@ -82,7 +82,7 @@ bool ModelMgr::Init
             }
         }
 
-        if (!m_DefaultBaseColor.Init(pCmdList, res))
+        if (!m_White.Init(pCmdList, res))
         {
             ELOGA("Error : Default Base Color Init Failed.");
             res.Dispose();
@@ -335,10 +335,10 @@ void ModelMgr::Term()
     m_Meshes.clear();
     m_Meshes.shrink_to_fit();
 
-    m_DefaultBaseColor  .Term();
     m_DefaultNormal     .Term();
     m_DefaultORM        .Term();
     m_Black             .Term();
+    m_White             .Term();
 
     m_GeometryHandles.clear();
     m_InstanceHandles.clear();
@@ -563,7 +563,7 @@ uint32_t ModelMgr::GetSizeMB() const
 uint32_t ModelMgr::GetBaseColor(uint32_t handle)
 {
     return (handle == INVALID_MATERIAL_MAP) 
-        ? m_DefaultBaseColor.GetView()->GetDescriptorIndex()
+        ? m_White.GetView()->GetDescriptorIndex()
         : handle;
 }
 
@@ -593,7 +593,7 @@ uint32_t ModelMgr::GetOrm(uint32_t handle)
 uint32_t ModelMgr::GetEmissive(uint32_t handle)
 {
     return (handle == INVALID_MATERIAL_MAP)
-        ? m_Black.GetView()->GetDescriptorIndex()
+        ? m_White.GetView()->GetDescriptorIndex()
         : handle;
 }
 

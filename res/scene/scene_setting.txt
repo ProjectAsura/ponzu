@@ -3,7 +3,7 @@ export {
 };
 
 ibl {
-   -Path: ..\res\ibl\modern_buildings_2_2k.dds
+   -Path: ..\res\ibl\rostock_laage_airport_2k.dds
 };
 
 model {
@@ -34,7 +34,7 @@ material {
    -BaseColor: 0.95 0.95 0.95 1.0
    -Roughness: 1.0
    -Metalness: 0.0
-   -Ior: 2.4
+   -Ior: 2.0
 };
 
 material {
@@ -63,10 +63,18 @@ material {
 
 material {
    -Tag: Glass
-   -BaseColor: 1.0 1.0 1.0 1.0
+   -BaseColor: 0.5 0.5 0.5 1.0
    -Roughness: 0.0
    -Metalness: 0.0
-   -Ior: 1.2
+   -Ior: 1.4
+};
+
+material {
+   -Tag: Emitter
+   -BaseColor: 1.0 1.0 1.0 1.0
+   -Roughness: 1.0
+   -Metalness: 0.0
+   -Emissive: 1.0 0.5 0.5 10000.0
 };
 
 instance {
@@ -103,13 +111,13 @@ instance {
 instance {
     -Mesh: box
     -Material: Glass
-    -Scale: 0.001 0.05 2.00
-    -Translation: -6.5 3.0 -1.5
+    -Scale: 0.025 0.025 0.025
+    -Translation: -6.5 2.0 -6.5
 };
 
 directional_light {
    -Tag: MainDir
    -Direction: 0.0 -1.0 0.5
-   -Intensity: 1.0 1.0 1.0
+   -Intensity: 0.5 0.5 0.5
 };
 

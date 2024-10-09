@@ -317,10 +317,10 @@ private:
     D3D12_GPU_VIRTUAL_ADDRESS m_AddressTB = 0;
     D3D12_GPU_VIRTUAL_ADDRESS m_AddressMB = 0;
 
-    asdx::Texture   m_DefaultBaseColor;
     asdx::Texture   m_DefaultNormal;
     asdx::Texture   m_DefaultORM;
     asdx::Texture   m_Black;
+    asdx::Texture   m_White;
 
     std::vector<GeometryHandle> m_GeometryHandles;
     std::vector<InstanceHandle> m_InstanceHandles;

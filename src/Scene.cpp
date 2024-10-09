@@ -176,8 +176,8 @@ void UpdateTexture
             srcData.pData       = srcResource->Pixels();
             srcData.RowPitch    = srcResource->Pitch();
             srcData.SlicePitch  = srcResource->SlicePitch();
-            assert(layouts[i].Footprint.Width  == srcResource->Width());
-            assert(layouts[i].Footprint.Height == srcResource->Height());
+            //assert(layouts[i].Footprint.Width  == srcResource->Width());
+            //assert(layouts[i].Footprint.Height == srcResource->Height());
 
             D3D12_MEMCPY_DEST dstData = {};
             dstData.pData       = pData + layouts[i].Offset;
@@ -735,10 +735,18 @@ bool Scene::Init(const char* path, ID3D12GraphicsCommandList4* pCmdList)
         auto srcLights    = resScene->Lights();
         auto srcLightTags = resScene->LightTags();
 
-        // ライトがあれば初期化.
-        if (count > 0)
+        if (count != 0)
         {
             if (!m_LB.Init(pCmdList, count, stride, srcLights->data()))
+            {
+                ELOGA("Error : LB::Init() Failed.");
+                return false;
+            }
+        }
+        else
+        {
+            ResLight dummy = {};
+            if (!m_LB.Init(pCmdList, 1, stride, &dummy))
             {
                 ELOGA("Error : LB::Init() Failed.");
                 return false;
@@ -1139,6 +1147,7 @@ bool SceneExporter::LoadFromTXT(const char* path, std::string& exportPath)
                         retId = textureIndex;
                         textureIndex++;
                         textureDic[path] = retId;
+                        AddTexture(path.c_str());
                     }
                 };
 
