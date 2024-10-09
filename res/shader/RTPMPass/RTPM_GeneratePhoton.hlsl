@@ -13,7 +13,8 @@
 //-----------------------------------------------------------------------------
 // Constant Values.
 //-----------------------------------------------------------------------------
-static const uint kInfoTexHeight = 512;
+static const uint  kInfoTexHeight = 512;
+static const float kRayTMax = 0.0f;
 
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -103,6 +104,120 @@ bool Culling(float3 origin)
     return (CullingHashBuffer[hashId] == 0);
 }
 
+void SampleLightDirection
+(
+    uint            lightType,
+    float3          lightDir,
+    float2          rnd,
+    inout float3    newDir,
+    inout float     lightPdf,
+    //float           cosThetaMax = F_PI
+)
+{
+    switch(lightType)
+    {
+    // Point
+    case 0:
+    default:
+        {
+            newDir = UniformSampleSphere(rnd);
+            lightPdf = 1.0f / (4.0f * F_PI);
+        }
+        break;
+
+    // Area
+    case 1:
+        {
+            newDir = SampleCosineHemisphere(rnd);
+            lightPdf = newDir.z / F_PI;
+        }
+        break;
+
+    //// Spot
+    //case 2:
+    //    {
+    //        newDir = SampleCone(rnd, cosThetaMax);
+    //        lightPdf = 1.0f / (F_2PI * (1.0f - cosThetaMax));
+    //    }
+    //    break;
+    }
+
+    // ライト空間に変換.
+    float3 T, B;
+    CalcONB(lightDir);
+    newDir = normalize(newDir.x * T + newDir.y * B + newDir.z * lightDir);
+}
+
+//-----------------------------------------------------------------------------
+//      ライトデータを取得します.
+//-----------------------------------------------------------------------------
+bool GetLight
+(
+    uint2       pixelIndex,
+    float3      rnd,
+    out uint    lightType,
+    out float3  lightPos,
+    out float3  lightDir,
+    out float3  lightFlux,
+    out float   lightPdf
+)
+{
+    int lightId = LightSampleMap[pixelIndex];
+    if (lightId == 0)
+        return false;
+ 
+    bool analytic = (lightId < 0);
+    if (analytic)
+        lightId *= -1;
+    lightId -= -1;
+
+    lightPos  = 0.0f.xxx;
+    lightDir  = float3(0.0f, 1.0f, 0.0f);
+    lightType = 0;
+
+    float  invPdf           = PassParam.AnalyticInvPdf;
+    float3 lightIntensity   = 0.0f.xxx;
+    float  lightArea        = 1.0f;
+    //float  maxSpotAngle     = 0.0f;
+    //float  penumbra         = 0.0f;
+
+    if (analytic)
+    {
+        // シーンからライトを取得.
+        LightData currentLight = Lights[lightId];
+
+        // ポイントライトのみサポート.
+        if (currentLight.Type != uint(0))
+            return false;
+        
+        //if (currentLight.OpeningAngle < F_PIDIV2)
+        //    lightType = 2;
+
+        lightPos        = currentLight.posW;
+        lightDir        = currentLight.dirW;
+        lightIntensity  = currentLight.Itensity;
+        //maxSpotAngle    = currentLight.OpeningAngle;
+        //penumbra        = currentLight.PenumbraAngle;
+       
+    }
+    //// Emissive
+    //else
+    //{
+    //    invPdf = 1.0f / PassParam.PhotonCountPerEmissive[lightId];
+    //    const uint tri
+    //}
+
+    //float spotAngle = maxSpotAngle - penumbra * rnd.z;
+    SampleLightDirection(lightType, lightDir, rnd.xy, lightDir, lightPdf);
+    
+    lightFlux = lightIntensity * invPdf;
+    if (analytic)
+        lightFlux /= float(pixelIndex.x * pixelIndex.y) / lightPdf;
+    else
+        lightFlux *= lightArea * F_PI; // Lambertian Emitter.
+    
+}
+
 //-----------------------------------------------------------------------------
 //      非交差時の処理です.
 //-----------------------------------------------------------------------------
@@ -187,21 +302,14 @@ void OnRayGeneration()
     payload.Init();
     payload.Seed = seed;
 
-    // ライト番号とタイプを取得.
-    int lightId = LightSampleMap[launchId];
-    if (lightId == 0)
+    /// ライトデータを取得.
+    uint   lightType;
+    float3 lightPos;
+    float3 lightDir;
+    float  lightPdf;
+    float3 lightFlux;
+    if (!GetLight(launchId, lightType, lightPos, lightDir, lightFlux, lightPdf))
         return;
-    
-    // ライト設定.
-    {
-        
-    }
-
-    // ライトの方向ベクトルを求める.
-    float lightDirPdf = 0.0f;
-    float3 lightRandom = float3(Random(payload.Seed), Random(payload.Seed), Random(payload.Seed));
-    // spotAngle
-    //CalcLightDirection(lightDirPdf, lightRandom, ray.Direction, lightDirPdf, type);
 
     // フォトンを生成.
     PhotoInfo photon;
@@ -211,17 +319,10 @@ void OnRayGeneration()
     photon.FnPhi   = 1.0f;
     float3 photonPos = 0.0f.xxx;
 
-    // ライトの光束.
-    float3 lightFlux = lightIntensity * invPdf;
-    if (analytic)
-        lightFlux /= float(launchDim.x * launchDim.y) * lightDirPdf;
-    else
-        lightFlux *= lightArea * F_PI; // Lambertian Emitter.
-
     // レイの設定.
     RayDesc ray;
     ray.Origin      = lightPos + 0.01f * lightDir;
-    ray.Direction   = lightDirPdf;
+    ray.Direction   = lightDir;
     ray.TMin        = 0.01f;
     ray.TMax        = kRayTMax;
 
@@ -231,6 +332,9 @@ void OnRayGeneration()
 
     for(uint i=0; i<SceneParam.MaxBounce && !payload.Terminated; ++i)
     {
+        // 光束を更新.
+        photon.Flux = lightFlux * payload.Throughtput;
+
         TraceRay(SceneAS, rayFlags, 0xff, 0, 0, 0, ray, payload);
         if (payload.Terminated)
             break;
