@@ -118,6 +118,6 @@ instance {
 directional_light {
    -Tag: MainDir
    -Direction: 0.0 -1.0 0.5
-   -Intensity: 0.5 0.5 0.5
+   -Intensity: 1.0 1.0 1.0
 };
 

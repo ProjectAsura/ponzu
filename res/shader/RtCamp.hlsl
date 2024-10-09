@@ -489,6 +489,7 @@ void OnGenerateRay()
 
         // 物体からのレイの入出を考慮した法線.
         Ng = (dot(Ng, V) <= 0.0f) ? Ng : -Ng;
+        float3 Ns = dot(vertex.GeometryNormal, V) <= 0.0f ? N : -N;
 
         if (bounce == 0)
         { prevPosition = vertex.Position; }
@@ -499,11 +500,11 @@ void OnGenerateRay()
         Lo += W * material.Emissive;
 
         // 直接光を評価.
-        //if (!HasDelta(material))
+        if (!HasDelta(material))
         {
             Light light;
             float lightWeight;
-            if (SampleLightRIS(seed, vertex.Position, Ng, light, lightWeight))
+            if (SampleLightRIS(seed, vertex.Position, Ns, light, lightWeight))
             {
                 float3 lightVector;
                 float lightDistance;
