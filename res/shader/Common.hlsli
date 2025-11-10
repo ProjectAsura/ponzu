@@ -183,6 +183,30 @@ uint4 PCG(uint4 v)
 }
 
 //-----------------------------------------------------------------------------
+//      IbukiHashによる疑似乱数を生成します.
+//-----------------------------------------------------------------------------
+float Ibuki(inout uint4 u)
+{
+    // IbukiHash by Andante
+    // This work is marked with CC0 1.0. To view a copy of this license, visit https://creativecommons.org/publicdomain/zero/1.0/
+
+    // [Andante 2024] Andaten, "屋根裏工房改: 高速で頑健なシェーダー乱数の比較と提案", 2024.
+    // https://andantesoft.hatenablog.com/entry/2024/12/19/193517
+    const uint4 mult = uint4(0xae3cc725, 0x9fe72885, 0xae36bfb5, 0x82c1fcad);
+
+    u = u * mult;
+    u ^= u.wxyz ^ u >> 13;
+
+    uint r = dot(u, mult);
+ 
+    r ^= r >> 11;
+    r = (r * r) ^ r;
+
+    return r * 2.3283064365386962890625e-10;
+}
+
+
+//-----------------------------------------------------------------------------
 //      floatに変換します.
 //-----------------------------------------------------------------------------
 float ToFloat(uint x)
@@ -200,7 +224,8 @@ uint4 SetSeed(uint2 pixelCoords, uint frameIndex)
 float Random(inout uint4 seed)
 {
     seed.w++;
-    return ToFloat(PCG(seed).x);
+    //return ToFloat(PCG(seed).x);
+    return Ibuki(seed);
 }
 
 //-----------------------------------------------------------------------------
@@ -244,7 +269,6 @@ SurfaceHit GetSurfaceHit(uint instanceId, uint triangleIndex, float2 barycentric
         uint address = indices[i] * VERTEX_STRIDE;
 
         v[i] = asfloat(vertices.Load3(address));
-        v[i] = mul(world, float4(v[i], 1.0f)).xyz;
 
         surfaceHit.Position += v[i] * factor[i];
         surfaceHit.Normal   += asfloat(vertices.Load3(address + NORMAL_OFFSET))   * factor[i];
@@ -252,12 +276,13 @@ SurfaceHit GetSurfaceHit(uint instanceId, uint triangleIndex, float2 barycentric
         surfaceHit.TexCoord += asfloat(vertices.Load2(address + TEXCOORD_OFFSET)) * factor[i];
     }
 
-    surfaceHit.Normal  = normalize(mul((float3x3)world, normalize(surfaceHit.Normal)));
-    surfaceHit.Tangent = normalize(mul((float3x3)world, normalize(surfaceHit.Tangent)));
+    surfaceHit.Position = mul(surfaceHit.Position, world);
+    surfaceHit.Normal  = normalize(mul(normalize(surfaceHit.Normal), (float3x3)world));
+    surfaceHit.Tangent = normalize(mul(normalize(surfaceHit.Tangent), (float3x3)world));
 
-    float3 e0 = v[0] - v[1];
-    float3 e1 = v[2] - v[1];
-    surfaceHit.GeometryNormal = normalize(cross(e0, e1));
+    float3 e0 = v[1] - v[0];
+    float3 e1 = v[2] - v[0];
+    surfaceHit.GeometryNormal = normalize(mul(cross(e0, e1), (float3x3)world));
 
     return surfaceHit;
 }
@@ -336,10 +361,10 @@ float3 GetLightIntensity(Light light, float dist)
 {
     if (light.Type == LIGHT_TYPE_POINT)
     {
-    #if 0
+    #if 1
         const float radiusSq    = light.Radius * light.Radius;
         const float distSq      = dist * dist;
-        const float attenuation = 2.0f / (distSq + radiusSq + dist * sqrt(max(distSq + radiusSq, 0.0f)));
+        const float attenuation = 2.0f / (distSq + radiusSq + dist * sqrt(max(distSq + radiusSq, 1e-6f)));
         return light.Intensity * attenuation;
     #else
         return light.Intensity / max(light.Radius * light.Radius, 1e-6f);
@@ -409,7 +434,7 @@ RayDesc GeneratePinholeCameraRay(float2 pixel)
     ray.Origin      = GetPosition(SceneParam.View);
     ray.Direction   = CalcRayDir(pixel, SceneParam.View, SceneParam.Proj);
     ray.TMin        = T_MIN;
-    ray.TMax        = FLT_MAX;
+    ray.TMax        = HALF_MAX;
 
     return ray;
 }

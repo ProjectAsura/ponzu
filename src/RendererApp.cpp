@@ -2223,55 +2223,55 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
 
     auto jitterOffset = CalcTemporalJitterOffset(m_TemporalJitterIndex);
 
-    // プレブラー処理.
-    {
-        RTC_DEBUG_CODE(ScopedMarker marker(pCmd, "PreBlur"));
+    //// プレブラー処理.
+    //{
+    //    RTC_DEBUG_CODE(ScopedMarker marker(pCmd, "PreBlur"));
 
-        auto rotator = CalcRotator(randomAngle.x, randomScale.x);
+    //    auto rotator = CalcRotator(randomAngle.x, randomScale.x);
 
-        auto& inputBuffer = m_Tonemapped;
+    //    auto& inputBuffer = m_Tonemapped;
 
-        asdx::Vector4 blurOffset = {};
-        blurOffset.x = 1.0f / float(m_SceneDesc.RenderWidth);
-        blurOffset.y = 0.0f;
-        blurOffset.z = 1.0f;
+    //    asdx::Vector4 blurOffset = {};
+    //    blurOffset.x = 1.0f / float(m_SceneDesc.RenderWidth);
+    //    blurOffset.y = 0.0f;
+    //    blurOffset.z = 1.0f;
 
-        m_BlurTarget0      .ChangeState(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-        m_Depth            .ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        m_Normal           .ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        m_Roughness        .ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        m_HitDistance      .ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        m_AccumulationCount.ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        inputBuffer        .ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    //    m_BlurTarget0      .ChangeState(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    //    m_Depth            .ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    //    m_Normal           .ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    //    m_Roughness        .ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    //    m_HitDistance      .ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    //    m_AccumulationCount.ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    //    inputBuffer        .ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
-        pCmd->SetComputeRootSignature(m_DenoiserRootSig.GetPtr());
-        m_PreBlurPipe.SetState(pCmd);
-        pCmd->SetComputeRootConstantBufferView(DENOISER_PARAM_CBV0, m_DenoiseParam.GetResource()->GetGPUVirtualAddress());
-        pCmd->SetComputeRoot32BitConstants(DENOISER_PARAM_CBV1, 3, &blurOffset, 0);
-        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV0, m_Depth            .GetSRV()->GetHandleGPU());
-        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV1, m_Normal           .GetSRV()->GetHandleGPU());
-        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV2, m_Roughness        .GetSRV()->GetHandleGPU());
-        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV3, m_HitDistance      .GetSRV()->GetHandleGPU());
-        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV4, inputBuffer        .GetSRV()->GetHandleGPU());
-        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV5, m_AccumulationCount.GetSRV()->GetHandleGPU());
-        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_UAV0, m_BlurTarget0      .GetUAV()->GetHandleGPU());
-        pCmd->Dispatch(threadX, threadY, 1);
+    //    pCmd->SetComputeRootSignature(m_DenoiserRootSig.GetPtr());
+    //    m_PreBlurPipe.SetState(pCmd);
+    //    pCmd->SetComputeRootConstantBufferView(DENOISER_PARAM_CBV0, m_DenoiseParam.GetResource()->GetGPUVirtualAddress());
+    //    pCmd->SetComputeRoot32BitConstants(DENOISER_PARAM_CBV1, 3, &blurOffset, 0);
+    //    pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV0, m_Depth            .GetSRV()->GetHandleGPU());
+    //    pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV1, m_Normal           .GetSRV()->GetHandleGPU());
+    //    pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV2, m_Roughness        .GetSRV()->GetHandleGPU());
+    //    pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV3, m_HitDistance      .GetSRV()->GetHandleGPU());
+    //    pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV4, inputBuffer        .GetSRV()->GetHandleGPU());
+    //    pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV5, m_AccumulationCount.GetSRV()->GetHandleGPU());
+    //    pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_UAV0, m_BlurTarget0      .GetUAV()->GetHandleGPU());
+    //    pCmd->Dispatch(threadX, threadY, 1);
 
-        asdx::UAVBarrier(pCmd, m_BlurTarget0.GetResource());
+    //    asdx::UAVBarrier(pCmd, m_BlurTarget0.GetResource());
 
-        blurOffset.x = 0.0f;
-        blurOffset.y = 1.0f / float(m_SceneDesc.RenderHeight);
+    //    blurOffset.x = 0.0f;
+    //    blurOffset.y = 1.0f / float(m_SceneDesc.RenderHeight);
 
-        m_BlurTarget1.ChangeState(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-        m_BlurTarget0.ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    //    m_BlurTarget1.ChangeState(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    //    m_BlurTarget0.ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
-        pCmd->SetComputeRoot32BitConstants(DENOISER_PARAM_CBV1, 3, &blurOffset, 0);
-        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV4, m_BlurTarget0.GetSRV()->GetHandleGPU());
-        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_UAV0, m_BlurTarget1.GetUAV()->GetHandleGPU());
-        pCmd->Dispatch(threadX, threadY, 1);
+    //    pCmd->SetComputeRoot32BitConstants(DENOISER_PARAM_CBV1, 3, &blurOffset, 0);
+    //    pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV4, m_BlurTarget0.GetSRV()->GetHandleGPU());
+    //    pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_UAV0, m_BlurTarget1.GetUAV()->GetHandleGPU());
+    //    pCmd->Dispatch(threadX, threadY, 1);
 
-        asdx::UAVBarrier(pCmd, m_BlurTarget1.GetResource());
-    }
+    //    asdx::UAVBarrier(pCmd, m_BlurTarget1.GetResource());
+    //}
 
     // テンポラルアキュムレーション処理.
     {
@@ -2290,17 +2290,19 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
 
         uint32_t flags = (m_ResetHistory) ? 0x1 : 0;
 
+        auto& inputBuffer = m_Tonemapped;
+
         m_AccumulationColorHistory[m_PrevHistoryIndex].ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         m_AccumulationColorHistory[m_CurrHistoryIndex].ChangeState(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         m_Velocity.ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         m_AccumulationCount.ChangeState(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-        m_BlurTarget1.ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        inputBuffer.ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
         pCmd->SetComputeRootSignature(m_DenoiserRootSig.GetPtr());
         m_TemporalAccumulationPipe.SetState(pCmd);
         pCmd->SetComputeRoot32BitConstants(DENOISER_PARAM_CBV1, 4, &constants, 0);
         pCmd->SetComputeRoot32BitConstants(DENOISER_PARAM_CBV2, 1, &flags, 0);
-        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV0, m_BlurTarget1.GetSRV()->GetHandleGPU());
+        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV0, inputBuffer.GetSRV()->GetHandleGPU());
         pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV1, m_AccumulationColorHistory[m_PrevHistoryIndex].GetSRV()->GetHandleGPU());
         pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV2, m_Velocity.GetSRV()->GetHandleGPU());
         pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_UAV0, m_AccumulationColorHistory[m_CurrHistoryIndex].GetUAV()->GetHandleGPU());
@@ -2310,87 +2312,87 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         asdx::UAVBarrier(pCmd, m_AccumulationColorHistory[m_CurrHistoryIndex].GetResource());
     }
 
-    // ブラー処理.
-    {
-        RTC_DEBUG_CODE(ScopedMarker marker(pCmd, "DenoiseBlur"));
+    //// ブラー処理.
+    //{
+    //    RTC_DEBUG_CODE(ScopedMarker marker(pCmd, "DenoiseBlur"));
 
-        m_BlurTarget0      .ChangeState(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-        m_AccumulationCount.ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    //    m_BlurTarget0      .ChangeState(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    //    m_AccumulationCount.ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
-        asdx::Vector4 blurOffset = {};
-        blurOffset.x = 1.0f / float(m_SceneDesc.RenderWidth);
-        blurOffset.y = 0.0f;
-        blurOffset.z = 1.0f;
+    //    asdx::Vector4 blurOffset = {};
+    //    blurOffset.x = 1.0f / float(m_SceneDesc.RenderWidth);
+    //    blurOffset.y = 0.0f;
+    //    blurOffset.z = 1.0f;
 
-        pCmd->SetComputeRootSignature(m_DenoiserRootSig.GetPtr());
-        m_DenoiserPipe.SetState(pCmd);
-        pCmd->SetComputeRootConstantBufferView(DENOISER_PARAM_CBV0, m_DenoiseParam.GetResource()->GetGPUVirtualAddress());
-        pCmd->SetComputeRoot32BitConstants(DENOISER_PARAM_CBV1, 3, &blurOffset, 0);
-        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV0, m_Depth.GetSRV()->GetHandleGPU());
-        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV1, m_Normal.GetSRV()->GetHandleGPU());
-        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV2, m_Roughness.GetSRV()->GetHandleGPU());
-        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV3, m_HitDistance.GetSRV()->GetHandleGPU());
-        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV4, m_AccumulationColorHistory[m_CurrHistoryIndex].GetSRV()->GetHandleGPU());
-        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV5, m_AccumulationCount.GetSRV()->GetHandleGPU());
-        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_UAV0, m_BlurTarget0.GetUAV()->GetHandleGPU());
-        pCmd->Dispatch(threadX, threadY, 1);
+    //    pCmd->SetComputeRootSignature(m_DenoiserRootSig.GetPtr());
+    //    m_DenoiserPipe.SetState(pCmd);
+    //    pCmd->SetComputeRootConstantBufferView(DENOISER_PARAM_CBV0, m_DenoiseParam.GetResource()->GetGPUVirtualAddress());
+    //    pCmd->SetComputeRoot32BitConstants(DENOISER_PARAM_CBV1, 3, &blurOffset, 0);
+    //    pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV0, m_Depth.GetSRV()->GetHandleGPU());
+    //    pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV1, m_Normal.GetSRV()->GetHandleGPU());
+    //    pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV2, m_Roughness.GetSRV()->GetHandleGPU());
+    //    pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV3, m_HitDistance.GetSRV()->GetHandleGPU());
+    //    pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV4, m_AccumulationColorHistory[m_CurrHistoryIndex].GetSRV()->GetHandleGPU());
+    //    pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV5, m_AccumulationCount.GetSRV()->GetHandleGPU());
+    //    pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_UAV0, m_BlurTarget0.GetUAV()->GetHandleGPU());
+    //    pCmd->Dispatch(threadX, threadY, 1);
 
-        asdx::UAVBarrier(pCmd, m_BlurTarget0.GetResource());
+    //    asdx::UAVBarrier(pCmd, m_BlurTarget0.GetResource());
 
-        blurOffset.x = 0.0f;
-        blurOffset.y = 1.0f / float(m_SceneDesc.RenderHeight);
+    //    blurOffset.x = 0.0f;
+    //    blurOffset.y = 1.0f / float(m_SceneDesc.RenderHeight);
 
-        m_BlurTarget0.ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        m_BlurTarget1.ChangeState(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    //    m_BlurTarget0.ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    //    m_BlurTarget1.ChangeState(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-        pCmd->SetComputeRoot32BitConstants(DENOISER_PARAM_CBV1, 3, &blurOffset, 0);
-        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV4, m_BlurTarget0.GetSRV()->GetHandleGPU());
-        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_UAV0, m_BlurTarget1.GetUAV()->GetHandleGPU());
-        pCmd->Dispatch(threadX, threadY, 1);
+    //    pCmd->SetComputeRoot32BitConstants(DENOISER_PARAM_CBV1, 3, &blurOffset, 0);
+    //    pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV4, m_BlurTarget0.GetSRV()->GetHandleGPU());
+    //    pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_UAV0, m_BlurTarget1.GetUAV()->GetHandleGPU());
+    //    pCmd->Dispatch(threadX, threadY, 1);
 
-        asdx::UAVBarrier(pCmd, m_BlurTarget1.GetResource());
-    }
+    //    asdx::UAVBarrier(pCmd, m_BlurTarget1.GetResource());
+    //}
 
-    // ポストブラー処理.
-    {
-        RTC_DEBUG_CODE(ScopedMarker marker(pCmd, "PostBlur"));
+    //// ポストブラー処理.
+    //{
+    //    RTC_DEBUG_CODE(ScopedMarker marker(pCmd, "PostBlur"));
 
-        asdx::Vector4 blurOffset = {};
-        blurOffset.x = 1.0f / float(m_SceneDesc.RenderWidth);
-        blurOffset.y = 0.0f;
-        blurOffset.z = 0.5f;
+    //    asdx::Vector4 blurOffset = {};
+    //    blurOffset.x = 1.0f / float(m_SceneDesc.RenderWidth);
+    //    blurOffset.y = 0.0f;
+    //    blurOffset.z = 0.5f;
 
-        m_BlurTarget0.ChangeState(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-        m_BlurTarget1.ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    //    m_BlurTarget0.ChangeState(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    //    m_BlurTarget1.ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
-        pCmd->SetComputeRootSignature(m_DenoiserRootSig.GetPtr());
-        m_PostBlurPipe.SetState(pCmd);
-        pCmd->SetComputeRootConstantBufferView(DENOISER_PARAM_CBV0, m_DenoiseParam.GetResource()->GetGPUVirtualAddress());
-        pCmd->SetComputeRoot32BitConstants(DENOISER_PARAM_CBV1, 3, &blurOffset, 0);
-        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV0, m_Depth.GetSRV()->GetHandleGPU());
-        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV1, m_Normal.GetSRV()->GetHandleGPU());
-        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV2, m_Roughness.GetSRV()->GetHandleGPU());
-        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV3, m_HitDistance.GetSRV()->GetHandleGPU());
-        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV4, m_BlurTarget1.GetSRV()->GetHandleGPU());
-        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV5, m_AccumulationCount.GetSRV()->GetHandleGPU());
-        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_UAV0, m_BlurTarget0.GetUAV()->GetHandleGPU());
-        pCmd->Dispatch(threadX, threadY, 1);
+    //    pCmd->SetComputeRootSignature(m_DenoiserRootSig.GetPtr());
+    //    m_PostBlurPipe.SetState(pCmd);
+    //    pCmd->SetComputeRootConstantBufferView(DENOISER_PARAM_CBV0, m_DenoiseParam.GetResource()->GetGPUVirtualAddress());
+    //    pCmd->SetComputeRoot32BitConstants(DENOISER_PARAM_CBV1, 3, &blurOffset, 0);
+    //    pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV0, m_Depth.GetSRV()->GetHandleGPU());
+    //    pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV1, m_Normal.GetSRV()->GetHandleGPU());
+    //    pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV2, m_Roughness.GetSRV()->GetHandleGPU());
+    //    pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV3, m_HitDistance.GetSRV()->GetHandleGPU());
+    //    pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV4, m_BlurTarget1.GetSRV()->GetHandleGPU());
+    //    pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV5, m_AccumulationCount.GetSRV()->GetHandleGPU());
+    //    pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_UAV0, m_BlurTarget0.GetUAV()->GetHandleGPU());
+    //    pCmd->Dispatch(threadX, threadY, 1);
 
-        asdx::UAVBarrier(pCmd, m_BlurTarget0.GetResource());
+    //    asdx::UAVBarrier(pCmd, m_BlurTarget0.GetResource());
 
-        blurOffset.x = 0.0f;
-        blurOffset.y = 1.0f / float(m_SceneDesc.RenderHeight);
+    //    blurOffset.x = 0.0f;
+    //    blurOffset.y = 1.0f / float(m_SceneDesc.RenderHeight);
 
-        m_BlurTarget0.ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        m_BlurTarget1.ChangeState(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    //    m_BlurTarget0.ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    //    m_BlurTarget1.ChangeState(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-        pCmd->SetComputeRoot32BitConstants(DENOISER_PARAM_CBV1, 3, &blurOffset, 0);
-        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV4, m_BlurTarget0.GetSRV()->GetHandleGPU());
-        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_UAV0, m_BlurTarget1.GetUAV()->GetHandleGPU());
-        pCmd->Dispatch(threadX, threadY, 1);
+    //    pCmd->SetComputeRoot32BitConstants(DENOISER_PARAM_CBV1, 3, &blurOffset, 0);
+    //    pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV4, m_BlurTarget0.GetSRV()->GetHandleGPU());
+    //    pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_UAV0, m_BlurTarget1.GetUAV()->GetHandleGPU());
+    //    pCmd->Dispatch(threadX, threadY, 1);
 
-        asdx::UAVBarrier(pCmd, m_BlurTarget1.GetResource());
-    }
+    //    asdx::UAVBarrier(pCmd, m_BlurTarget1.GetResource());
+    //}
 
     // テンポラルスタビライゼーション処理.
     {
@@ -2409,15 +2411,17 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
 
         uint32_t flags = (m_ResetHistory) ? 0x1 : 0;
 
+        auto& inputBuffer = m_AccumulationColorHistory[m_CurrHistoryIndex];
+
         m_StabilizationColorHistory[m_PrevHistoryIndex].ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         m_StabilizationColorHistory[m_CurrHistoryIndex].ChangeState(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-        m_BlurTarget1.ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        inputBuffer.ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
         pCmd->SetComputeRootSignature(m_DenoiserRootSig.GetPtr());
         m_TemporalStabilizationPipe.SetState(pCmd);
         pCmd->SetComputeRoot32BitConstants(DENOISER_PARAM_CBV1, 4, &constants, 0);
         pCmd->SetComputeRoot32BitConstants(DENOISER_PARAM_CBV2, 1, &flags, 0);
-        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV0, m_BlurTarget1.GetSRV()->GetHandleGPU());
+        pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV0, inputBuffer.GetSRV()->GetHandleGPU());
         pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV1, m_StabilizationColorHistory[m_PrevHistoryIndex].GetSRV()->GetHandleGPU());
         pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV2, m_Velocity.GetSRV()->GetHandleGPU());
         pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_UAV0, m_StabilizationColorHistory[m_CurrHistoryIndex].GetUAV()->GetHandleGPU());

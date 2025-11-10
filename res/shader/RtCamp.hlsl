@@ -41,7 +41,7 @@
 //#define DEBUG_DEPTH_INDEX   SceneParam.MaxBounce
 #define DEBUG_DEPTH_INDEX   0
 //#define DEBUG_OUT_FLAG      OUT_DEFAULT
-#define DEBUG_OUT_FLAG      OUT_RAY_DIR
+#define DEBUG_OUT_FLAG      OUT_GEOMETRY_NORMAL
 //------------------------------------------------
 #endif
 
@@ -80,7 +80,10 @@ bool SampleLightUniform
 )
 {
     if (SceneParam.LightCount == 0)
-    { return false; }
+    {
+        lightSampleWeight = 1.0f;
+        return false;
+    }
 
     uint index = min(SceneParam.LightCount - 1, uint(Random(seed) * SceneParam.LightCount));
     light = Lights[index];
@@ -103,6 +106,7 @@ bool SampleLightRIS
     out float   lightSampleWeight
 )
 {
+    lightSampleWeight = 1.0f;
     if (SceneParam.LightCount == 0)
     { return false; }
 
@@ -123,10 +127,12 @@ bool SampleLightRIS
             float  lightDistance;
             GetLightData(candidateLight, hitPosition, lightVector, lightDistance);
 
-            // 裏面向きのライトは無視.
-            float3 L = normalize(lightVector);
-            if (dot(surfaceNormal, L) < 1e-6f)
-            { continue; }
+            #if 0
+            //// 裏面向きのライトは無視.
+            //float3 L = normalize(lightVector);
+            //if (dot(surfaceNormal, L) < 1e-6f)
+            //{ continue; }
+            #endif
 
             float candidatePdfG = Luminance(GetLightIntensity(candidateLight, lightDistance));
             const float candidateRISWeight = candidatePdfG * candidateWeight;
@@ -512,7 +518,7 @@ void OnGenerateRay()
 
                 float3 dir = normalize(lightVector);
 
-                #if 0 // 重いのでシャドウキャストしない. 正しくないのは目を瞑る.
+                #if 0// 重いのでシャドウキャストしない. 正しくないのは目を瞑る.
                 if (!CastShadowRay(vertex.Position, gN, dir, lightDistance, instanceId, primitiveId))
                 #endif
                 {

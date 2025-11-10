@@ -42,7 +42,7 @@ void GetArrayOfCells(float3 position, out int3 cells[8])
     float3 relCellPos = abs(cell - cellFloor);
     
 #if __HLSL_VERSION >= 2021
-    int3 offset = select(relCelPos < 0.5f, -1.0, 1.0);
+    int3 offset = select(relCellPos < 0.5f, -1.0, 1.0);
 #else
     int3 offset = (relCellPos < 0.5f) ? -1.0 : 1.0f;
 #endif
