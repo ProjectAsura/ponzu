@@ -116,11 +116,11 @@ private:
     asdx::PipelineState             m_TonemapPipe;
     asdx::PipelineState             m_TaaPipe;
     asdx::PipelineState             m_CopyPipe;
-    asdx::PipelineState             m_PreBlurPipe;
+    //asdx::PipelineState             m_PreBlurPipe;
     asdx::PipelineState             m_TemporalAccumulationPipe;
-    asdx::PipelineState             m_DenoiserPipe;
+    //asdx::PipelineState             m_DenoiserPipe;
     asdx::PipelineState             m_TemporalStabilizationPipe;
-    asdx::PipelineState             m_PostBlurPipe;
+    //asdx::PipelineState             m_PostBlurPipe;
 
     asdx::ConstantBuffer            m_SceneParam;
     asdx::ConstantBuffer            m_TaaParam;
@@ -140,8 +140,8 @@ private:
     asdx::ComputeTarget             m_AccumulationCount;            // アキュムレーション数ヒストリー.
     asdx::ComputeTarget             m_AccumulationColorHistory[2];  // アキュムレーションカラーヒストリー.
     asdx::ComputeTarget             m_StabilizationColorHistory[2]; // スタビライゼーションカラーヒストリー.
-    asdx::ComputeTarget             m_BlurTarget0;                  // ブラーターゲット0
-    asdx::ComputeTarget             m_BlurTarget1;                  // ブラーターゲット1.
+    //asdx::ComputeTarget             m_BlurTarget0;                  // ブラーターゲット0
+    //asdx::ComputeTarget             m_BlurTarget1;                  // ブラーターゲット1.
 
     Scene                           m_Scene;
     //asdx::Camera                    m_Camera;
@@ -188,6 +188,8 @@ private:
 
     asdx::PCG           m_PcgRandom;
     uint8_t             m_TemporalJitterIndex = 0;
+
+    asdx::Vector2       m_PrevJitter = asdx::Vector2(0.0f, 0.0f);
 
 
 #if RTC_TARGET == RTC_DEVELOP

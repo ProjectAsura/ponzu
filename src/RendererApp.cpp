@@ -1130,38 +1130,38 @@ bool Renderer::SystemSetup()
         RTC_DEBUG_CODE(m_StabilizationColorHistory[1].SetName(L"StabilizationColor1"));
     }
 
-    // ブラーターゲット生成.
-    {
-        asdx::TargetDesc desc;
-        desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-        desc.Width              = m_SceneDesc.RenderWidth;
-        desc.Height             = m_SceneDesc.RenderHeight;
-        desc.DepthOrArraySize   = 1;
-        desc.MipLevels          = 1;
-        desc.Format             = DXGI_FORMAT_R8G8B8A8_UNORM;
-        desc.SampleDesc.Count   = 1;
-        desc.SampleDesc.Quality = 0;
-        desc.InitState          = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-        desc.ClearColor[0]      = 0.0f;
-        desc.ClearColor[1]      = 0.0f;
-        desc.ClearColor[2]      = 0.0f;
-        desc.ClearColor[3]      = 0.0f;
+    //// ブラーターゲット生成.
+    //{
+    //    asdx::TargetDesc desc;
+    //    desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    //    desc.Width              = m_SceneDesc.RenderWidth;
+    //    desc.Height             = m_SceneDesc.RenderHeight;
+    //    desc.DepthOrArraySize   = 1;
+    //    desc.MipLevels          = 1;
+    //    desc.Format             = DXGI_FORMAT_R8G8B8A8_UNORM;
+    //    desc.SampleDesc.Count   = 1;
+    //    desc.SampleDesc.Quality = 0;
+    //    desc.InitState          = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    //    desc.ClearColor[0]      = 0.0f;
+    //    desc.ClearColor[1]      = 0.0f;
+    //    desc.ClearColor[2]      = 0.0f;
+    //    desc.ClearColor[3]      = 0.0f;
 
-        if (!m_BlurTarget0.Init(&desc))
-        {
-            ELOGA("Error : BlurTarget Init Failed.");
-            return false;
-        }
+    //    if (!m_BlurTarget0.Init(&desc))
+    //    {
+    //        ELOGA("Error : BlurTarget Init Failed.");
+    //        return false;
+    //    }
 
-        if (!m_BlurTarget1.Init(&desc))
-        {
-            ELOGA("Error : BlurTarget Init Failed.");
-            return false;
-        }
+    //    if (!m_BlurTarget1.Init(&desc))
+    //    {
+    //        ELOGA("Error : BlurTarget Init Failed.");
+    //        return false;
+    //    }
 
-        RTC_DEBUG_CODE(m_BlurTarget0.SetName(L"BlurTarget0"));
-        RTC_DEBUG_CODE(m_BlurTarget1.SetName(L"BlurTarget1"));
-    }
+    //    RTC_DEBUG_CODE(m_BlurTarget0.SetName(L"BlurTarget0"));
+    //    RTC_DEBUG_CODE(m_BlurTarget1.SetName(L"BlurTarget1"));
+    //}
 
     // G-Buffer ルートシグニチャ生成.
     {
@@ -1349,29 +1349,29 @@ bool Renderer::SystemSetup()
         }
     }
 
-    // プレブラー用パイプラインステート.
-    {
-        D3D12_COMPUTE_PIPELINE_STATE_DESC desc = {};
-        desc.pRootSignature = m_DenoiserRootSig.GetPtr();
-        desc.CS             = { PreBlurCS, sizeof(PreBlurCS) };
+    //// プレブラー用パイプラインステート.
+    //{
+    //    D3D12_COMPUTE_PIPELINE_STATE_DESC desc = {};
+    //    desc.pRootSignature = m_DenoiserRootSig.GetPtr();
+    //    desc.CS             = { PreBlurCS, sizeof(PreBlurCS) };
 
-        if (!m_PreBlurPipe.Init(pDevice, &desc))
-        {
-            ELOGA("Error : PreBlur Pipe Init Failed.");
-            return false;
-        }
+    //    if (!m_PreBlurPipe.Init(pDevice, &desc))
+    //    {
+    //        ELOGA("Error : PreBlur Pipe Init Failed.");
+    //        return false;
+    //    }
 
-    #if RTC_TARGET == RTC_DEVELOP
-        std::vector<std::string> deps{
-            "../res/shader/DenoiseBlur.hlsli",
-            "../res/shader/Denoiser.hlsli",
-        };
-        m_PreBlurPipe.SetIncludeDirs(kIncludeDirs);
-        m_PreBlurPipe.SetDependencies(deps);
-        m_PreBlurPipe.SetReloadPathCS("../res/shader/PreBlurCS.hlsl", "cs_6_6");
-        m_pShaderReloadListener.push_back(&m_PreBlurPipe);
-    #endif
-    }
+    //#if RTC_TARGET == RTC_DEVELOP
+    //    std::vector<std::string> deps{
+    //        "../res/shader/DenoiseBlur.hlsli",
+    //        "../res/shader/Denoiser.hlsli",
+    //    };
+    //    m_PreBlurPipe.SetIncludeDirs(kIncludeDirs);
+    //    m_PreBlurPipe.SetDependencies(deps);
+    //    m_PreBlurPipe.SetReloadPathCS("../res/shader/PreBlurCS.hlsl", "cs_6_6");
+    //    m_pShaderReloadListener.push_back(&m_PreBlurPipe);
+    //#endif
+    //}
 
     // テンポラルアキュムレーション用パイプラインステート.
     {
@@ -1396,29 +1396,29 @@ bool Renderer::SystemSetup()
     #endif
     }
 
-    // デノイズブラー用パイプラインステート.
-    {
-        D3D12_COMPUTE_PIPELINE_STATE_DESC desc = {};
-        desc.pRootSignature = m_DenoiserRootSig.GetPtr();
-        desc.CS             = { DenoiserCS, sizeof(DenoiserCS) };
+    //// デノイズブラー用パイプラインステート.
+    //{
+    //    D3D12_COMPUTE_PIPELINE_STATE_DESC desc = {};
+    //    desc.pRootSignature = m_DenoiserRootSig.GetPtr();
+    //    desc.CS             = { DenoiserCS, sizeof(DenoiserCS) };
 
-        if (!m_DenoiserPipe.Init(pDevice, &desc))
-        {
-            ELOGA("Error : Denoiser Pipe Init Failed.");
-            return false;
-        }
+    //    if (!m_DenoiserPipe.Init(pDevice, &desc))
+    //    {
+    //        ELOGA("Error : Denoiser Pipe Init Failed.");
+    //        return false;
+    //    }
 
-    #if RTC_TARGET == RTC_DEVELOP
-        std::vector<std::string> deps{
-            "../res/shader/DenoiseBlur.hlsli",
-            "../res/shader/Denoiser.hlsli",
-        };
-        m_DenoiserPipe.SetIncludeDirs(kIncludeDirs);
-        m_DenoiserPipe.SetDependencies(deps);
-        m_DenoiserPipe.SetReloadPathCS("../res/shader/DenoiserCS.hlsl", "cs_6_6");
-        m_pShaderReloadListener.push_back(&m_DenoiserPipe);
-    #endif
-    }
+    //#if RTC_TARGET == RTC_DEVELOP
+    //    std::vector<std::string> deps{
+    //        "../res/shader/DenoiseBlur.hlsli",
+    //        "../res/shader/Denoiser.hlsli",
+    //    };
+    //    m_DenoiserPipe.SetIncludeDirs(kIncludeDirs);
+    //    m_DenoiserPipe.SetDependencies(deps);
+    //    m_DenoiserPipe.SetReloadPathCS("../res/shader/DenoiserCS.hlsl", "cs_6_6");
+    //    m_pShaderReloadListener.push_back(&m_DenoiserPipe);
+    //#endif
+    //}
 
     // テンポラルスタビライゼーション用パイプラインステート.
     {
@@ -1443,29 +1443,29 @@ bool Renderer::SystemSetup()
     #endif
     }
 
-    // ポストブラー用パイプラインステート.
-    {
-        D3D12_COMPUTE_PIPELINE_STATE_DESC desc = {};
-        desc.pRootSignature = m_DenoiserRootSig.GetPtr();
-        desc.CS             = { PostBlurCS, sizeof(PostBlurCS) };
+    //// ポストブラー用パイプラインステート.
+    //{
+    //    D3D12_COMPUTE_PIPELINE_STATE_DESC desc = {};
+    //    desc.pRootSignature = m_DenoiserRootSig.GetPtr();
+    //    desc.CS             = { PostBlurCS, sizeof(PostBlurCS) };
 
-        if (!m_PostBlurPipe.Init(pDevice, &desc))
-        {
-            ELOGA("Error : PostBlur Pipe Init Failed.");
-            return false;
-        }
+    //    if (!m_PostBlurPipe.Init(pDevice, &desc))
+    //    {
+    //        ELOGA("Error : PostBlur Pipe Init Failed.");
+    //        return false;
+    //    }
 
-    #if RTC_TARGET == RTC_DEVELOP
-        std::vector<std::string> deps{
-            "../res/shader/DenoiseBlur.hlsli",
-            "../res/shader/Denoiser.hlsli",
-        };
-        m_PostBlurPipe.SetIncludeDirs(kIncludeDirs);
-        m_PostBlurPipe.SetDependencies(deps);
-        m_PostBlurPipe.SetReloadPathCS("../res/shader/PostBlurCS.hlsl", "cs_6_6");
-        m_pShaderReloadListener.push_back(&m_PostBlurPipe);
-    #endif
-    }
+    //#if RTC_TARGET == RTC_DEVELOP
+    //    std::vector<std::string> deps{
+    //        "../res/shader/DenoiseBlur.hlsli",
+    //        "../res/shader/Denoiser.hlsli",
+    //    };
+    //    m_PostBlurPipe.SetIncludeDirs(kIncludeDirs);
+    //    m_PostBlurPipe.SetDependencies(deps);
+    //    m_PostBlurPipe.SetReloadPathCS("../res/shader/PostBlurCS.hlsl", "cs_6_6");
+    //    m_pShaderReloadListener.push_back(&m_PostBlurPipe);
+    //#endif
+    //}
 
     // デノイズ用定数バッファ.
     {
@@ -1837,8 +1837,8 @@ void Renderer::OnTerm()
             m_StabilizationColorHistory[i]  .Term();
         }
 
-        m_BlurTarget0       .Term();
-        m_BlurTarget1       .Term();
+        //m_BlurTarget0       .Term();
+        //m_BlurTarget1       .Term();
         m_HitDistance       .Term();
         m_AccumulationCount .Term();
         m_Tonemapped        .Term();
@@ -1869,11 +1869,11 @@ void Renderer::OnTerm()
 
     // パイプライン関連.
     {
-        m_PostBlurPipe              .Term();
+        //m_PostBlurPipe              .Term();
         m_TemporalStabilizationPipe .Term();
-        m_DenoiserPipe              .Term();
+        //m_DenoiserPipe              .Term();
         m_TemporalAccumulationPipe  .Term();
-        m_PreBlurPipe               .Term();
+        //m_PreBlurPipe               .Term();
 
         m_CopyPipe   .Term();
         m_TaaPipe    .Term();
@@ -2288,7 +2288,14 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         constants.ScreenHeight  = m_SceneDesc.RenderHeight;
         constants.Jitter        = jitterOffset;
 
-        uint32_t flags = (m_ResetHistory) ? 0x1 : 0;
+        struct Constants2
+        {
+            uint32_t Flags;
+            asdx::Vector2 PrevJitter;
+        };
+        Constants2 constants2 = {};
+        constants2.Flags = (m_ResetHistory) ? 0x1 : 0;
+        constants2.PrevJitter = m_PrevJitter;
 
         auto& inputBuffer = m_Tonemapped;
 
@@ -2301,7 +2308,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         pCmd->SetComputeRootSignature(m_DenoiserRootSig.GetPtr());
         m_TemporalAccumulationPipe.SetState(pCmd);
         pCmd->SetComputeRoot32BitConstants(DENOISER_PARAM_CBV1, 4, &constants, 0);
-        pCmd->SetComputeRoot32BitConstants(DENOISER_PARAM_CBV2, 1, &flags, 0);
+        pCmd->SetComputeRoot32BitConstants(DENOISER_PARAM_CBV2, 3, &constants2, 0);
         pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV0, inputBuffer.GetSRV()->GetHandleGPU());
         pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV1, m_AccumulationColorHistory[m_PrevHistoryIndex].GetSRV()->GetHandleGPU());
         pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV2, m_Velocity.GetSRV()->GetHandleGPU());
@@ -2409,7 +2416,14 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         constants.ScreenHeight  = m_SceneDesc.RenderHeight;
         constants.Jitter        = jitterOffset;
 
-        uint32_t flags = (m_ResetHistory) ? 0x1 : 0;
+        struct Constants2
+        {
+            uint32_t Flags;
+            asdx::Vector2 PrevJitter;
+        };
+        Constants2 constants2 = {};
+        constants2.Flags      = (m_ResetHistory) ? 0x1 : 0;
+        constants2.PrevJitter = m_PrevJitter;
 
         auto& inputBuffer = m_AccumulationColorHistory[m_CurrHistoryIndex];
 
@@ -2420,7 +2434,7 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
         pCmd->SetComputeRootSignature(m_DenoiserRootSig.GetPtr());
         m_TemporalStabilizationPipe.SetState(pCmd);
         pCmd->SetComputeRoot32BitConstants(DENOISER_PARAM_CBV1, 4, &constants, 0);
-        pCmd->SetComputeRoot32BitConstants(DENOISER_PARAM_CBV2, 1, &flags, 0);
+        pCmd->SetComputeRoot32BitConstants(DENOISER_PARAM_CBV2, 3, &constants2, 0);
         pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV0, inputBuffer.GetSRV()->GetHandleGPU());
         pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV1, m_StabilizationColorHistory[m_PrevHistoryIndex].GetSRV()->GetHandleGPU());
         pCmd->SetComputeRootDescriptorTable(DENOISER_PARAM_SRV2, m_Velocity.GetSRV()->GetHandleGPU());
@@ -2429,6 +2443,9 @@ void Renderer::OnFrameRender(asdx::FrameEventArgs& args)
 
         asdx::UAVBarrier(pCmd, m_StabilizationColorHistory[m_CurrHistoryIndex].GetResource());
     }
+
+    // 前フレームのジったーオフセットを更新.
+    m_PrevJitter = jitterOffset;
 
     // ポストエフェクト処理.
     {
@@ -2794,11 +2811,11 @@ void Renderer::Draw2D(float elapsedSec)
                 m_TonemapPipe               .RequestRebuild();
                 m_TaaPipe                   .RequestRebuild();
                 m_CopyPipe                  .RequestRebuild();
-                m_PreBlurPipe               .RequestRebuild();
+                //m_PreBlurPipe               .RequestRebuild();
                 m_TemporalAccumulationPipe  .RequestRebuild();
-                m_DenoiserPipe              .RequestRebuild();
+                //m_DenoiserPipe              .RequestRebuild();
                 m_TemporalStabilizationPipe .RequestRebuild();
-                m_PostBlurPipe              .RequestRebuild();
+                //m_PostBlurPipe              .RequestRebuild();
 
                 m_Dirty = true;
             }

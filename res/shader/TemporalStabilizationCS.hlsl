@@ -35,6 +35,7 @@ cbuffer CbParam : register(b1)
 cbuffer CbFlags : register(b2)
 {
     uint    Flags;
+    float2  PrevJitter;
     uint3   Reserved;
 };
 
@@ -62,8 +63,8 @@ void main
     const float2 kInvScreenSize = 1.0f.xx / float2(ScreenSize);
 
     // 現在フレームのカラーを取得.
-    float2 currUV = (float2(remappedId) + 0.5.xx) * kInvScreenSize;
-    float4 currColor = CurrColorMap.SampleLevel(PointClamp, currUV + Jitter * kInvScreenSize, 0.0f);
+    float2 currUV = (float2(remappedId) + 0.5.xx + Jitter) * kInvScreenSize;
+    float4 currColor = CurrColorMap.SampleLevel(PointClamp, currUV, 0.0f);
 
     const float kSizeScale = ScreenSize.x / 1920.0f;
 
@@ -72,7 +73,7 @@ void main
     float  velocityDelta = saturate(1.0f - length(velocity)) / (kFrameVelocityInPixelsDiff * kSizeScale);
     
     // 前フレームのテクスチャ座標を計算.
-    float2 prevUV = currUV + (velocity * kInvScreenSize);
+    float2 prevUV = (float2(remappedId) + 0.5.xx - PrevJitter + velocity) * kInvScreenSize;
 
     // スクリーン内かどうかチェック.
     float inScreen = all(saturate(prevUV) == prevUV) ? 1.0f : 0.0f;
