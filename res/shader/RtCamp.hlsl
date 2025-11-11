@@ -39,9 +39,9 @@
 //------------------------------------------------
 // ここを書き換えて，HotReloadする.
 //#define DEBUG_DEPTH_INDEX   SceneParam.MaxBounce
-#define DEBUG_DEPTH_INDEX   0
+#define DEBUG_DEPTH_INDEX   1
 //#define DEBUG_OUT_FLAG      OUT_DEFAULT
-#define DEBUG_OUT_FLAG      OUT_GEOMETRY_NORMAL
+#define DEBUG_OUT_FLAG      OUT_BRDF
 //------------------------------------------------
 #endif
 
@@ -233,11 +233,8 @@ void OnGenerateRay()
         float3 T = RecalcTangent(N, vertex.Tangent);
         B = normalize(cross(T, N));
 
-        float3 geometryNormal = vertex.GeometryNormal;
-        float3 V = -ray.Direction;
-
-        if (dot(geometryNormal, V) < 0.0f)
-        { geometryNormal = -geometryNormal; }
+        float3 Ng = vertex.GeometryNormal;
+        float3 V = ray.Direction;
 
         // 自己発光による放射輝度.
         Lo += W * material.Emissive;
@@ -296,9 +293,22 @@ void OnGenerateRay()
         //        }
         //    }
         //}        
+        
+        //if (dot(geometryNormal, V) < 0.0f)
+        //{ geometryNormal = -geometryNormal; } 
+        
+        if (IsDielectric(material))
+        {
+            // 屈折率更新.
+            ior = material.Ior;
+ 
+            // 屈折側になるので，オフセット計算に使用する法線は逆転する.
+            Ng = -Ng;
+        }
+        
 
         // レイを更新.
-        ray.Origin    = OffsetRay(vertex.Position, geometryNormal);
+        ray.Origin    = OffsetRay(vertex.Position, Ng);
         ray.Direction = dir;
 
         if (bounce == DEBUG_DEPTH_INDEX)
@@ -375,6 +385,10 @@ void OnGenerateRay()
                 
             case OUT_SHADOW_RAY_HIT:
                 output = occluded ? float4(1.0f, 0.0f, 0.0f, 0.0f) : 0.0f.xxxx;
+                break;
+                
+            default:
+                //output = float4(1.0f, 0.0f, 0.0f, 1.0f);
                 break;
             }
 
@@ -494,8 +508,7 @@ void OnGenerateRay()
         float3 V  = ray.Direction;
 
         // 物体からのレイの入出を考慮した法線.
-        Ng = (dot(Ng, V) <= 0.0f) ? Ng : -Ng;
-        float3 Ns = dot(vertex.GeometryNormal, V) <= 0.0f ? N : -N;
+        //Ng = (dot(Ng, V) <= 0.0f) ? Ng : -Ng;
 
         if (bounce == 0)
         { prevPosition = vertex.Position; }
@@ -508,9 +521,11 @@ void OnGenerateRay()
         // 直接光を評価.
         if (!HasDelta(material))
         {
+            //float3 Ns = dot(vertex.GeometryNormal, V) <= 0.0f ? N : -N;
+            
             Light light;
             float lightWeight;
-            if (SampleLightRIS(seed, vertex.Position, Ns, light, lightWeight))
+            if (SampleLightRIS(seed, vertex.Position, Ng, light, lightWeight))
             {
                 float3 lightVector;
                 float lightDistance;

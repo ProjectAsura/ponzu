@@ -55,7 +55,7 @@ material {
 
 material {
    -Tag: GeoSphere03
-   -BaseColor: 0.2 0.75 0.25 1.0
+   -BaseColor: 0.1 0.5 0.25 1.0
    -Roughness: 0.0
    -Metalness: 0.0
    -Ior: 1.58
@@ -63,10 +63,10 @@ material {
 
 material {
    -Tag: Glass
-   -BaseColor: 0.5 0.5 0.5 1.0
+   -BaseColor: 0.1 0.1 0.1 1.0
    -Roughness: 0.0
    -Metalness: 0.0
-   -Ior: 1.4
+   -Ior: 2.0
 };
 
 material {
@@ -111,7 +111,7 @@ instance {
 instance {
     -Mesh: box
     -Material: Glass
-    -Scale: 0.025 0.025 0.025
+    -Scale: 0.01 0.025 0.05
     -Translation: -6.5 2.0 -6.5
 };
 
