@@ -125,5 +125,5 @@ point_light {
    -Tag: PointLight0
    -Position: 0.0 10.0 5.0
    -Radius: 1.5
-   -Intensity: 200.0 0.0 1000.0
+   -Intensity: 0.2 0.0 1000.0
 };

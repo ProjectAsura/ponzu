@@ -16,7 +16,7 @@
 int main(int argc, char** argv)
 {
     r3d::SceneDesc desc = {};
-    desc.RenderTimeSec      = 255.9;
+    desc.RenderTimeSec      = 179.9;
     desc.OutputWidth        = 1920;
     desc.OutputHeight       = 1080;
     desc.RenderWidth        = 1920;//1920;//2560;

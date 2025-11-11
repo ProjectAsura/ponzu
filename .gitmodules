@@ -1,3 +1,6 @@
 [submodule "external/asdx12"]
 	path = external/asdx12
 	url = https://github.com/ProjectAsura/asdx12
+[submodule "external/ImGuizmo"]
+	path = external/ImGuizmo
+	url = https://github.com/CedricGuillemet/ImGuizmo.git

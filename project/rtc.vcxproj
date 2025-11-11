@@ -29,6 +29,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\external\fpng\fpng.cpp" />
+    <ClCompile Include="..\external\ImGuizmo\ImGuizmo.cpp" />
+    <ClCompile Include="..\external\ImGuizmo\ImSequencer.cpp" />
     <ClCompile Include="..\external\mikktspace\mikktspace.c" />
     <ClCompile Include="..\external\xxhash\xxhash.c" />
     <ClCompile Include="..\src\CameraSequence.cpp" />
@@ -41,6 +43,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\external\fpng\fpng.h" />
+    <ClInclude Include="..\external\ImGuizmo\ImGuizmo.h" />
+    <ClInclude Include="..\external\ImGuizmo\ImSequencer.h" />
     <ClInclude Include="..\external\mikktspace\mikktspace.h" />
     <ClInclude Include="..\external\xxhash\xxhash.h" />
     <ClInclude Include="..\include\CameraSequence.h" />
@@ -312,7 +316,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;ENABLE_OVERRIDE;_DEBUG;_CONSOLE;ASDX_ENABLE_SINGLE_THREAD=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\external\asdx12\include;$(ProjectDir)..\external\fpng;$(ProjectDir)..\external\flatbuffers-2.0.0\include;$(ProjectDir)..\external\dxc\inc;$(ProjectDir)..\include;$(ProjectDir)..\external\mikktspace;$(ProjectDir)..\external\xxhash;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\external\asdx12\include;$(ProjectDir)..\external\fpng;$(ProjectDir)..\external\flatbuffers-2.0.0\include;$(ProjectDir)..\external\dxc\inc;$(ProjectDir)..\include;$(ProjectDir)..\external\mikktspace;$(ProjectDir)..\external\xxhash;$(ProjectDir)..\external\asdx12\external\imgui;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <EnableEnhancedInstructionSet>AdvancedVectorExtensions</EnableEnhancedInstructionSet>
     </ClCompile>
@@ -345,7 +349,7 @@ xcopy $(ProjectDir)..\external\dxc\bin\x64\dxil.dll $(TargetDir) /e /y /c</Comma
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;ENABLE_OVERRIDE;NDEBUG;_CONSOLE;ASDX_ENABLE_SINGLE_THREAD=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\external\asdx12\include;$(ProjectDir)..\external\fpng;$(ProjectDir)..\external\flatbuffers-2.0.0\include;$(ProjectDir)..\external\dxc\inc;$(ProjectDir)..\include;$(ProjectDir)..\external\mikktspace;$(ProjectDir)..\external\xxhash;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\external\asdx12\include;$(ProjectDir)..\external\fpng;$(ProjectDir)..\external\flatbuffers-2.0.0\include;$(ProjectDir)..\external\dxc\inc;$(ProjectDir)..\include;$(ProjectDir)..\external\mikktspace;$(ProjectDir)..\external\xxhash;$(ProjectDir)..\external\asdx12\external\imgui;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <EnableEnhancedInstructionSet>AdvancedVectorExtensions</EnableEnhancedInstructionSet>
     </ClCompile>
@@ -377,7 +381,7 @@ xcopy $(ProjectDir)..\external\dxc\bin\x64\dxil.dll $(TargetDir) /e /y /c</Comma
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;ENABLE_OVERRIDE;NDEBUG;_CONSOLE;CAMP_RELEASE=1;ASDX_ENABLE_SINGLE_THREAD=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\external\asdx12\include;$(ProjectDir)..\external\fpng;$(ProjectDir)..\external\flatbuffers-2.0.0\include;$(ProjectDir)..\external\dxc\inc;$(ProjectDir)..\include;$(ProjectDir)..\external\mikktspace;$(ProjectDir)..\external\xxhash;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\external\asdx12\include;$(ProjectDir)..\external\fpng;$(ProjectDir)..\external\flatbuffers-2.0.0\include;$(ProjectDir)..\external\dxc\inc;$(ProjectDir)..\include;$(ProjectDir)..\external\mikktspace;$(ProjectDir)..\external\xxhash;$(ProjectDir)..\external\asdx12\external\imgui;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <EnableEnhancedInstructionSet>AdvancedVectorExtensions</EnableEnhancedInstructionSet>
     </ClCompile>

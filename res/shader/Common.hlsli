@@ -276,7 +276,7 @@ SurfaceHit GetSurfaceHit(uint instanceId, uint triangleIndex, float2 barycentric
         surfaceHit.TexCoord += asfloat(vertices.Load2(address + TEXCOORD_OFFSET)) * factor[i];
     }
 
-    surfaceHit.Position = mul(surfaceHit.Position, world);
+    surfaceHit.Position = mul(surfaceHit.Position, world).xyz;
     surfaceHit.Normal  = normalize(mul(normalize(surfaceHit.Normal), (float3x3)world));
     surfaceHit.Tangent = normalize(mul(normalize(surfaceHit.Tangent), (float3x3)world));
 
