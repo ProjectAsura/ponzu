@@ -174,7 +174,7 @@ bool CameraSequence::Update(uint32_t frameIndex, float aspectRatio)
     if (!changed)
     { return false; }
 
-    m_ParamIndex = nextIndex;
+    m_ParamIndex++;
 
     auto position = Convert(param->position());
     auto target   = Convert(param->target());

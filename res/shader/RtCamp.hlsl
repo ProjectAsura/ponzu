@@ -41,7 +41,7 @@
 //#define DEBUG_DEPTH_INDEX   SceneParam.MaxBounce
 #define DEBUG_DEPTH_INDEX   1
 //#define DEBUG_OUT_FLAG      OUT_DEFAULT
-#define DEBUG_OUT_FLAG      OUT_BRDF
+#define DEBUG_OUT_FLAG      OUT_RAY_DIR
 //------------------------------------------------
 #endif
 
@@ -506,9 +506,6 @@ void OnGenerateRay()
 
         float3 Ng = vertex.GeometryNormal;
         float3 V  = ray.Direction;
-
-        // 物体からのレイの入出を考慮した法線.
-        //Ng = (dot(Ng, V) <= 0.0f) ? Ng : -Ng;
 
         if (bounce == 0)
         { prevPosition = vertex.Position; }

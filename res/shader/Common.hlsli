@@ -324,6 +324,13 @@ Material GetMaterial(uint instanceId, float2 uv, float mip)
     param.Metalness = mat.Metalness;
     param.Emissive  = mat.Emissive.rgb * mat.Emissive.a;
     param.Ior       = mat.Ior;
+
+    if (mat.TextureMaps.x != INVALID_ID)
+    {
+        Texture2D<float4> baseColorMap = ResourceDescriptorHeap[mat.TextureMaps.x];
+        uv.y = 1.0f - uv.y;
+        param.BaseColor *= baseColorMap.SampleLevel(LinearWrap, uv, mip);
+    }
 #endif
 
     return param;
@@ -538,8 +545,8 @@ float3 SampleMaterial
         float F0 = SaturateFloat(Pow2(a) / Pow2(b));
 
         // Schlickの近似によるフレネル項.
-        float c  = 1.0f - ((into) ? -cosT1 : dot(V, -Nm));
-        float Fr = F_Schlick(F0, c);
+        float c  = (into) ? cosT1 : -dot(V, Nm);
+        float Fr = F_Schlick(F0, 1.0f, c);
 
         // 屈折光による放射輝度.
         float Tr = (1.0f - Fr) * Pow2(eta);
@@ -607,10 +614,8 @@ float3 EvaluateMaterial
     out float   pdf         // 確率密度.
 )
 {
-    float3 rayDir = V;
-    
     // 物体からのレイの入出を考慮した法線.
-    bool into = dot(N, rayDir) <= 0.0f;
+    bool into = dot(N, V) <= 0.0f;
     float3 Nm = (into) ? N : -N;
     float3 Tm = (into) ? T : -T;
     float3 Bm = (into) ? B : -B;
@@ -626,7 +631,7 @@ float3 EvaluateMaterial
         float eta = SaturateFloat(n1 / n2);
 
         // cos(θ_1).
-        float cosT1 = dot(-V, Nm);
+        float cosT1 = dot(V, Nm);
 
         // cos^2(θ_2).
         float cos2T2 = 1.0f - Pow2(eta) * (1.0f - Pow2(cosT1));
@@ -650,8 +655,8 @@ float3 EvaluateMaterial
         float F0 = SaturateFloat(Pow2(a) / Pow2(b));
 
         // Schlickの近似によるフレネル項.
-        float c  = (into) ? -cosT1 : dot(refraction, -Nm);
-        float Fr = F_Schlick(F0, c);
+        float c  = (into) ? cosT1 : -dot(V, Nm);
+        float Fr = F_Schlick(F0, 1.0f, c);
 
         // 屈折光による放射輝度.
         float Tr = (1.0f - Fr) * Pow2(eta);
@@ -660,14 +665,14 @@ float3 EvaluateMaterial
         if (u.z <= p)
         {
             dir = reflection;
-            pdf = Fr / p;
-            return SaturateFloat(material.BaseColor.rgb);
+            pdf = p;
+            return SaturateFloat(material.BaseColor.rgb * Fr);
         }
         else
         {
             dir = refraction;
-            pdf = Tr / (1.0f - p);
-            return SaturateFloat(material.BaseColor.rgb);
+            pdf = (1.0f - p);
+            return SaturateFloat(material.BaseColor.rgb * Tr);
         }
     }
     // 完全拡散反射.

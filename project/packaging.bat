@@ -14,8 +14,8 @@ xcopy %SRC_DIR%\dxil.dll %DST_DIR% /y /c
 xcopy %SRC_DIR%\dxcompiler.dll %DST_DIR% /y /c
 xcopy %SRC_DIR%\D3D12 %DST_DIR%\D3D12 /y /i /c
 xcopy %RES_DIR%\ibl\*.dds %DST_DIR%\etc\ibl /y /i /c
-xcopy %RES_DIR%\scene\*.scn %DST_DIR%\etc\scene /y /i /c
-xcopy %RES_DIR%\scene\*.cam %DST_DIR%\etc\scene /y /i /c
+xcopy %RES_DIR%\etc\scene\*.scn %DST_DIR%\etc\scene /y /i /c
+xcopy %RES_DIR%\etc\scene\*.cam %DST_DIR%\etc\scene /y /i /c
 xcopy ".\fps.txt" %DST_DIR% /y /c
 xcopy ".\run.ps1" %DST_DIR% /y /c
 

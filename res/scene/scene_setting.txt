@@ -1,129 +1,141 @@
 export {
-   -Path: ..\etc\scene\rtcamp_2024.scn
+   -Path: ..\etc\scene\rtcamp_2025.scn
 };
 
 ibl {
-   -Path: ..\res\ibl\rostock_laage_airport_2k.dds
+   -Path: ..\res\ibl\citrus_orchard_road_puresky_2k.dds
 };
 
 model {
-   -Tag: Plane
-   -Path: ..\res\model\plane.obj
+   -Tag: mergedBlocks
+   -Path: ..\res\model\RtCamp2025.obj
 };
 
-model {
-   -Tag: Gems
-   -Path: ..\res\model\gems.obj
-};
+// mesh names
+// building-archery
+// building-castle
+// river-intersectionC
+// river-corner
+// river-end
+// grass
+// grass-hill
+// grass-forest
+// building-wizard-tower
+// building-village
+// rock-large
+// rock-small
+// stone-mountain
+// unit-tree
+// cabin-roof-now-dormer
+// building-house
+// path-straight
+// path-start
+// sand
+// stone-hill
+// unit-tower
+// sand-desert
+// sand-rocks
+// unit-mill
+// stone-rocks
+// unit-wall-tower
+// bridge
+// water
+// water-rocks
+// tree
+// stall-green
+// path-intersectionF
+// tree-high-round
+// poles_garlandFlags
 
-model {
-   -Tag: Box
-   -Path: ..\res\model\box.obj
-};
+// materials name:
+// kenney_hexagon-kit-colormap(Clone) = Textures/kenney_hexagon-kit-colormap(Clone).p
+// kenney_fantasy-town-kit_2.0-colormap(Clone) = Textures/kenney_fantasy-town-kit_2.0-colormap(Clone).png
+// kenney_holiday-kit-colormap(Clone) = Textures/kenney_holiday-kit-colormap(Clone).png
+// _defaultMat(Clone) Kd 0.939 0.53 1
+// wood(Clone) Kd 0.84 0.435 0.305
+// bricks(Clone) Kd 0 0.655 0.486
+// foliage(Clone) Kd 0 0.655 0.486
+// metalLight(Clone) 0.698 0.686 0.867
 
 material {
-   -Tag: PlaneMat
-   -BaseColor: 0.05 0.05 0.05 1.0
-   -Roughness: 1.0
-   -Metalness: 0.0
-};
-
-
-material {
-   -Tag: GeoSphere01
-   -BaseColor: 0.95 0.95 0.95 1.0
-   -Roughness: 1.0
-   -Metalness: 0.0
-   -Ior: 2.0
-};
-
-material {
-   -Tag: GeoSphere02
-   -BaseColor: 0.9 0.5 0.1 1.0
-   -Roughness: 0.0
-   -Metalness: 0.0
-   -Ior: 1.55
-};
-
-material {
-   -Tag: Box01
-   -BaseColor: 0.2 0.2 0.95 1.0
-   -Roughness: 0.0
-   -Metalness: 0.0
-   -Ior: 1.76
-};
-
-material {
-   -Tag: GeoSphere03
-   -BaseColor: 0.1 0.5 0.25 1.0
-   -Roughness: 0.0
-   -Metalness: 0.0
-   -Ior: 1.58
-};
-
-material {
-   -Tag: Glass
-   -BaseColor: 0.1 0.1 0.1 1.0
-   -Roughness: 0.0
-   -Metalness: 0.0
-   -Ior: 2.0
-};
-
-material {
-   -Tag: Emitter
+   -Tag: hexagon-kit
    -BaseColor: 1.0 1.0 1.0 1.0
-   -Roughness: 1.0
-   -Metalness: 0.0
-   -Emissive: 1.0 0.5 0.5 10000.0
+   -BaseColorMap: ..\res\model\Textures\kenney_hexagon-kit-colormap(Clone).png
+   -Roughness: 0.3
+   -Metalness: 1.0
+};
+
+material {
+   -Tag: fantasy-town-kit
+   -BaseColor: 1.0 1.0 1.0 1.0
+   -BaseColorMap: ..\res\model\Textures\kenney_fantasy-town-kit_2.0-colormap(Clone).png
+   -Roughness: 0.3
+   -Metalness: 1.0
+};
+
+material {
+   -Tag: holiday-kit
+   -BaseColor: 1.0 1.0 1.0 1.0
+   -BaseColorMap: ..\res\model\Textures\kenney_holiday-kit-colormap(Clone).png
+   -Roughness: 0.3
+   -Metalness: 1.0
+};
+
+material {
+   -Tag: defaultMat
+   -BaseColor: 0.939 0.53 1.0 1.0
+   -Roughness: 0.3
+   -Metalness: 1.0
+};
+
+material {
+   -Tag: wood
+   -BaseColor: 0.84 0.435 0.305 1.0
+   -Roughness: 0.3
+   -Metalness: 1.0
+};
+
+material {
+   -Tag: bricks
+   -BaseColor: 0.0 0.655 0.486 1.0
+   -Roughness: 0.3
+   -Metalness: 1.0
+};
+
+material {
+  -Tag: foliage
+  -BaseColor: 0.0 0.655 0.486 1.0
+  -Roughness: 0.3
+  -Metalness: 1.0
+};
+
+material {
+  -Tag: metal_light
+  -BaseColor: 0.698 0.686 0.867 1.0
+  -Roughness: 0.3
+  -Metalness: 1.0
+};
+
+
+instance {
+  -Mesh: rock-large
+  -Material: fantasy-town-kit
 };
 
 instance {
-    -Mesh: plane
-    -Material: PlaneMat
-    -Scale: 0.1 1.0 0.1
-    -Translation: 0.0 0.0 0.0
+  -Mesh: building-archery
+  -Material: hexagon-kit
 };
 
 instance {
-    -Mesh: GeoSphere01
-    -Material: GeoSphere01
-    -Translation: 0.0 0.0 0.0
+  -Mesh: cabin-roof-snow-dormer
+  -Material: holiday-kit
 };
 
-instance {
-    -Mesh: GeoSphere02
-    -Material: GeoSphere02
-    -Translation: 0.0 0.0 0.0
-};
-
-instance {
-    -Mesh: GeoSphere003
-    -Material: GeoSphere03
-    -Translation: 0.0 0.0 0.0
-};
-
-instance {
-    -Mesh: Box01
-    -Material: Box01
-    -Translation: 0.0 0.0 0.0
-};
-
-instance {
-    -Mesh: box
-    -Material: Glass
-    -Scale: 0.01 0.025 0.05
-    -Translation: -6.5 2.0 -6.5
-};
 
 directional_light {
    -Tag: MainDir
-   -Direction: 0.0 -1.0 0.5
-   -Intensity: 0.0 0.5 0.0
+   -Direction: 0.0 -1.0 0.25
+   -Intensity: 0.01 0.01 0.01
 };
 
-point_light {
-   -Tag: PointLight0
-   -Position: 0.0 10.0 5.0
-   -Radius: 1.5
-   -Intensity: 0.2 0.0 1000.0
-};

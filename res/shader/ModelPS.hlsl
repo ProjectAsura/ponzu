@@ -93,6 +93,8 @@ struct ResMaterial
 
 #define INSTANCE_STRIDE (sizeof(Instance))
 
+#define INVALID_ID 0xffffffff
+
 //-----------------------------------------------------------------------------
 // Resources
 //-----------------------------------------------------------------------------
@@ -140,6 +142,13 @@ PSOutput main(const PSInput input)
     output.Normal    = PackNormal(input.Normal);
     output.Roughness = material.Roughness;
     output.Velocity  = velocity;
+    
+    if (material.TextureMaps.x != INVALID_ID)
+    {
+        Texture2D<float4> baseColorMap = ResourceDescriptorHeap[material.TextureMaps.x];
+        uv.y = 1.0f - uv.y;
+        output.Albedo *= baseColorMap.Sample(LinearWrap, uv);
+    }
 #endif
     
     output.Visibility.x = ObjectParam.InstanceId;

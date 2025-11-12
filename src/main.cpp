@@ -24,8 +24,8 @@ int main(int argc, char** argv)
     desc.FPS                = 24.0;
     desc.AnimationTimeSec   = 10.0;
 #if 1
-    desc.SceneFilePath      = "../etc/scene/rtcamp_2024.scn";
-    desc.CameraFilePath     = "../etc/scene/rtcamp_2024.cam";
+    desc.SceneFilePath      = "../etc/scene/rtcamp_2025.scn";
+    desc.CameraFilePath     = "../etc/scene/rtcamp_2025.cam";
 #else
     desc.SceneFilePath      = "../etc/scene/test_scene.scn";
     desc.CameraFilePath     = "../etc/scene/test_camera.cam";

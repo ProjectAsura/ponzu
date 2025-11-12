@@ -163,6 +163,12 @@
     <FxCompile Include="..\res\shader\RTPMPass\RTPM_StochasticCollectPhoton.hlsl">
       <Filter>リソース ファイル\RTPM</Filter>
     </FxCompile>
+    <FxCompile Include="..\res\shader\GaussFilterPS.hlsl">
+      <Filter>リソース ファイル</Filter>
+    </FxCompile>
+    <FxCompile Include="..\res\shader\StarPS.hlsl">
+      <Filter>リソース ファイル</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

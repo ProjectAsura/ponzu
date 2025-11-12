@@ -23,7 +23,7 @@
 #include <gfx/asdxShaderCompiler.h>
 #endif
 
-extern "C" { __declspec(dllexport) extern const UINT D3D12SDKVersion = 614;}
+extern "C" { __declspec(dllexport) extern const UINT D3D12SDKVersion = 618;}
 extern "C" { __declspec(dllexport) extern const char* D3D12SDKPath = u8".\\D3D12\\"; }
 
 #define MAX_RECURSION_DEPTH     (16)
@@ -39,11 +39,11 @@ namespace {
 #include "../res/shader/Compile/ModelVS.inc"
 #include "../res/shader/Compile/ModelPS.inc"
 #include "../res/shader/Compile/DebugPS.inc"
-#include "../res/shader/Compile/PreBlurCS.inc"
+//#include "../res/shader/Compile/PreBlurCS.inc"
 #include "../res/shader/Compile/TemporalAccumulationCS.inc"
-#include "../res/shader/Compile/DenoiserCS.inc"
+//#include "../res/shader/Compile/DenoiserCS.inc"
 #include "../res/shader/Compile/TemporalStabilizationCS.inc"
-#include "../res/shader/Compile/PostBlurCS.inc"
+//#include "../res/shader/Compile/PostBlurCS.inc"
 #include "../asdx12/res/shaders/Compiled/TaaCS.inc"
 #include "../asdx12/res/shaders/Compiled/CopyPS.inc"
 
@@ -1654,6 +1654,14 @@ bool Renderer::SystemSetup()
         auto target = asdx::Vector3(0.0f, 0.0f, 0.0f);
         auto upward = asdx::Vector3(0.0f, 1.0f, 0.0f);
         m_AppCamera.Init(pos, target, upward, 1.0f, 10000.0f);
+
+        auto moveGain   = m_AppCamera.GetMoveGain() * 0.005f;
+        auto rotateGain = m_AppCamera.GetRotateGain() * 0.5f;
+        auto zoomGain   = m_AppCamera.GetDollyGain() * 0.1f;
+        m_AppCamera.SetMoveGain(moveGain);
+        m_AppCamera.SetRotateGain(rotateGain);
+        m_AppCamera.SetDollyGain(zoomGain);
+        m_AppCamera.Present();
     }
 
     // 初回フレーム計算用に設定しておく.
@@ -2042,7 +2050,7 @@ void Renderer::ChangeFrame(uint32_t index)
         param.MaxBounce             = MAX_RECURSION_DEPTH;
         param.MinBounce             = 4;
         param.FrameIndex            = GetFrameCount();
-        param.SkyIntensity          = 5.0f;
+        param.SkyIntensity          = 1.0f;
         param.EnableAccumulation    = enableAccumulation;
         param.AccumulatedFrames     = m_AccumulatedFrames;
         param.ExposureAdjustment    = 1.0f;
@@ -2063,22 +2071,22 @@ void Renderer::ChangeFrame(uint32_t index)
         m_SceneParam.Update(&param, sizeof(param));
     }
 
-    // デノイズ用定数バッファ更新.
-    {
-        DenoiseParam param = {};
-        param.ScreenWidth   = m_SceneDesc.RenderWidth;
-        param.ScreenHeight  = m_SceneDesc.RenderHeight;
-        param.IgnoreHistory = (changed) ? 0x1 : 0;
-        param.Sharpness     = (farClip - nearClip) * 0.1f;
-        param.View          = m_CurrView;
-        param.Proj          = m_CurrProj;
-        param.NearClip      = nearClip;
-        param.FarClip       = farClip;
-        param.UVToViewParam = asdx::Vector2(1.0f / m_CurrProj._11, 1.0f / m_CurrProj._22);
+    //// デノイズ用定数バッファ更新.
+    //{
+    //    DenoiseParam param = {};
+    //    param.ScreenWidth   = m_SceneDesc.RenderWidth;
+    //    param.ScreenHeight  = m_SceneDesc.RenderHeight;
+    //    param.IgnoreHistory = (changed) ? 0x1 : 0;
+    //    param.Sharpness     = (farClip - nearClip) * 0.1f;
+    //    param.View          = m_CurrView;
+    //    param.Proj          = m_CurrProj;
+    //    param.NearClip      = nearClip;
+    //    param.FarClip       = farClip;
+    //    param.UVToViewParam = asdx::Vector2(1.0f / m_CurrProj._11, 1.0f / m_CurrProj._22);
 
-        m_DenoiseParam.SwapBuffer();
-        m_DenoiseParam.Update(&param, sizeof(param));
-    }
+    //    m_DenoiseParam.SwapBuffer();
+    //    m_DenoiseParam.Update(&param, sizeof(param));
+    //}
 }
 
 //-----------------------------------------------------------------------------
@@ -2830,6 +2838,7 @@ void Renderer::Draw2D(float elapsedSec)
             }
             if (ImGui::CollapsingHeader(u8"カメライベント") && !animating)
             {
+                ImGui::Text(u8"1フレームあたりの変化量");
                 ImGui::DragFloat2(u8"Rotate", r, 0.1f);
                 ImGui::DragFloat(u8"Dolly", &d, 0.1f);
                 ImGui::DragInt(u8"StartIndex", &startIndex);
