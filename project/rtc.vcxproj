@@ -29,8 +29,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\external\fpng\fpng.cpp" />
-    <ClCompile Include="..\external\ImGuizmo\ImGuizmo.cpp" />
-    <ClCompile Include="..\external\ImGuizmo\ImSequencer.cpp" />
     <ClCompile Include="..\external\mikktspace\mikktspace.c" />
     <ClCompile Include="..\external\xxhash\xxhash.c" />
     <ClCompile Include="..\src\CameraSequence.cpp" />
@@ -38,13 +36,10 @@
     <ClCompile Include="..\src\ModelManager.cpp" />
     <ClCompile Include="..\src\OBJLoader.cpp" />
     <ClCompile Include="..\src\RendererApp.cpp" />
-    <ClCompile Include="..\src\RTPMPass.cpp" />
     <ClCompile Include="..\src\Scene.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\external\fpng\fpng.h" />
-    <ClInclude Include="..\external\ImGuizmo\ImGuizmo.h" />
-    <ClInclude Include="..\external\ImGuizmo\ImSequencer.h" />
     <ClInclude Include="..\external\mikktspace\mikktspace.h" />
     <ClInclude Include="..\external\xxhash\xxhash.h" />
     <ClInclude Include="..\include\CameraSequence.h" />
@@ -53,21 +48,12 @@
     <ClInclude Include="..\include\ModelManager.h" />
     <ClInclude Include="..\include\OBJLoader.h" />
     <ClInclude Include="..\include\RendererApp.h" />
-    <ClInclude Include="..\include\RTPMPass.h" />
     <ClInclude Include="..\include\Scene.h" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="..\res\shader\DebugPS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Master|x64'">Pixel</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
-    </FxCompile>
-    <FxCompile Include="..\res\shader\GaussFilterPS.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Master|Win32'">Pixel</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Master|x64'">Pixel</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Pixel</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
     </FxCompile>
     <FxCompile Include="..\res\shader\ModelPS.hlsl">
@@ -89,16 +75,6 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Master|Win32'">Vertex</ShaderType>
     </FxCompile>
-    <FxCompile Include="..\res\shader\PostBlurCS.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Master|x64'">Compute</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
-    </FxCompile>
-    <FxCompile Include="..\res\shader\PreBlurCS.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Master|x64'">Compute</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
-    </FxCompile>
     <FxCompile Include="..\res\shader\RtCamp.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Library</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">6.6</ShaderModel>
@@ -106,40 +82,6 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Master|x64'">Library</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">6.6</ShaderModel>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Master|x64'">6.6</ShaderModel>
-    </FxCompile>
-    <FxCompile Include="..\res\shader\DenoiserCS.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Master|Win32'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Master|Win32'">4.0</ShaderModel>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Master|x64'">Compute</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">4.0</ShaderModel>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">4.0</ShaderModel>
-    </FxCompile>
-    <FxCompile Include="..\res\shader\RTPMPass\RTPM_GeneratePhoton.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Library</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Master|x64'">Library</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Library</ShaderType>
-    </FxCompile>
-    <FxCompile Include="..\res\shader\RTPMPass\RTPM_PhotonCulling.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Master|x64'">Compute</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
-    </FxCompile>
-    <FxCompile Include="..\res\shader\RTPMPass\RTPM_StochasticCollectPhoton.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Library</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Master|x64'">Library</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Library</ShaderType>
-    </FxCompile>
-    <FxCompile Include="..\res\shader\StarPS.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Master|Win32'">Pixel</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Master|x64'">Pixel</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Pixel</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Pixel</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
     </FxCompile>
     <FxCompile Include="..\res\shader\TemporalAccumulationCS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
@@ -178,10 +120,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="..\res\shader\Common.hlsli" />
-    <None Include="..\res\shader\DenoiseBlur.hlsli" />
-    <None Include="..\res\shader\Denoiser.hlsli" />
-    <None Include="..\res\shader\Reservoir.hlsli" />
-    <None Include="..\res\shader\RTPMPass\RTPM_Common.hlsli" />
     <None Include="..\res\shader\SceneParam.hlsli" />
     <None Include="packages.config" />
   </ItemGroup>
